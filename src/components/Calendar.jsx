@@ -1,0 +1,410 @@
+import { useState, useEffect, useCallback } from 'react'
+import { supabase } from '../lib/supabase'
+
+const DEFAULT_CATEGORIES = [
+  { name: 'Competição', color: '#378ADD' },
+  { name: 'Training Camp', color: '#4a7abf' },
+  { name: 'Treino/Campo', color: '#4a9a5a' },
+  { name: 'Optional', color: '#777' },
+]
+
+const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
+const WEEKDAYS = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom']
+const STATUS = ['confirmed','optional','cancelled']
+
+export default function Calendar({ theme, t, user, lang = 'en' }) {
+  const [view, setView] = useState('month')
+  const [currentDate, setCurrentDate] = useState(new Date(2026, 3, 1))
+  const [events, setEvents] = useState([])
+  const [categories, setCategories] = useState(DEFAULT_CATEGORIES)
+  const [showModal, setShowModal] = useState(false)
+  const [showCatModal, setShowCatModal] = useState(false)
+  const [editEvent, setEditEvent] = useState(null)
+  const [form, setForm] = useState({ title: '', start_date: '', end_date: '', category: 'Competição', status: 'confirmed', color: '#378ADD', result: '', position: '', notes: '' })
+  const [catForm, setCatForm] = useState({ name: '', color: '#378ADD' })
+  const [saving, setSaving] = useState(false)
+  const [deleteConfirmEvent, setDeleteConfirmEvent] = useState(null)
+  const [calFilters, setCalFilters] = useState({ events: true, golf: true, gym: true })
+  const [trainingPlans, setTrainingPlans] = useState([])
+
+  const fetchEvents = useCallback(async () => {
+    const { data } = await supabase.from('events').select('*').order('start_date')
+    setEvents(data || [])
+  }, [])
+
+  const fetchCategories = useCallback(async () => {
+    const { data } = await supabase.from('event_categories').select('*')
+    if (data && data.length > 0) setCategories(data)
+  }, [])
+
+  const fetchTrainingPlans = useCallback(async () => {
+    const { data } = await supabase.from('training_plans').select('*').order('week_start', { ascending: false }).limit(8)
+    setTrainingPlans(data || [])
+  }, [])
+
+  useEffect(() => { fetchEvents(); fetchCategories(); fetchTrainingPlans() }, [fetchEvents, fetchCategories, fetchTrainingPlans])
+
+  const openNew = (date) => {
+    const d = date || new Date().toISOString().split('T')[0]
+    setEditEvent(null)
+    setForm({ title: '', start_date: d, end_date: d, category: categories[0]?.name || 'Competição', status: 'confirmed', color: categories[0]?.color || '#378ADD', result: '', position: '', notes: '' })
+    setShowModal(true)
+  }
+
+  const openEdit = (e) => {
+    setEditEvent(e)
+    setForm({ title: e.title, start_date: e.start_date, end_date: e.end_date || e.start_date, category: e.category, status: e.status, color: e.color, result: e.result || '', position: e.position || '', notes: e.notes || '' })
+    setShowModal(true)
+  }
+
+  const saveEvent = async () => {
+    setSaving(true)
+    const payload = { ...form, position: form.position ? parseInt(form.position) : null }
+    if (editEvent) {
+      await supabase.from('events').update(payload).eq('id', editEvent.id)
+    } else {
+      await supabase.from('events').insert({ ...payload, created_by: 'user' })
+    }
+    setSaving(false)
+    setShowModal(false)
+    fetchEvents()
+  }
+
+  const deleteEvent = async () => {
+    setDeleteConfirmEvent(editEvent)
+  }
+
+  const confirmDeleteEvent = async () => {
+    if (!deleteConfirmEvent) return
+    await supabase.from('events').delete().eq('id', deleteConfirmEvent.id)
+    setDeleteConfirmEvent(null)
+    setShowModal(false)
+    fetchEvents()
+  }
+
+  const saveCat = async () => {
+    await supabase.from('event_categories').insert({ ...catForm, created_by: 'user' })
+    setCategories(p => [...p, catForm])
+    setCatForm({ name: '', color: '#378ADD' })
+    setShowCatModal(false)
+  }
+
+  const getCatColor = (catName) => categories.find(c => c.name === catName)?.color || '#777'
+
+  const getEventsForDay = (date) => {
+    const d = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`
+    const dayEvents = calFilters.events ? events.filter(e => {
+      const start = e.start_date
+      const end = e.end_date || e.start_date
+      return d >= start && d <= end
+    }) : []
+    // Training sessions from training plans
+    const trainingSessions = []
+    trainingPlans.forEach(plan => {
+      if (!plan.sessions) return
+      plan.sessions.forEach(session => {
+        if (session.date === d) {
+          if (calFilters.golf && session.type === 'golf') trainingSessions.push({ ...session, _isTrain: true, _color: '#378ADD' })
+          if (calFilters.gym && session.type === 'gym') trainingSessions.push({ ...session, _isTrain: true, _color: '#52E8A0' })
+        }
+      })
+    })
+    return [...dayEvents, ...trainingSessions]
+  }
+
+  const getDaysInMonth = (year, month) => {
+    const firstDay = new Date(year, month, 1)
+    const lastDay = new Date(year, month + 1, 0)
+    const days = []
+    let startDow = firstDay.getDay()
+    startDow = startDow === 0 ? 6 : startDow - 1
+    for (let i = 0; i < startDow; i++) {
+      const d = new Date(year, month, -startDow + i + 1)
+      days.push({ date: d, current: false })
+    }
+    for (let i = 1; i <= lastDay.getDate(); i++) {
+      days.push({ date: new Date(year, month, i), current: true })
+    }
+    while (days.length % 7 !== 0) {
+      const last = days[days.length - 1].date
+      days.push({ date: new Date(last.getTime() + 86400000), current: false })
+    }
+    return days
+  }
+
+  const year = currentDate.getFullYear()
+  const month = currentDate.getMonth()
+  const today = new Date().toISOString().split('T')[0]
+
+  const F = 'system-ui,-apple-system,sans-serif'
+  const btn = (active) => ({ background: active ? t.accent : 'transparent', border: `1px solid ${active ? t.accent : t.border}`, borderRadius: '4px', color: active ? (theme === 'dark' ? '#000' : '#fff') : t.textMuted, padding: '5px 12px', cursor: 'pointer', fontSize: '11px', fontFamily: F, transition: 'all 0.15s' })
+  const inp = { background: t.bg, border: `1px solid ${t.border}`, borderRadius: '4px', color: t.text, padding: '6px 10px', fontSize: '13px', fontFamily: F, outline: 'none', width: '100%', boxSizing: 'border-box' }
+
+  // Annual stats
+  const yearEvents = events.filter(e => e.start_date?.startsWith(year.toString()))
+  const confirmed = yearEvents.filter(e => e.status === 'confirmed').length
+  const optional = yearEvents.filter(e => e.status === 'optional').length
+
+  return (
+    <div style={{ fontFamily: F, color: t.text }}>
+      <style>{`
+        .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);background:#fff;border-radius:0 0 10px 10px;overflow:hidden;}
+        .cal-cell{background:#fff;padding:6px;min-height:62px;cursor:pointer;transition:background 0.1s;border-right:0.5px solid #e8f0ff;border-bottom:0.5px solid #e8f0ff;}
+        .cal-cell:hover{background:#f5f8ff;}
+        .cal-cell.today-cell{background:#eef4ff;}
+        .annual-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+        @media(max-width:700px){.annual-grid{grid-template-columns:repeat(2,1fr)}.cal-cell{min-height:44px}}
+      `}</style>
+
+      {/* Delete Event Confirm Modal */}
+      {deleteConfirmEvent && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '14px', padding: '28px 32px', maxWidth: '380px', width: '90%' }}>
+            <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '8px', color: t.text }}>Delete this event?</div>
+            <div style={{ fontSize: '13px', color: t.textMuted, marginBottom: '24px', lineHeight: 1.6 }}>
+              <b style={{ color: t.text }}>{deleteConfirmEvent.title}</b><br/>
+              {deleteConfirmEvent.start_date} {deleteConfirmEvent.end_date !== deleteConfirmEvent.start_date ? `→ ${deleteConfirmEvent.end_date}` : ''}
+            </div>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button onClick={() => setDeleteConfirmEvent(null)} style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '6px', color: t.textMuted, padding: '8px 16px', cursor: 'pointer', fontSize: '12px', fontFamily: F }}>Cancel</button>
+              <button onClick={confirmDeleteEvent} style={{ background: 'transparent', border: `1px solid ${t.danger || '#f87171'}`, borderRadius: '6px', color: t.danger || '#f87171', padding: '8px 16px', cursor: 'pointer', fontSize: '12px', fontFamily: F, fontWeight: 600 }}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Event Modal */}
+      {showModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
+          <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '10px', padding: '24px', width: '90%', maxWidth: '440px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '16px' }}>{editEvent ? 'Edit Event' : 'New Event'}</div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div>
+                <div style={{ fontSize: '9px', letterSpacing: '2px', color: t.textMuted, marginBottom: '4px' }}>{lang==='pt'?'NOME':'NAME'}</div>
+                <input value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))} placeholder="Event name" style={inp} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                <div>
+                  <div style={{ fontSize: '9px', letterSpacing: '2px', color: t.textMuted, marginBottom: '4px' }}>{lang==='pt'?'INÍCIO':'START'}</div>
+                  <input type="date" value={form.start_date} onChange={e => setForm(p => ({ ...p, start_date: e.target.value }))} style={inp} />
+                </div>
+                <div>
+                  <div style={{ fontSize: '9px', letterSpacing: '2px', color: t.textMuted, marginBottom: '4px' }}>{lang==='pt'?'FIM':'END'}</div>
+                  <input type="date" value={form.end_date} onChange={e => setForm(p => ({ ...p, end_date: e.target.value }))} style={inp} />
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                <div>
+                  <div style={{ fontSize: '9px', letterSpacing: '2px', color: t.textMuted, marginBottom: '4px' }}>{lang==='pt'?'CATEGORIA':'CATEGORY'}</div>
+                  <select value={form.category} onChange={e => { const cat = categories.find(c => c.name === e.target.value); setForm(p => ({ ...p, category: e.target.value, color: cat?.color || p.color })) }} style={{ ...inp }}>
+                    {categories.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <div style={{ fontSize: '9px', letterSpacing: '2px', color: t.textMuted, marginBottom: '4px' }}>{lang==='pt'?'ESTADO':'STATUS'}</div>
+                  <select value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value }))} style={{ ...inp }}>
+                    {STATUS.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: '9px', letterSpacing: '2px', color: t.textMuted, marginBottom: '4px' }}>{lang==='pt'?'COR':'COLOR'}</div>
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                  <input type="color" value={form.color} onChange={e => setForm(p => ({ ...p, color: e.target.value }))} style={{ width: '36px', height: '32px', border: `1px solid ${t.border}`, borderRadius: '4px', background: 'transparent', cursor: 'pointer', padding: '2px' }} />
+                  <span style={{ fontSize: '12px', color: t.textMuted }}>{form.color}</span>
+                </div>
+              </div>
+
+              <div style={{ borderTop: `1px solid ${t.border}`, paddingTop: '10px', marginTop: '2px' }}>
+                <div style={{ fontSize: '11px', letterSpacing: '1px', color: t.textMuted, marginBottom: '8px' }}>{lang==='pt'?'RESULTADO':'RESULT'}</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '8px' }}>
+                  <div>
+                    <div style={{ fontSize: '9px', color: t.textMuted, marginBottom: '4px' }}>Resultado</div>
+                    <input value={form.result} onChange={e => setForm(p => ({ ...p, result: e.target.value }))} placeholder="e.g. Top 10, Cut, DNF" style={inp} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '9px', color: t.textMuted, marginBottom: '4px' }}>Posição</div>
+                    <input type="number" value={form.position} onChange={e => setForm(p => ({ ...p, position: e.target.value }))} placeholder="e.g. 3" style={inp} />
+                  </div>
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: '9px', letterSpacing: '2px', color: t.textMuted, marginBottom: '4px' }}>{lang==='pt'?'NOTAS':'NOTES'}</div>
+                <textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} placeholder={lang==='pt'?'Observações...':'Notes...'} style={{ ...inp, minHeight: '60px', resize: 'vertical' }} />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', marginTop: '16px', justifyContent: 'space-between' }}>
+              <div>
+                {editEvent && <button onClick={deleteEvent} style={{ background: 'transparent', border: `1px solid ${t.danger || '#c04444'}`, borderRadius: '4px', color: t.danger || '#c04444', padding: '7px 14px', cursor: 'pointer', fontSize: '11px', fontFamily: F }}>Delete</button>}
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button onClick={() => setShowModal(false)} style={btn(false)}>Cancelar</button>
+                <button onClick={saveEvent} disabled={saving || !form.title} style={{ background: saving ? t.surface : t.accent, border: 'none', borderRadius: '4px', color: theme === 'dark' ? '#000' : '#fff', padding: '7px 16px', cursor: saving ? 'not-allowed' : 'pointer', fontSize: '11px', fontFamily: F, fontWeight: 600 }}>
+                  {saving ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Category Modal */}
+      {showCatModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
+          <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '10px', padding: '24px', width: '90%', maxWidth: '340px' }}>
+            <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '16px' }}>Nova Categoria</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <input value={catForm.name} onChange={e => setCatForm(p => ({ ...p, name: e.target.value }))} placeholder="Category name" style={inp} />
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <input type="color" value={catForm.color} onChange={e => setCatForm(p => ({ ...p, color: e.target.value }))} style={{ width: '36px', height: '32px', border: `1px solid ${t.border}`, borderRadius: '4px', cursor: 'pointer', padding: '2px' }} />
+                <span style={{ fontSize: '12px', color: t.textMuted }}>Pick a colour</span>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: '8px', marginTop: '16px', justifyContent: 'flex-end' }}>
+              <button onClick={() => setShowCatModal(false)} style={btn(false)}>Cancelar</button>
+              <button onClick={saveCat} style={{ background: t.accent, border: 'none', borderRadius: '4px', color: theme === 'dark' ? '#000' : '#fff', padding: '7px 16px', cursor: 'pointer', fontSize: '11px', fontFamily: F, fontWeight: 600 }}>Guardar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Header */}
+      <div style={{ background: '#1a2744', borderRadius: '10px 10px 0 0', padding: '12px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {view === 'month' && <>
+            <button onClick={() => setCurrentDate(new Date(year, month - 1, 1))} style={{ background: 'transparent', border: 'none', color: '#52E8A0', cursor: 'pointer', fontSize: '20px', lineHeight: 1, padding: '0 4px' }}>‹</button>
+            <div style={{ fontSize: '16px', fontWeight: 700, color: '#fff', minWidth: '160px' }}>{MONTHS[month]} {year}</div>
+            <button onClick={() => setCurrentDate(new Date(year, month + 1, 1))} style={{ background: 'transparent', border: 'none', color: '#52E8A0', cursor: 'pointer', fontSize: '20px', lineHeight: 1, padding: '0 4px' }}>›</button>
+          </>}
+          {view === 'year' && <div style={{ fontSize: '16px', fontWeight: 700, color: '#fff' }}>Ano {year}</div>}
+        </div>
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <button onClick={() => setView('month')} style={{ background: view === 'month' ? '#243560' : 'transparent', border: '0.5px solid #2e4a6a', borderRadius: '6px', color: view === 'month' ? '#fff' : '#8aaed4', padding: '5px 12px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 600 }}>{lang==='pt'?'Mensal':'Monthly'}</button>
+          <button onClick={() => setView('year')} style={{ background: view === 'year' ? '#243560' : 'transparent', border: '0.5px solid #2e4a6a', borderRadius: '6px', color: view === 'year' ? '#fff' : '#8aaed4', padding: '5px 12px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 600 }}>{lang==='pt'?'Anual':'Annual'}</button>
+          <div style={{ width: '1px', height: '14px', background: '#2e4a6a' }}></div>
+          {[['events', lang==='pt'?'Eventos':'Events', '#378ADD'], ['golf', 'Golf', '#378ADD'], ['gym', lang==='pt'?'Ginásio':'Gym', '#52E8A0']].map(([key, label, color]) => (
+            <button key={key} onClick={() => setCalFilters(p => ({ ...p, [key]: !p[key] }))}
+              style={{ background: calFilters[key] ? color + '33' : 'transparent', border: `0.5px solid ${calFilters[key] ? color : '#2e4a6a'}`, borderRadius: '6px', color: calFilters[key] ? color : '#8aaed4', padding: '5px 10px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 600 }}>
+              {label}
+            </button>
+          ))}
+          <button onClick={() => setShowCatModal(true)} style={{ background: 'transparent', border: '0.5px solid #2e4a6a', borderRadius: '6px', color: '#8aaed4', padding: '5px 12px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 600 }}>{lang==='pt'?'+ Cat':'+ Cat'}</button>
+          <button onClick={() => openNew()} style={{ background: '#52E8A0', border: 'none', borderRadius: '6px', color: '#0a2a1a', padding: '5px 14px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 700 }}>{lang==='pt'?'+ Evento':'+ Event'}</button>
+        </div>
+      </div>
+
+      {/* Legend */}
+      <div style={{ display: 'flex', gap: '14px', padding: '8px 18px', background: '#f0f4ff', borderBottom: '0.5px solid #e0e8ff', flexWrap: 'wrap' }}>
+        {categories.map(c => (
+          <div key={c.name} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '9px', color: '#4a6ab5', fontWeight: 500 }}>
+            <div style={{ width: '12px', height: '3px', borderRadius: '2px', background: c.color }}></div>
+            {c.name}
+          </div>
+        ))}
+      </div>
+
+      {/* Monthly View */}
+      {view === 'month' && (
+        <div>
+          <div className="cal-grid">
+            {WEEKDAYS.map(d => (
+              <div key={d} style={{ background: '#f0f4ff', padding: '8px', textAlign: 'center', fontSize: '10px', fontWeight: 700, letterSpacing: '1px', color: '#1a2744', borderRight: '0.5px solid #e0e8ff', borderBottom: '0.5px solid #e0e8ff' }}>{d}</div>
+            ))}
+            {getDaysInMonth(year, month).map((day, i) => {
+              const dayEvents = getEventsForDay(day.date)
+              const dateStr = `${day.date.getFullYear()}-${String(day.date.getMonth()+1).padStart(2,'0')}-${String(day.date.getDate()).padStart(2,'0')}`
+              const isToday = dateStr === today
+              return (
+                <div key={i} className={`cal-cell${isToday ? ' today-cell' : ''}`} onClick={() => openNew(dateStr)}
+                  style={{ background: isToday ? '#eef4ff' : day.current ? '#fff' : '#fafbff', borderRight: '0.5px solid #e8f0ff', borderBottom: '0.5px solid #e8f0ff' }}>
+                  <div style={{ fontSize: '12px', color: day.current ? (isToday ? '#378ADD' : '#0f1e3d') : '#b0bcd8', fontWeight: isToday ? 800 : 600, marginBottom: '4px' }}>{day.date.getDate()}</div>
+                  {dayEvents.slice(0, 2).map((ev, ei) => (
+                    <div key={ev.id || ei} onClick={e => { e.stopPropagation(); if (!ev._isTrain) openEdit(ev) }}
+                      style={{ background: ev._isTrain ? ev._color + '33' : getCatColor(ev.category), borderRadius: '4px', padding: '3px 6px', fontSize: '10px', fontWeight: 700, color: ev._isTrain ? ev._color : '#fff', marginBottom: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: ev._isTrain ? 'default' : 'pointer', border: ev._isTrain ? `1px solid ${ev._color}44` : 'none' }}>
+                      {ev._isTrain ? (ev.type === 'golf' ? '⛳' : '💪') + ' ' : ''}{ev.title || ev.session_name || ev.name}
+                    </div>
+                  ))}
+                  {dayEvents.length > 2 && <div style={{ fontSize: '9px', color: '#8aaed4', fontWeight: 600 }}>+{dayEvents.length - 2}</div>}
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Month summary */}
+          <div style={{ marginTop: '12px', fontSize: '11px', color: t.textMuted, display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+            <span>{MONTHS[month]}: {events.filter(e => e.start_date?.startsWith(`${year}-${String(month+1).padStart(2,'0')}`)).length} eventos</span>
+          </div>
+        </div>
+      )}
+
+      {/* Annual View */}
+      {view === 'year' && (
+        <div>
+          <div className="annual-grid">
+            {Array.from({ length: 12 }, (_, m) => {
+              const monthEvents = events.filter(e => e.start_date?.startsWith(`${year}-${String(m+1).padStart(2,'0')}`))
+              return (
+                <div key={m} style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '6px', padding: '12px' }}>
+                  <div style={{ fontSize: '12px', letterSpacing: '2px', color: t.textMuted, marginBottom: '10px', textTransform: 'uppercase', fontWeight: 600 }}>{MONTHS[m]}</div>
+                  {monthEvents.length === 0
+                    ? <div style={{ fontSize: '11px', color: t.textFaint }}>Sem eventos</div>
+                    : monthEvents.map(ev => (
+                      <div key={ev.id} onClick={() => openEdit(ev)}
+                        style={{ marginBottom: '5px', background: getCatColor(ev.category) + '15', border: `1px solid ${getCatColor(ev.category)}44`, borderLeft: `3px solid ${getCatColor(ev.category)}`, borderRadius: '3px', padding: '4px 7px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px', cursor: 'pointer' }}>
+                        <div style={{ fontSize: '12px', color: getCatColor(ev.category), overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{ev.title}</div>
+                        <div style={{ fontSize: '11px', color: t.textFaint, whiteSpace: 'nowrap' }}>
+                          {ev.start_date?.slice(8)}{ev.end_date && ev.end_date !== ev.start_date ? `–${ev.end_date?.slice(8)}` : ''}
+                        </div>
+                      </div>
+                    ))
+                  }
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Annual stats */}
+          <div style={{ marginTop: '16px' }}>
+            <div style={{ fontSize: '9px', letterSpacing: '3px', color: t.textMuted, marginBottom: '10px', fontWeight: 600 }}>SEASON OVERVIEW</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '10px', marginBottom: '14px' }}>
+              <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+                <div style={{ fontSize: '9px', letterSpacing: '2px', color: t.textMuted, marginBottom: '6px', fontWeight: 600 }}>CONFIRMED</div>
+                <div style={{ fontSize: '24px', fontWeight: 800, color: t.accentLight }}>{confirmed}</div>
+              </div>
+              <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+                <div style={{ fontSize: '9px', letterSpacing: '2px', color: t.textMuted, marginBottom: '6px', fontWeight: 600 }}>OPTIONAL</div>
+                <div style={{ fontSize: '24px', fontWeight: 800, color: t.textMuted }}>{optional}</div>
+              </div>
+              <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+                <div style={{ fontSize: '9px', letterSpacing: '2px', color: t.textMuted, marginBottom: '6px', fontWeight: 600 }}>TOTAL EVENTS</div>
+                <div style={{ fontSize: '24px', fontWeight: 800, color: t.text }}>{yearEvents.length}</div>
+              </div>
+              <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+                <div style={{ fontSize: '9px', letterSpacing: '2px', color: t.textMuted, marginBottom: '6px', fontWeight: 600 }}>COMP DAYS</div>
+                <div style={{ fontSize: '24px', fontWeight: 800, color: '#f59e0b' }}>{yearEvents.filter(e => e.status !== 'cancelled').reduce((acc, e) => { if (!e.start_date) return acc; const s = new Date(e.start_date); const en = new Date(e.end_date || e.start_date); return acc + Math.round((en - s) / 86400000) + 1 }, 0)}</div>
+              </div>
+            </div>
+            <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '8px', padding: '14px' }}>
+              <div style={{ fontSize: '9px', letterSpacing: '2px', color: t.textMuted, marginBottom: '12px', fontWeight: 600 }}>BY CATEGORY</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {Object.entries(yearEvents.reduce((acc, e) => { const cat = e.category || 'Other'; if (!acc[cat]) acc[cat] = { count: 0, color: e.color || t.accent, days: 0 }; acc[cat].count++; if (e.start_date) { const s = new Date(e.start_date); const en = new Date(e.end_date || e.start_date); acc[cat].days += Math.round((en - s) / 86400000) + 1 } return acc }, {})).sort((a, b) => b[1].count - a[1].count).map(([cat, data]) => (
+                  <div key={cat} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: data.color, flexShrink: 0 }}></div>
+                    <div style={{ fontSize: '12px', color: t.text, flex: 1, fontWeight: 500 }}>{cat}</div>
+                    <div style={{ fontSize: '11px', color: t.textMuted }}>{data.days}d</div>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: t.text, minWidth: '24px', textAlign: 'right' }}>{data.count}</div>
+                    <div style={{ width: '80px', height: '4px', background: t.border, borderRadius: '2px', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${(data.count / yearEvents.length) * 100}%`, background: data.color, borderRadius: '2px' }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
