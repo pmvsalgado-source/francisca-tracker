@@ -261,17 +261,24 @@ export default function Performance({ theme, t, user, lang = 'en', initialTab = 
                       {parseFloat(delta) >= 0 ? '+' : ''}{delta} {m.unit}
                     </div>
                   )}
-                  {m.target && last && (
-                    <div style={{ marginTop: '6px' }}>
-                      <div style={{ height: '3px', background: '#2a2a2a', borderRadius: '2px', overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: `${Math.min(100, (parseFloat(last.value) / m.target) * 100)}%`, background: '#378ADD', borderRadius: '2px' }} />
+                  {m.target && last && (() => {
+                    const val = parseFloat(last.value)
+                    const tgt = parseFloat(m.target)
+                    const exceeded = val >= tgt
+                    // For metrics where higher is better (all current ones), clamp to 100%
+                    const barPct = Math.min(100, Math.max(0, (val / tgt) * 100))
+                    return (
+                      <div style={{ marginTop: '6px' }}>
+                        <div style={{ height: '3px', background: '#2a2a2a', borderRadius: '2px', overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${barPct}%`, background: exceeded ? '#52E8A0' : '#378ADD', borderRadius: '2px', transition: 'width 0.4s' }} />
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '3px', fontSize: '9px', color: t.textFaint }}>
+                          <span style={{ color: exceeded ? '#52E8A0' : t.textFaint }}>{val.toFixed(2)}{m.unit}</span>
+                          <span style={{ color: exceeded ? '#52E8A0' : '#378ADD' }}>{exceeded ? '✓ ' : ''}{tgt}{m.unit}</span>
+                        </div>
                       </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '3px', fontSize: '9px', color: t.textFaint }}>
-                        <span>{parseFloat(last.value).toFixed(1)}</span>
-                        <span style={{ color: '#378ADD' }}>{m.target}</span>
-                      </div>
-                    </div>
-                  )}
+                    )
+                  })()}
                 </div>
               )
             })}
