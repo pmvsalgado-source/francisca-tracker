@@ -99,14 +99,24 @@ export default function Calendar({ theme, t, user, lang = 'en' }) {
       return d >= start && d <= end
     }) : []
     // Training sessions from training plans
+    // Structure: plan.days[i] = { sessions: [{id, cat, notes, items}] }
+    // days[0]=Mon … days[6]=Sun; date computed from plan.week_start + i days
     const trainingSessions = []
     trainingPlans.forEach(plan => {
-      if (!plan.sessions) return
-      plan.sessions.forEach(session => {
-        if (session.date === d) {
-          if (calFilters.golf && session.type === 'golf') trainingSessions.push({ ...session, _isTrain: true, _color: '#378ADD' })
-          if (calFilters.gym && session.type === 'gym') trainingSessions.push({ ...session, _isTrain: true, _color: '#52E8A0' })
-        }
+      if (!plan.days || !plan.week_start) return
+      const planType = plan.plan_type // 'golf' | 'gym'
+      plan.days.forEach((day, dayIdx) => {
+        if (!day?.sessions?.length) return
+        const dayDate = new Date(plan.week_start + 'T12:00:00')
+        dayDate.setDate(dayDate.getDate() + dayIdx)
+        const sessionDateStr = `${dayDate.getFullYear()}-${String(dayDate.getMonth()+1).padStart(2,'0')}-${String(dayDate.getDate()).padStart(2,'0')}`
+        if (sessionDateStr !== d) return
+        day.sessions.forEach(session => {
+          if (calFilters.golf && planType === 'golf')
+            trainingSessions.push({ ...session, _isTrain: true, type: 'golf', _color: '#22c55e', name: session.cat || 'Golf' })
+          if (calFilters.gym && planType === 'gym')
+            trainingSessions.push({ ...session, _isTrain: true, type: 'gym', _color: '#f97316', name: session.cat || 'Gym' })
+        })
       })
     })
     return [...dayEvents, ...trainingSessions]
@@ -284,7 +294,7 @@ export default function Calendar({ theme, t, user, lang = 'en' }) {
           <button onClick={() => setView('month')} style={{ background: view === 'month' ? '#243560' : 'transparent', border: '0.5px solid #2e4a6a', borderRadius: '6px', color: view === 'month' ? '#fff' : '#8aaed4', padding: '5px 12px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 600 }}>{lang==='pt'?'Mensal':'Monthly'}</button>
           <button onClick={() => setView('year')} style={{ background: view === 'year' ? '#243560' : 'transparent', border: '0.5px solid #2e4a6a', borderRadius: '6px', color: view === 'year' ? '#fff' : '#8aaed4', padding: '5px 12px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 600 }}>{lang==='pt'?'Anual':'Annual'}</button>
           <div style={{ width: '1px', height: '14px', background: '#2e4a6a' }}></div>
-          {[['events', lang==='pt'?'Eventos':'Events', '#378ADD'], ['golf', 'Golf', '#378ADD'], ['gym', lang==='pt'?'Ginásio':'Gym', '#52E8A0']].map(([key, label, color]) => (
+          {[['events', lang==='pt'?'Eventos':'Events', '#378ADD'], ['golf', 'Golf', '#22c55e'], ['gym', lang==='pt'?'Ginásio':'Gym', '#f97316']].map(([key, label, color]) => (
             <button key={key} onClick={() => setCalFilters(p => ({ ...p, [key]: !p[key] }))}
               style={{ background: calFilters[key] ? color + '33' : 'transparent', border: `0.5px solid ${calFilters[key] ? color : '#2e4a6a'}`, borderRadius: '6px', color: calFilters[key] ? color : '#8aaed4', padding: '5px 10px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 600 }}>
               {label}
@@ -323,7 +333,7 @@ export default function Calendar({ theme, t, user, lang = 'en' }) {
                   {dayEvents.slice(0, 2).map((ev, ei) => (
                     <div key={ev.id || ei} onClick={e => { e.stopPropagation(); if (!ev._isTrain) openEdit(ev) }}
                       style={{ background: ev._isTrain ? ev._color + '33' : (ev.color || getCatColor(ev.category)), borderRadius: '4px', padding: '3px 6px', fontSize: '10px', fontWeight: 700, color: ev._isTrain ? ev._color : '#fff', marginBottom: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: ev._isTrain ? 'default' : 'pointer', border: ev._isTrain ? `1px solid ${ev._color}44` : 'none' }}>
-                      {ev._isTrain ? (ev.type === 'golf' ? '⛳' : '💪') + ' ' : ''}{ev.title || ev.session_name || ev.name}
+                      {ev._isTrain ? (ev.type === 'golf' ? '⛳' : '💪') + ' ' : ''}{ev.title || ev.session_name || ev.name || ev.cat}
                     </div>
                   ))}
                   {dayEvents.length > 2 && <div style={{ fontSize: '9px', color: '#8aaed4', fontWeight: 600 }}>+{dayEvents.length - 2}</div>}
