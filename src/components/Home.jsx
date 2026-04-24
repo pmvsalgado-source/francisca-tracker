@@ -93,22 +93,41 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   const [events, setEvents] = useState([])
   const [trainingPlans, setTrainingPlans] = useState([])
   const [compStats, setCompStats] = useState([])
-  const [athlete, setAthlete] = useState({ hcp: '1.1', wagr: '—', club: 'Vale de Janelas', category: 'Sub-18', fed: 'FPG', fed_num: '43832' })
+  const ATHLETE_DEFAULTS = { hcp: '1.1', wagr: '—', club: 'Vale de Janelas', category: 'Sub-18', fed: 'FPG', fed_num: '43832' }
+  const [athlete, setAthlete] = useState(ATHLETE_DEFAULTS)
   const [editingAthlete, setEditingAthlete] = useState(false)
-  const [athleteForm, setAthleteForm] = useState({ ...athlete })
+  const [athleteForm, setAthleteForm] = useState(ATHLETE_DEFAULTS)
+  const [athleteSaving, setAthleteSaving] = useState(false)
 
   useEffect(() => {
     supabase.from('entries').select('*').order('entry_date', { ascending: true }).then(({ data }) => setEntries(data || []))
     supabase.from('events').select('*').order('start_date').then(({ data }) => setEvents(data || []))
     supabase.from('training_plans').select('*').order('week_start', { ascending: false }).limit(2).then(({ data }) => setTrainingPlans(data || []))
     supabase.from('competition_stats').select('*').order('event_date', { ascending: false }).then(({ data }) => setCompStats(data || []))
-    const saved = localStorage.getItem('athlete_data')
-    if (saved) { const a = JSON.parse(saved); setAthlete(a); setAthleteForm(a) }
-  }, [])
+    if (user?.id) {
+      supabase.from('profiles').select('hcp,wagr,athlete_club,category,fed,fed_num').eq('id', user.id).single()
+        .then(({ data }) => {
+          if (data) {
+            const a = { hcp: data.hcp || '1.1', wagr: data.wagr || '—', club: data.athlete_club || 'Vale de Janelas', category: data.category || 'Sub-18', fed: data.fed || 'FPG', fed_num: data.fed_num || '43832' }
+            setAthlete(a); setAthleteForm(a)
+          }
+        })
+    }
+  }, [user])
 
-  const saveAthlete = () => {
+  const saveAthlete = async () => {
+    if (!user?.id) return
+    setAthleteSaving(true)
+    await supabase.from('profiles').update({
+      hcp: athleteForm.hcp,
+      wagr: athleteForm.wagr,
+      athlete_club: athleteForm.club,
+      category: athleteForm.category,
+      fed: athleteForm.fed,
+      fed_num: athleteForm.fed_num,
+    }).eq('id', user.id)
     setAthlete(athleteForm)
-    localStorage.setItem('athlete_data', JSON.stringify(athleteForm))
+    setAthleteSaving(false)
     setEditingAthlete(false)
   }
 
@@ -211,7 +230,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
             ))}
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button onClick={saveAthlete} style={{ background: '#378ADD', border: 'none', borderRadius: '6px', color: t.text, padding: '6px 16px', fontSize: '11px', fontWeight: 700, cursor: 'pointer', fontFamily: F, letterSpacing: '1px' }}>GUARDAR</button>
+            <button onClick={saveAthlete} disabled={athleteSaving} style={{ background: '#378ADD', border: 'none', borderRadius: '6px', color: t.text, padding: '6px 16px', fontSize: '11px', fontWeight: 700, cursor: 'pointer', fontFamily: F, letterSpacing: '1px', opacity: athleteSaving ? 0.7 : 1 }}>{athleteSaving ? 'A GUARDAR...' : 'GUARDAR'}</button>
             <button onClick={() => setEditingAthlete(false)} style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '6px', color: t.textFaint, padding: '6px 16px', fontSize: '11px', cursor: 'pointer', fontFamily: F }}>Cancelar</button>
           </div>
         </div>
