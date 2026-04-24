@@ -10,6 +10,7 @@ export default function Chat({ theme, t, user, profile, lang = 'en' }) {
   const [editText, setEditText] = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [hoveredId, setHoveredId] = useState(null)
+  const [avatarMap, setAvatarMap] = useState({})
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
   const F = "'Inter', system-ui, sans-serif"
@@ -31,6 +32,20 @@ export default function Chat({ theme, t, user, profile, lang = 'en' }) {
     return () => clearInterval(interval)
   }, [fetchMessages])
 
+  // Load avatar for own user immediately
+  useEffect(() => {
+    if (!user?.id) return
+    const { data } = supabase.storage.from('avatars').getPublicUrl(user.id + '.jpg')
+    if (data?.publicUrl) {
+      // Test if image exists
+      const img = new Image()
+      img.onload = () => setAvatarMap(p => ({ ...p, [myEmail]: data.publicUrl }))
+      img.src = data.publicUrl + '?t=' + Date.now()
+    }
+  }, [user, myEmail])
+
+
+
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
   const sendMessage = async () => {
@@ -39,7 +54,8 @@ export default function Chat({ theme, t, user, profile, lang = 'en' }) {
     setSending(true)
     setInput('')
     const name = profile?.name || myEmail.split('@')[0]
-    const { error } = await supabase.from('messages').insert({ user_email: myEmail, user_name: name, content: text })
+    const avatarUrl = avatarMap[myEmail] || null
+    const { error } = await supabase.from('messages').insert({ user_email: myEmail, user_name: name, content: text, avatar_url: avatarUrl })
     if (error) { alert('Erro: ' + error.message); setInput(text) }
     else await fetchMessages()
     setSending(false)
@@ -132,8 +148,10 @@ export default function Chat({ theme, t, user, profile, lang = 'en' }) {
 
                   {/* Avatar */}
                   {!isOwn && (
-                    <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: `linear-gradient(135deg, #378ADD44, #52E8A044)`, border: `1px solid ${t.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 700, color: t.accent, flexShrink: 0, marginBottom: '2px' }}>
-                      {initials}
+                    <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: `linear-gradient(135deg, #378ADD44, #52E8A044)`, border: `1px solid ${t.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 700, color: t.accent, flexShrink: 0, marginBottom: '2px', overflow: 'hidden' }}>
+                      {(msg.avatar_url || avatarMap[(msg.user_email || '').trim().toLowerCase()])
+                        ? <img src={msg.avatar_url || avatarMap[(msg.user_email || '').trim().toLowerCase()]} alt={initials} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        : initials}
                     </div>
                   )}
 
