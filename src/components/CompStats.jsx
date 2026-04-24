@@ -375,10 +375,14 @@ export default function CompStats({ theme, t, user }) {
                     )
                   })}
                   <td style={{ padding: '10px 8px', textAlign: 'center' }}>
-                    <button onClick={() => openEdit(stat)}
-                      style={{ background: 'transparent', border: 'none', color: t.textFaint, cursor: 'pointer', fontSize: '13px', padding: '2px 6px' }}
-                      onMouseEnter={e => e.target.style.color = t.accent}
-                      onMouseLeave={e => e.target.style.color = t.textFaint}>✎</button>
+                    <button onClick={e => { e.stopPropagation(); openEdit(stat) }} title="Edit"
+                      style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '5px', color: t.textMuted, cursor: 'pointer', padding: '4px 6px', display: 'inline-flex', alignItems: 'center', lineHeight: 1 }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = t.accent; e.currentTarget.style.color = t.accent }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = t.border; e.currentTarget.style.color = t.textMuted }}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+                      </svg>
+                    </button>
                   </td>
                 </tr>
               ))}
