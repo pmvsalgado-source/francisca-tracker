@@ -314,6 +314,9 @@ export default function Dashboard({ user }) {
   const [registerError, setRegisterError] = useState('')
   const [profileError, setProfileError] = useState('')
   const [profileSaving, setProfileSaving] = useState(false)
+  const [pwForm, setPwForm] = useState({ newPw: '', confirmPw: '' })
+  const [pwSaving, setPwSaving] = useState(false)
+  const [pwMsg, setPwMsg] = useState('')
   const menuRef = useRef(null)
 
   const changeLang = (l) => { setLang(l); localStorage.setItem('app_lang', l); setShowLangModal(false); setShowMenu(false) }
@@ -436,6 +439,17 @@ export default function Dashboard({ user }) {
     if (error) { setProfileError('Erro: ' + error.message); return }
     setProfile({ ...profileForm, email: currentUser.email })
     setShowProfile(false)
+  }
+
+  const changePassword = async () => {
+    if (pwForm.newPw.length < 6) { setPwMsg(lang === 'pt' ? 'Mínimo 6 caracteres.' : 'Minimum 6 characters.'); return }
+    if (pwForm.newPw !== pwForm.confirmPw) { setPwMsg(lang === 'pt' ? 'As passwords não coincidem.' : 'Passwords do not match.'); return }
+    setPwSaving(true); setPwMsg('')
+    const { error } = await supabase.auth.updateUser({ password: pwForm.newPw })
+    setPwSaving(false)
+    if (error) { setPwMsg((lang === 'pt' ? 'Erro: ' : 'Error: ') + error.message) }
+    else { setPwMsg(lang === 'pt' ? 'Password alterada ✓' : 'Password updated ✓'); setPwForm({ newPw: '', confirmPw: '' }) }
+    setTimeout(() => setPwMsg(''), 4000)
   }
 
   const exportXLS = () => {
@@ -630,6 +644,33 @@ export default function Dashboard({ user }) {
                 <input value={user.email} disabled style={{ ...inp, opacity: 0.5 }} />
               </div>
             </div>
+
+            {/* Change Password */}
+            <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: `1px solid ${t.border}` }}>
+              <div style={{ fontSize: '9px', letterSpacing: '2px', color: t.textMuted, marginBottom: '10px', fontWeight: 600 }}>
+                {lang === 'pt' ? 'ALTERAR PASSWORD' : 'CHANGE PASSWORD'}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <input type="password" value={pwForm.newPw} onChange={e => setPwForm(p => ({ ...p, newPw: e.target.value }))}
+                  placeholder={lang === 'pt' ? 'Nova password (mín. 6 caracteres)' : 'New password (min. 6 chars)'}
+                  style={inp} />
+                {pwForm.newPw.length > 0 && (
+                  <input type="password" value={pwForm.confirmPw} onChange={e => setPwForm(p => ({ ...p, confirmPw: e.target.value }))}
+                    placeholder={lang === 'pt' ? 'Confirmar nova password' : 'Confirm new password'}
+                    style={inp} />
+                )}
+                {pwForm.newPw.length >= 6 && (
+                  <button onClick={changePassword} disabled={pwSaving}
+                    style={{ background: pwSaving ? t.navActive : t.surface, border: `1px solid ${t.border}`, borderRadius: '6px', color: pwSaving ? t.textMuted : t.text, padding: '7px 14px', fontFamily: F, fontWeight: 600, fontSize: '12px', cursor: pwSaving ? 'not-allowed' : 'pointer', alignSelf: 'flex-start' }}>
+                    {pwSaving ? (lang === 'pt' ? 'A guardar...' : 'Saving...') : (lang === 'pt' ? 'Alterar Password' : 'Update Password')}
+                  </button>
+                )}
+                {pwMsg && (
+                  <div style={{ fontSize: '12px', fontWeight: 600, color: pwMsg.includes('✓') ? t.success : t.danger }}>{pwMsg}</div>
+                )}
+              </div>
+            </div>
+
             <div style={{ display: 'flex', gap: '10px', marginTop: '20px', justifyContent: 'flex-end' }}>
               <button onClick={() => { setShowProfile(false); setProfileError('') }} style={btn(false)}>{s.profile.cancel}</button>
               <button onClick={saveProfile} disabled={profileSaving} style={{ background: t.accent, border: 'none', borderRadius: '6px', color: t.text, padding: '8px 20px', fontFamily: F, fontWeight: 600, fontSize: '13px', cursor: profileSaving ? 'not-allowed' : 'pointer', opacity: profileSaving ? 0.7 : 1 }}>{profileSaving ? (lang==='pt' ? 'A guardar...' : 'Saving...') : s.profile.save}</button>
@@ -673,7 +714,7 @@ export default function Dashboard({ user }) {
                   </div>
                   {[
                     
-                    { label: s.menu.editProfile, action: () => { setProfileForm({...profile}); setShowProfile(true); setShowMenu(false) } },
+                    { label: s.menu.editProfile, action: () => { setProfileForm({...profile}); setPwForm({ newPw: '', confirmPw: '' }); setPwMsg(''); setShowProfile(true); setShowMenu(false) } },
                     { label: s.menu.team, action: () => { setShowTeam(true); setShowMenu(false) } },
                     { label: theme === 'dark' ? s.menu.lightMode : s.menu.darkMode, action: () => { const next = theme === 'dark' ? 'light' : 'dark'; setTheme(next); localStorage.setItem('fs_theme', next); setShowMenu(false) } },
                     { label: s.menu.exportExcel, action: () => { exportXLS(); setShowMenu(false) } },

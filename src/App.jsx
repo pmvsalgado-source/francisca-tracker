@@ -6,6 +6,7 @@ import Dashboard from './components/Dashboard'
 export default function App() {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [needsPasswordReset, setNeedsPasswordReset] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -13,8 +14,14 @@ export default function App() {
       setLoading(false)
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setUser(session?.user ?? null)
+        setNeedsPasswordReset(true)
+      } else {
+        setUser(session?.user ?? null)
+        setNeedsPasswordReset(false)
+      }
     })
 
     return () => subscription.unsubscribe()
@@ -30,5 +37,6 @@ export default function App() {
     </div>
   )
 
+  if (needsPasswordReset) return <Login initialMode="reset" onPasswordReset={() => setNeedsPasswordReset(false)} />
   return user ? <Dashboard user={user} /> : <Login />
 }

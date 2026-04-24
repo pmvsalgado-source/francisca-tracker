@@ -1,13 +1,16 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
 
-export default function Login() {
+export default function Login({ initialMode, onPasswordReset }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [mode, setMode] = useState('login') // login | forgot
+  const [mode, setMode] = useState(initialMode || 'login') // login | forgot | reset
   const [forgotSent, setForgotSent] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [resetDone, setResetDone] = useState(false)
 
   const F = "'Inter', system-ui, sans-serif"
   const savedTheme = typeof window !== 'undefined' ? (localStorage.getItem('fs_theme') || 'light') : 'light'
@@ -24,6 +27,20 @@ export default function Login() {
     setLoading(true); setError('')
     const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) setError(error.message)
+    setLoading(false)
+  }
+
+  const handleResetPassword = async (e) => {
+    e.preventDefault()
+    if (newPassword.length < 6) { setError('A password deve ter pelo menos 6 caracteres.'); return }
+    if (newPassword !== confirmPassword) { setError('As passwords não coincidem.'); return }
+    setLoading(true); setError('')
+    const { error } = await supabase.auth.updateUser({ password: newPassword })
+    if (error) { setError(error.message) }
+    else {
+      setResetDone(true)
+      setTimeout(() => onPasswordReset?.(), 1800)
+    }
     setLoading(false)
   }
 
@@ -63,6 +80,40 @@ export default function Login() {
         </div>
 
         <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '16px', padding: '32px' }}>
+
+          {mode === 'reset' && (
+            <>
+              <div style={{ fontSize: '18px', fontWeight: 700, color: t.text, marginBottom: '8px' }}>Definir Nova Password</div>
+              <div style={{ fontSize: '13px', color: t.textMuted, marginBottom: '24px', lineHeight: 1.6 }}>
+                Escolhe uma nova password para a tua conta.
+              </div>
+              {resetDone ? (
+                <div style={{ fontSize: '14px', color: '#4ade80', background: '#0a2010', border: '1px solid #1a5a20', borderRadius: '8px', padding: '16px', lineHeight: 1.6 }}>
+                  ✓ Password alterada com sucesso. A entrar na aplicação...
+                </div>
+              ) : (
+                <form onSubmit={handleResetPassword}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <div>
+                      <div style={{ fontSize: '10px', letterSpacing: '2px', color: t.textMuted, marginBottom: '6px', fontWeight: 600 }}>NOVA PASSWORD</div>
+                      <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)}
+                        placeholder="Mínimo 6 caracteres" required style={inp} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '10px', letterSpacing: '2px', color: t.textMuted, marginBottom: '6px', fontWeight: 600 }}>CONFIRMAR PASSWORD</div>
+                      <input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
+                        placeholder="Repetir nova password" required style={inp} />
+                    </div>
+                    {error && <div style={{ fontSize: '13px', color: '#f87171', background: '#2a0a0a', border: '1px solid #5a1a1a', borderRadius: '8px', padding: '10px 12px' }}>{error}</div>}
+                    <button type="submit" disabled={loading}
+                      style={{ background: loading ? t.border : t.accent, border: 'none', borderRadius: '8px', color: loading ? t.textMuted : '#fff', padding: '13px', fontSize: '14px', fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer', fontFamily: F, marginTop: '4px' }}>
+                      {loading ? 'A guardar...' : 'Guardar Nova Password'}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </>
+          )}
 
           {mode === 'login' && (
             <>
