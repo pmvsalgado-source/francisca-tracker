@@ -389,13 +389,14 @@ export default function Dashboard({ user }) {
   const uploadAvatar = async (file) => {
     if (!file) return
     setUploadingAvatar(true)
-    const { error } = await supabase.storage.from('avatars').upload(user.id + '.jpg', file, { upsert: true, contentType: file.type })
+    const { data: { user: currentUser } } = await supabase.auth.getUser()
+    if (!currentUser?.id) { setUploadingAvatar(false); return }
+    const { error } = await supabase.storage.from('avatars').upload(currentUser.id + '.jpg', file, { upsert: true, contentType: file.type })
     if (!error) {
-      const { data } = supabase.storage.from('avatars').getPublicUrl(user.id + '.jpg')
+      const { data } = supabase.storage.from('avatars').getPublicUrl(currentUser.id + '.jpg')
       const url = data.publicUrl + '?t=' + Date.now()
       setAvatar(url)
-      // Save avatar_url to profiles so Chat and other components can use it
-      await supabase.from('profiles').update({ avatar_url: data.publicUrl }).eq('id', user.id)
+      await supabase.from('profiles').update({ avatar_url: data.publicUrl }).eq('id', currentUser.id)
     }
     setUploadingAvatar(false)
   }
@@ -425,19 +426,15 @@ export default function Dashboard({ user }) {
   }
 
   const saveProfile = async () => {
-    if (!user?.id) return
     setProfileSaving(true); setProfileError('')
+    const { data: { user: currentUser } } = await supabase.auth.getUser()
+    if (!currentUser?.id) { setProfileError('Sessão expirada. Faz login novamente.'); setProfileSaving(false); return }
     const { error } = await supabase.from('profiles')
-      .update({
-        name: profileForm.name,
-        role: profileForm.role,
-        phone: profileForm.phone,
-        athlete_club: profileForm.club,
-      })
-      .eq('id', user.id)
+      .update({ name: profileForm.name, role: profileForm.role, phone: profileForm.phone, athlete_club: profileForm.club })
+      .eq('id', currentUser.id)
     setProfileSaving(false)
-    if (error) { setProfileError('Erro ao guardar: ' + error.message); return }
-    setProfile({ ...profileForm, email: user.email })
+    if (error) { setProfileError('Erro: ' + error.message); return }
+    setProfile({ ...profileForm, email: currentUser.email })
     setShowProfile(false)
   }
 
