@@ -92,6 +92,7 @@ export default function Performance({ theme, t, user, lang = 'en', initialTab = 
   const [newMetric, setNewMetric] = useState({ label: '', unit: '', category: 'golfe', target: '' })
   const [savingKpis, setSavingKpis] = useState(false)
   const [kpiMsg, setKpiMsg] = useState('')
+  const [saveError, setSaveError] = useState('')
 
   const F = "'Inter', system-ui, sans-serif"
   const card = { background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '20px 22px' }
@@ -134,7 +135,8 @@ export default function Performance({ theme, t, user, lang = 'en', initialTab = 
     if (!rows.length) { setSaving(false); return }
     const { error } = await supabase.from('entries').upsert(rows, { onConflict: 'entry_date,metric_id' })
     setSaving(false)
-    if (error) { alert('Erro: ' + error.message); return }
+    if (error) { setSaveError('Erro ao guardar: ' + error.message); return }
+    setSaveError('')
     setSavedMsg('Guardado ✓'); setTimeout(() => setSavedMsg(''), 3000)
     setForm(p => ({ ...p, values: {}, notes: '' }))
     fetchEntries()
@@ -201,7 +203,16 @@ export default function Performance({ theme, t, user, lang = 'en', initialTab = 
         ))}
       </div>
 
-      {loading && <div style={{ padding: '40px', textAlign: 'center', color: t.textMuted }}>A carregar...</div>}
+      {loading && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '8px 0' }}>
+          {[1,2,3].map(i => (
+            <div key={i} style={{ height: i === 1 ? '120px' : '72px', borderRadius: '12px', background: t.surface, border: `1px solid ${t.border}`, position: 'relative', overflow: 'hidden' }}>
+              <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(90deg, transparent 0%, ${t.border} 50%, transparent 100%)`, animation: 'shimmer 1.4s infinite', backgroundSize: '200% 100%' }} />
+            </div>
+          ))}
+          <style>{`@keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }`}</style>
+        </div>
+      )}
 
       {/* FOCO */}
       {!loading && subTab === 'focus' && (
@@ -307,6 +318,7 @@ export default function Performance({ theme, t, user, lang = 'en', initialTab = 
               {saving ? 'A guardar...' : 'Guardar Sessão'}
             </button>
             {savedMsg && <span style={{ fontSize: '13px', color: t.success, fontWeight: 600 }}>{savedMsg}</span>}
+            {saveError && <span style={{ fontSize: '12px', color: t.danger, fontWeight: 600 }}>{saveError}</span>}
           </div>
         </div>
       )}
