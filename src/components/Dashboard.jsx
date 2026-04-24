@@ -395,7 +395,7 @@ export default function Dashboard({ user }) {
       const url = data.publicUrl + '?t=' + Date.now()
       setAvatar(url)
       // Save avatar_url to profiles so Chat and other components can use it
-      await supabase.from('profiles').upsert({ id: user.id, avatar_url: data.publicUrl })
+      await supabase.from('profiles').update({ avatar_url: data.publicUrl }).eq('id', user.id)
     }
     setUploadingAvatar(false)
   }
@@ -427,13 +427,14 @@ export default function Dashboard({ user }) {
   const saveProfile = async () => {
     if (!user?.id) return
     setProfileSaving(true); setProfileError('')
-    const { error } = await supabase.from('profiles').upsert({
-      id: user.id,
-      name: profileForm.name,
-      role: profileForm.role,
-      phone: profileForm.phone,
-      athlete_club: profileForm.club,
-    })
+    const { error } = await supabase.from('profiles')
+      .update({
+        name: profileForm.name,
+        role: profileForm.role,
+        phone: profileForm.phone,
+        athlete_club: profileForm.club,
+      })
+      .eq('id', user.id)
     setProfileSaving(false)
     if (error) { setProfileError('Erro ao guardar: ' + error.message); return }
     setProfile({ ...profileForm, email: user.email })
