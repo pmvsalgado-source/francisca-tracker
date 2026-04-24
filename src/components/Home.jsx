@@ -270,7 +270,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
               <div style={{ fontSize: '10px', color: t.textMuted, letterSpacing: '3px', marginBottom: '4px' }}>{lang==='pt'?'OBJECTIVO':'TARGET'}</div>
               <div style={{ fontSize: '40px', fontWeight: 900, color: '#378ADD', lineHeight: 1, letterSpacing: '-2px' }}>{swingTarget}</div>
               <div style={{ fontSize: '11px', color: '#378ADD', marginTop: '2px' }}>
-                {lastSwing ? lang==='pt'?(lastSwing >= swingTarget ? (lang==='pt'?`superou em +${(lastSwing-swingTarget).toFixed(1)} mph`:`exceeded by +${(lastSwing-swingTarget).toFixed(1)} mph`) : lang==='pt'?`faltam ${(swingTarget - lastSwing).toFixed(1)} mph`:`${(swingTarget - lastSwing).toFixed(1)} mph to go`) : (lang==='pt'?'sem dados':'no data')}
+                {lastSwing ? (lastSwing >= swingTarget ? (lang==='pt' ? 'superou objectivo' : 'target exceeded') : (lang==='pt' ? "faltam " + (swingTarget-lastSwing).toFixed(1) + " mph" : (swingTarget-lastSwing).toFixed(1) + " mph to go")) : (lang==='pt' ? 'sem dados' : 'no data')}
               </div>
             </div>
           </div>
@@ -510,3 +510,4 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
     </div>
   )
 }
+
