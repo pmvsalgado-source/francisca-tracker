@@ -3,10 +3,19 @@ import { supabase } from './lib/supabase'
 import Login from './components/Login'
 import Dashboard from './components/Dashboard'
 
+// Read URL hash synchronously — Supabase appends #access_token=...&type=recovery
+function isRecoveryUrl() {
+  try {
+    const params = new URLSearchParams(window.location.hash.slice(1))
+    return params.get('type') === 'recovery'
+  } catch { return false }
+}
+
 export default function App() {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [needsPasswordReset, setNeedsPasswordReset] = useState(false)
+  // Initialise synchronously from URL so first render is already correct
+  const [needsPasswordReset, setNeedsPasswordReset] = useState(isRecoveryUrl)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -18,9 +27,12 @@ export default function App() {
       if (event === 'PASSWORD_RECOVERY') {
         setUser(session?.user ?? null)
         setNeedsPasswordReset(true)
-      } else {
-        setUser(session?.user ?? null)
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null)
         setNeedsPasswordReset(false)
+      } else {
+        // SIGNED_IN can fire right after PASSWORD_RECOVERY — do NOT clear the flag here
+        setUser(session?.user ?? null)
       }
     })
 
