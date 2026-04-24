@@ -32,13 +32,21 @@ export default function Chat({ theme, t, user, profile, lang = 'en' }) {
     return () => clearInterval(interval)
   }, [fetchMessages])
 
-  // Load avatars for all users from profiles table
+  // Load avatars for all users from profiles table — map by both id and email
   useEffect(() => {
-    supabase.from('profiles').select('id, avatar_url').then(({ data }) => {
+    supabase.from('profiles').select('id, avatar_url').then(async ({ data }) => {
       if (!data) return
-      // Build a map of user_id -> avatar_url
       const idMap = {}
       data.forEach(p => { if (p.avatar_url) idMap[p.id] = p.avatar_url })
+      // Also map by email using auth.users via messages table
+      const { data: msgs } = await supabase.from('messages').select('user_email, user_id').not('user_id', 'is', null)
+      if (msgs) {
+        msgs.forEach(m => {
+          if (m.user_id && m.user_email && idMap[m.user_id]) {
+            idMap[m.user_email.trim().toLowerCase()] = idMap[m.user_id]
+          }
+        })
+      }
       setAvatarMap(idMap)
     })
   }, [])
@@ -55,7 +63,6 @@ export default function Chat({ theme, t, user, profile, lang = 'en' }) {
     const name = profile?.name || myEmail.split('@')[0]
     const uid = user?.id || user?.sub || null
     const avatarUrl = (uid && avatarMap[uid]) || null
-    console.log('sendMessage — uid:', uid, 'user:', user)
     const { error } = await supabase.from('messages').insert({ user_email: myEmail, user_name: name, content: text, avatar_url: avatarUrl, user_id: uid })
     if (error) { alert('Erro: ' + error.message); setInput(text) }
     else await fetchMessages()
@@ -148,14 +155,20 @@ export default function Chat({ theme, t, user, profile, lang = 'en' }) {
                   style={{ display: 'flex', gap: '8px', alignItems: 'flex-end', flexDirection: isOwn ? 'row-reverse' : 'row', marginBottom: '6px', padding: '0 4px' }}>
 
                   {/* Avatar */}
-                  <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: `linear-gradient(135deg, #378ADD44, #52E8A044)`, border: `1px solid ${t.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 700, color: t.accent, flexShrink: 0, marginBottom: '2px', overflow: 'hidden' }}>
-                    {(msg.avatar_url || (msg.user_id && avatarMap[msg.user_id]))
-                      ? <img src={msg.avatar_url || avatarMap[msg.user_id]} alt={initials} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      : initials}
-                  </div>
+                  {(() => {
+                    const msgEmail = (msg.user_email || '').trim().toLowerCase()
+                    const avatarSrc = msg.avatar_url || (msg.user_id && avatarMap[msg.user_id]) || avatarMap[msgEmail] || null
+                    return (
+                      <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: `linear-gradient(135deg, #378ADD44, #52E8A044)`, border: `1px solid ${t.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 700, color: t.accent, flexShrink: 0, marginBottom: '2px', overflow: 'hidden' }}>
+                        {avatarSrc
+                          ? <img src={avatarSrc} alt={initials} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.target.style.display='none' }} />
+                          : initials}
+                      </div>
+                    )
+                  })()}
 
                   <div style={{ maxWidth: '72%', display: 'flex', flexDirection: 'column', alignItems: isOwn ? 'flex-end' : 'flex-start', gap: '2px' }}>
-                    {!isOwn && <div style={{ fontSize: '10px', color: t.textMuted, fontWeight: 600, marginLeft: '4px' }}>{name}</div>}
+                    <div style={{ fontSize: '10px', color: t.textMuted, fontWeight: 600, marginLeft: '4px', marginRight: '4px' }}>{name}</div>
 
                     {isEditing ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: 'flex-end', width: '100%' }}>
