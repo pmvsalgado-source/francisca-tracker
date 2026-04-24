@@ -322,7 +322,7 @@ export default function Calendar({ theme, t, user, lang = 'en' }) {
                   <div style={{ fontSize: '12px', color: day.current ? (isToday ? '#378ADD' : '#0f1e3d') : '#b0bcd8', fontWeight: isToday ? 800 : 600, marginBottom: '4px' }}>{day.date.getDate()}</div>
                   {dayEvents.slice(0, 2).map((ev, ei) => (
                     <div key={ev.id || ei} onClick={e => { e.stopPropagation(); if (!ev._isTrain) openEdit(ev) }}
-                      style={{ background: ev._isTrain ? ev._color + '33' : getCatColor(ev.category), borderRadius: '4px', padding: '3px 6px', fontSize: '10px', fontWeight: 700, color: ev._isTrain ? ev._color : '#fff', marginBottom: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: ev._isTrain ? 'default' : 'pointer', border: ev._isTrain ? `1px solid ${ev._color}44` : 'none' }}>
+                      style={{ background: ev._isTrain ? ev._color + '33' : (ev.color || getCatColor(ev.category)), borderRadius: '4px', padding: '3px 6px', fontSize: '10px', fontWeight: 700, color: ev._isTrain ? ev._color : '#fff', marginBottom: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: ev._isTrain ? 'default' : 'pointer', border: ev._isTrain ? `1px solid ${ev._color}44` : 'none' }}>
                       {ev._isTrain ? (ev.type === 'golf' ? '⛳' : '💪') + ' ' : ''}{ev.title || ev.session_name || ev.name}
                     </div>
                   ))}
