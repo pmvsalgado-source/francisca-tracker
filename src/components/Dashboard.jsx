@@ -311,14 +311,21 @@ export default function Dashboard({ user }) {
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const avatarInputRef = useRef(null)
   const [kpiMsg, setKpiMsg] = useState('')
+  const [registerError, setRegisterError] = useState('')
+  const [profileError, setProfileError] = useState('')
+  const [profileSaving, setProfileSaving] = useState(false)
   const menuRef = useRef(null)
 
   const changeLang = (l) => { setLang(l); localStorage.setItem('app_lang', l); setShowLangModal(false); setShowMenu(false) }
 
   useEffect(() => {
-    const saved = localStorage.getItem('user_profile_' + user.id)
-    if (saved) { const p = JSON.parse(saved); setProfile(p); setProfileForm(p) }
-    else { const name = user.email.split('@')[0]; setProfile(p => ({ ...p, name })); setProfileForm(p => ({ ...p, name })) }
+    if (!user?.id) return
+    supabase.from('profiles').select('name,role,phone,athlete_club').eq('id', user.id).single()
+      .then(({ data }) => {
+        const base = { name: user.email.split('@')[0], role: s.profile.roles[0], club: '', phone: '' }
+        const p = data ? { name: data.name || base.name, role: data.role || base.role, club: data.athlete_club || base.club, phone: data.phone || base.phone } : base
+        setProfile(p); setProfileForm(p)
+      })
   }, [user])
 
   useEffect(() => {
@@ -395,7 +402,7 @@ export default function Dashboard({ user }) {
     if (!rows.length) { setSaving(false); return }
     const { error } = await supabase.from('entries').upsert(rows, { onConflict: 'entry_date,metric_id' })
     setSaving(false)
-    if (error) { alert('Error: ' + error.message); return }
+    if (error) { setRegisterError('Erro ao guardar: ' + error.message); return }
     setSavedMsg(s.saved); setTimeout(() => setSavedMsg(''), 3000)
     setForm(p => ({ ...p, values: {}, notes: '' }))
     setShowRegister(false)
@@ -410,10 +417,19 @@ export default function Dashboard({ user }) {
     setDeleteConfirm(null); fetchEntries()
   }
 
-  const saveProfile = () => {
-    const profileWithEmail = { ...profileForm, email: user.email }
-    setProfile(profileWithEmail)
-    localStorage.setItem('user_profile_' + user.id, JSON.stringify(profileWithEmail))
+  const saveProfile = async () => {
+    if (!user?.id) return
+    setProfileSaving(true); setProfileError('')
+    const { error } = await supabase.from('profiles').upsert({
+      id: user.id,
+      name: profileForm.name,
+      role: profileForm.role,
+      phone: profileForm.phone,
+      athlete_club: profileForm.club,
+    })
+    setProfileSaving(false)
+    if (error) { setProfileError('Erro ao guardar: ' + error.message); return }
+    setProfile({ ...profileForm, email: user.email })
     setShowProfile(false)
   }
 
@@ -564,6 +580,7 @@ export default function Dashboard({ user }) {
                 {saving ? s.register.saving : s.register.save}
               </button>
               {savedMsg && <span style={{ fontSize: '13px', color: t.success, fontWeight: 600 }}>{savedMsg}</span>}
+              {registerError && <span style={{ fontSize: '12px', color: t.danger, fontWeight: 600 }}>{registerError}</span>}
             </div>
           </div>
         </div>
@@ -609,9 +626,10 @@ export default function Dashboard({ user }) {
               </div>
             </div>
             <div style={{ display: 'flex', gap: '10px', marginTop: '20px', justifyContent: 'flex-end' }}>
-              <button onClick={() => setShowProfile(false)} style={btn(false)}>{s.profile.cancel}</button>
-              <button onClick={saveProfile} style={{ background: t.accent, border: 'none', borderRadius: '6px', color: t.text, padding: '8px 20px', fontFamily: F, fontWeight: 600, fontSize: '13px', cursor: 'pointer' }}>{s.profile.save}</button>
+              <button onClick={() => { setShowProfile(false); setProfileError('') }} style={btn(false)}>{s.profile.cancel}</button>
+              <button onClick={saveProfile} disabled={profileSaving} style={{ background: t.accent, border: 'none', borderRadius: '6px', color: t.text, padding: '8px 20px', fontFamily: F, fontWeight: 600, fontSize: '13px', cursor: profileSaving ? 'not-allowed' : 'pointer', opacity: profileSaving ? 0.7 : 1 }}>{profileSaving ? (lang==='pt' ? 'A guardar...' : 'Saving...') : s.profile.save}</button>
             </div>
+            {profileError && <div style={{ marginTop: '10px', fontSize: '12px', color: t.danger, fontWeight: 600, textAlign: 'right' }}>{profileError}</div>}
           </div>
         </div>
       )}
