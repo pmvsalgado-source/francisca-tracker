@@ -320,11 +320,15 @@ export default function Dashboard({ user }) {
 
   useEffect(() => {
     if (!user?.id) return
-    supabase.from('profiles').select('name,role,phone,athlete_club').eq('id', user.id).single()
+    supabase.from('profiles').select('name,role,phone,athlete_club,avatar_url').eq('id', user.id).single()
       .then(({ data }) => {
         const base = { name: user.email.split('@')[0], role: s.profile.roles[0], club: '', phone: '' }
         const p = data ? { name: data.name || base.name, role: data.role || base.role, club: data.athlete_club || base.club, phone: data.phone || base.phone } : base
         setProfile(p); setProfileForm(p)
+        // Load avatar from profiles table first, fallback to storage check
+        if (data?.avatar_url) {
+          setAvatar(data.avatar_url + '?t=' + Date.now())
+        }
       })
   }, [user])
 
@@ -388,7 +392,10 @@ export default function Dashboard({ user }) {
     const { error } = await supabase.storage.from('avatars').upload(user.id + '.jpg', file, { upsert: true, contentType: file.type })
     if (!error) {
       const { data } = supabase.storage.from('avatars').getPublicUrl(user.id + '.jpg')
-      setAvatar(data.publicUrl + '?t=' + Date.now())
+      const url = data.publicUrl + '?t=' + Date.now()
+      setAvatar(url)
+      // Save avatar_url to profiles so Chat and other components can use it
+      await supabase.from('profiles').upsert({ id: user.id, avatar_url: data.publicUrl })
     }
     setUploadingAvatar(false)
   }
