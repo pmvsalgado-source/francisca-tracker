@@ -52,10 +52,11 @@ export default function Chat({ theme, t, user, profile, lang = 'en' }) {
     if (!text) return
     setSending(true)
     setInput('')
-    const { data: { user: currentUser } } = await supabase.auth.getUser()
     const name = profile?.name || myEmail.split('@')[0]
-    const avatarUrl = (currentUser?.id && avatarMap[currentUser.id]) || null
-    const { error } = await supabase.from('messages').insert({ user_email: myEmail, user_name: name, content: text, avatar_url: avatarUrl, user_id: currentUser?.id })
+    const uid = user?.id || user?.sub || null
+    const avatarUrl = (uid && avatarMap[uid]) || null
+    console.log('sendMessage — uid:', uid, 'user:', user)
+    const { error } = await supabase.from('messages').insert({ user_email: myEmail, user_name: name, content: text, avatar_url: avatarUrl, user_id: uid })
     if (error) { alert('Erro: ' + error.message); setInput(text) }
     else await fetchMessages()
     setSending(false)
