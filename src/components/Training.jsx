@@ -839,11 +839,11 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
                       <div style={{display:'flex',gap:'6px'}}>
                         <button onClick={()=>applyTemplate(tpl)} title='Aplicar template'
                           style={{background:typeColor,border:'none',borderRadius:'6px',color:'#fff',padding:'4px 10px',cursor:'pointer',fontSize:'11px',fontWeight:700,fontFamily:F}}>
-                          Aplicar
+                          Usar este Template
                         </button>
                         <button onClick={()=>deleteTemplate(tpl.id)} title='Apagar template'
-                          style={{background:'transparent',border:`1px solid #ef4444`,borderRadius:'6px',color:'#ef4444',padding:'4px 8px',cursor:'pointer',fontSize:'11px',fontFamily:F}}>
-                          ✕
+                          style={{background:'transparent',border:`1px solid #ef4444`,borderRadius:'6px',color:'#ef4444',padding:'4px 10px',cursor:'pointer',fontSize:'11px',fontFamily:F}}>
+                          Apagar
                         </button>
                       </div>
                     </div>
@@ -903,7 +903,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
                 </div>
                 <button onClick={()=>setWizardStep(1)}
                   style={{background:'transparent',border:'none',color:t.textMuted,cursor:'pointer',fontSize:'12px',fontFamily:F}}>
-                  ← Período
+                  ← Voltar
                 </button>
               </div>
               {Object.entries(chipsByWeek).map(([ws,dates])=>{
@@ -952,11 +952,11 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
                 <div style={{display:'flex',gap:'6px'}}>
                   <button onClick={()=>setWizardSelectedChips([...datesInRange])}
                     style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'6px',color:t.textMuted,padding:'3px 8px',cursor:'pointer',fontSize:'10px',fontFamily:F}}>
-                    Todos
+                    Seleccionar Todos
                   </button>
                   <button onClick={()=>setWizardSelectedChips([])}
                     style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'6px',color:t.textMuted,padding:'3px 8px',cursor:'pointer',fontSize:'10px',fontFamily:F}}>
-                    Nenhum
+                    Limpar Selecção
                   </button>
                 </div>
               </div>
@@ -983,13 +983,13 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
                         <div style={{fontSize:'13px',fontWeight:700,color:'#f59e0b'}}>Descanso marcado</div>
                         <button onClick={clearRestDay}
                           style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'6px',color:t.textMuted,padding:'4px 10px',cursor:'pointer',fontSize:'11px',fontFamily:F}}>
-                          Remover
+                          Remover Descanso
                         </button>
                       </div>
                     ) : (
                       <button onClick={markRestDay}
                         style={{width:'100%',background:'transparent',border:`1px dashed ${t.border}`,borderRadius:'8px',color:t.textMuted,padding:'8px',cursor:'pointer',fontSize:'12px',fontFamily:F}}>
-                        Descanso
+                        Marcar Descanso
                       </button>
                     )}
                   </div>
@@ -1101,7 +1101,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
                       {primaryItems.filter(i=>!i.isRest).length>0 && (
                         <button onClick={copyToAllChips}
                           style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'6px',color:t.textMuted,padding:'5px 10px',cursor:'pointer',fontSize:'11px',fontFamily:F}}>
-                          Aplicar a todos
+                          Copiar para Todos os Dias
                         </button>
                       )}
                     </div>
@@ -1157,7 +1157,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
                     placeholder='Nome do template' style={{...inp,flex:1,minWidth:'160px'}}/>
                   <button onClick={()=>saveAsTemplate(wizardTemplateName)} disabled={savingTemplate||!wizardTemplateName.trim()}
                     style={{background:savingTemplate?t.border:typeColor,border:'none',borderRadius:'8px',color:'#fff',padding:'8px 16px',cursor:savingTemplate?'not-allowed':'pointer',fontSize:'12px',fontWeight:700,fontFamily:F}}>
-                    {savingTemplate?'...':'💾 Guardar Template'}
+                    {savingTemplate?'...':'💾 Confirmar'}
                   </button>
                   <button onClick={()=>{setShowSaveTemplate(false);setWizardTemplateName('')}}
                     style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'8px',color:t.textMuted,padding:'8px 12px',cursor:'pointer',fontSize:'12px',fontFamily:F}}>
@@ -1448,7 +1448,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
               )}
               <button onClick={()=>setShowFreeSession(true)}
                 style={{background:'transparent',border:`1px solid ${golfColor}`,borderRadius:'8px',color:golfColor,padding:'7px 14px',fontSize:'12px',fontWeight:700,cursor:'pointer',fontFamily:F}}>
-                + Campo
+                + Ronda no Campo
               </button>
             </div>
           </div>
@@ -1572,7 +1572,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
             <div style={{display:'flex',justifyContent:'flex-end',marginTop:'8px'}}>
               <button onClick={async()=>{const p=golfPlan||gymPlan;if(p)await supabase.from('training_plans').update({athlete_notes:athleteNote,updated_at:new Date().toISOString()}).eq('id',p.id)}}
                 style={{background:golfColor,border:'none',borderRadius:'8px',color:'#fff',padding:'8px 20px',cursor:'pointer',fontSize:'13px',fontWeight:700,fontFamily:F}}>
-                Guardar
+                Guardar Nota
               </button>
             </div>
           </div>
@@ -1977,7 +1977,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
                             </div>
                             <button onClick={()=>navigateToWeek(ws)}
                               style={{background:'transparent',border:`1px solid ${ph.color}66`,borderRadius:'6px',color:ph.color,padding:'3px 8px',cursor:'pointer',fontSize:'10px',fontFamily:F,fontWeight:600}}>
-                              Ver →
+                              Ir para Semana →
                             </button>
                           </div>
 
