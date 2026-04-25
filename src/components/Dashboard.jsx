@@ -285,6 +285,7 @@ export default function Dashboard({ user }) {
   const s = STRINGS[lang]
   const t = theme === 'dark' ? dark : light
   const [view, setView] = useState('home')
+  const [trainingFocusDate, setTrainingFocusDate] = useState(null)
   const [entries, setEntries] = useState([])
   const [metrics, setMetrics] = useState(DEFAULT_METRICS)
   const [form, setForm] = useState({ date: new Date().toISOString().split('T')[0], values: {}, notes: '' })
@@ -859,9 +860,9 @@ export default function Dashboard({ user }) {
         )}
 
         {!loading && view === 'goals' && <Goals theme={theme} t={t} user={user} />}
-        {!loading && view === 'training' && <Training theme={theme} t={t} user={user} />}
+        {!loading && view === 'training' && <Training theme={theme} t={t} user={user} lang={lang} focusDate={trainingFocusDate} onFocusConsumed={() => setTrainingFocusDate(null)} />}
         {!loading && view === 'competition' && <CompStats theme={theme} t={t} user={user} />}
-        {!loading && view === 'calendar' && <Calendar theme={theme} t={t} />}
+        {!loading && view === 'calendar' && <Calendar theme={theme} t={t} user={user} lang={lang} onNavigate={(v, opts) => { if (opts?.date) setTrainingFocusDate(opts.date); setView(v) }} />}
 
                 {!loading && view === 'chat' && <Chat theme={theme} t={t} user={user} profile={profile} lang={lang} />}
         {!loading && view === 'microcycles' && <Microcycles theme={theme} t={t} user={user} lang={lang} />}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 
 const COACH_GOLF = 'pmvsalgado@gmail.com'
@@ -165,7 +165,7 @@ const fmtMins = (m) => {
   return `~${Math.floor(r/60)}h${r%60>0?` ${r%60}min`:''}`
 }
 
-export default function Training({ theme, t, user, lang = 'en', events = [] }) {
+export default function Training({ theme, t, user, lang = 'en', events = [], focusDate = null, onFocusConsumed }) {
   const [subTab, setSubTab] = useState('plan')
   const [plans, setPlans] = useState([])
   const [loading, setLoading] = useState(true)
@@ -198,6 +198,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
   const [progressType, setProgressType] = useState('all')
   const [progressPeriod, setProgressPeriod] = useState('all')
   const [eventsData, setEventsData] = useState([])
+  const [wizardSessionTypes, setWizardSessionTypes] = useState({})
 
   const email = (user?.email||'').toLowerCase()
   const DAYS_LONG  = lang==='pt' ? DAYS_PT : DAYS_EN
@@ -233,6 +234,22 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
   useEffect(() => {
     supabase.from('events').select('id,title,start_date,end_date').then(({data})=>setEventsData(data||[]))
   }, [])
+
+  const focusDateRef = useRef(null)
+  useEffect(() => {
+    if (!focusDate || focusDate === focusDateRef.current) return
+    focusDateRef.current = focusDate
+    const d = new Date(focusDate+'T12:00:00')
+    const dow = d.getDay(); const dayIdx = dow===0?6:dow-1
+    const monday = new Date(d); monday.setDate(d.getDate()-(dow===0?6:dow-1)); monday.setHours(12,0,0,0)
+    const targetWs = monday.toISOString().split('T')[0]
+    const currentWs = getWeekStart(0)
+    const diff = Math.round((new Date(targetWs)-new Date(currentWs))/(7*86400000))
+    setWeekOffset(diff)
+    setSelectedDay(dayIdx)
+    setSubTab('log')
+    onFocusConsumed?.()
+  }, [focusDate, getWeekStart]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const golfPlan = plans.find(p => p.week_start===weekStart && p.plan_type==='golf')
   const gymPlan  = plans.find(p => p.week_start===weekStart && p.plan_type==='gym')
@@ -334,6 +351,15 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
     setWizardActiveDays([0,1,2,3,4,5,6])
     setWizardDayPlans(newDayPlans)
     setWizardSelectedChips(focusDate?[focusDate]:allWeekDates.filter(ds=>newDayPlans[ds]))
+    const newSessionTypes = {}
+    ;(plan.days||[]).forEach((day,dayIdx)=>{
+      ;(day?.sessions||[]).forEach(s=>{
+        const d=new Date(plan.week_start+'T12:00:00'); d.setDate(d.getDate()+dayIdx)
+        const ds=d.toISOString().split('T')[0]
+        if(!s.isRest && s.session_type) newSessionTypes[ds]=s.session_type
+      })
+    })
+    setWizardSessionTypes(newSessionTypes)
     setWizardNote('')
     setWizardUserLib([])
     setWizardError('')
@@ -385,7 +411,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
 
   const saveWizard = async () => {
     // Validation: every day must have a session, rest, or competition
-    const missing = datesInRange.filter(ds => {
+    const missing = wizardSelectedChips.filter(ds => {
       if (dateHasComp(ds)) return false
       return (wizardDayPlans[ds] || []).length === 0
     })
@@ -393,6 +419,22 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
       setWizardError(
         `${missing.length} dia${missing.length>1?'s':''} sem sessão definida: ` +
         missing.map(ds => {
+          const d = new Date(ds+'T12:00:00')
+          return `${DAYS_SHORT_PT[d.getDay()===0?6:d.getDay()-1]} ${d.getDate()}/${d.getMonth()+1}`
+        }).join(', ')
+      )
+      return
+    }
+    const missingType = wizardSelectedChips.filter(ds => {
+      if (dateHasComp(ds)) return false
+      const items = wizardDayPlans[ds] || []
+      if (items[0]?.isRest) return false
+      return !wizardSessionTypes[ds]
+    })
+    if (missingType.length > 0) {
+      setWizardError(
+        `Define o tipo de sessão (Com Coach / Autónomo) para: ` +
+        missingType.map(ds => {
           const d = new Date(ds+'T12:00:00')
           return `${DAYS_SHORT_PT[d.getDay()===0?6:d.getDay()-1]} ${d.getDate()}/${d.getMonth()+1}`
         }).join(', ')
@@ -411,17 +453,19 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
       const ws = monday.toISOString().split('T')[0]
       const dayIdx = dow===0?6:dow-1
       if (!weekMap[ws]) weekMap[ws]={}
-      weekMap[ws][dayIdx] = wizardDayPlans[dateStr] || []
+      weekMap[ws][dayIdx] = { items: wizardDayPlans[dateStr] || [], session_type: wizardSessionTypes[dateStr] || null }
     })
     for (const [ws, dayMap] of Object.entries(weekMap)) {
       const newDays = Array(7).fill(null).map(()=>({sessions:[]}))
-      Object.entries(dayMap).forEach(([dayIdx, items]) => {
+      Object.entries(dayMap).forEach(([dayIdx, dayData]) => {
         const idx = parseInt(dayIdx)
+        const items = dayData.items
+        const session_type = dayData.session_type
         if (items.length > 0) {
           if (items[0]?.isRest) {
             newDays[idx].sessions.push({ id:Date.now()+idx, cat:'Descanso', isRest:true, items:[], notes:'' })
           } else {
-            newDays[idx].sessions.push({ id:Date.now()+idx, cat:wizardType==='golf'?'Driving Range':'Ginásio', notes:wizardNote, items })
+            newDays[idx].sessions.push({ id:Date.now()+idx, cat:wizardType==='golf'?'Driving Range':'Ginásio', notes:wizardNote, items, session_type })
           }
         }
       })
@@ -433,6 +477,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
     setWizardDayPlans({})
     setWizardSelectedChips([])
     setWizardNote('')
+    setWizardSessionTypes({})
     fetchPlans()
   }
 
@@ -622,7 +667,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
             </div>
             <div style={{fontSize:'20px',fontWeight:800,color:t.text}}>Criar Plano</div>
           </div>
-          <button onClick={()=>{setWizard(false);setWizardStep(1);setWizardDayPlans({});setWizardSelectedChips([]);setWizardError('')}}
+          <button onClick={()=>{setWizard(false);setWizardStep(1);setWizardDayPlans({});setWizardSelectedChips([]);setWizardSessionTypes({});setWizardError('')}}
             style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'8px',color:t.textMuted,padding:'8px 16px',cursor:'pointer',fontSize:'13px',fontFamily:F}}>
             Cancelar
           </button>
@@ -663,24 +708,6 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
               </div>
             </div>
 
-            <div style={{marginBottom:'20px'}}>
-              <div style={{fontSize:'10px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginBottom:'10px'}}>DIAS DE TREINO</div>
-              <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
-                {DAYS_SHORT_PT.map((d,i)=>{
-                  const active = wizardActiveDays.includes(i)
-                  return (
-                    <button key={i}
-                      onClick={()=>setWizardActiveDays(prev=>active?prev.filter(x=>x!==i):[...prev,i].sort())}
-                      style={{padding:'6px 12px',borderRadius:'20px',border:`1px solid ${active?typeColor:t.border}`,
-                        background:active?typeColor+'15':'transparent',color:active?typeColor:t.textMuted,
-                        cursor:'pointer',fontSize:'12px',fontWeight:active?700:400,fontFamily:F}}>
-                      {d}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-
             {wizardStartDate && wizardEndDate && datesInRange.length>0 && (
               <div style={{background:typeColor+'11',border:`1px solid ${typeColor}33`,borderRadius:'8px',padding:'10px 14px',marginBottom:'16px'}}>
                 <div style={{fontSize:'12px',fontWeight:600,color:typeColor}}>
@@ -704,7 +731,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
               style={{background:datesInRange.length===0?t.border:typeColor,border:'none',borderRadius:'8px',
                 color:datesInRange.length===0?t.textMuted:'#fff',padding:'12px 24px',fontSize:'14px',
                 fontWeight:700,cursor:datesInRange.length===0?'not-allowed':'pointer',fontFamily:F,width:'100%'}}>
-              {datesInRange.length===0?'Define o período e os dias de treino':'Definir Sessões →'}
+              {datesInRange.length===0?'Define o período de treino':'Definir Sessões →'}
             </button>
           </div>
         )}
@@ -893,6 +920,31 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
                       )}
                     </div>
 
+                    {!isRestDay && !dateHasComp(primaryChip) && (
+                      <div style={{marginBottom:'12px'}}>
+                        <div style={{fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginBottom:'6px'}}>TIPO DE SESSÃO</div>
+                        <div style={{display:'flex',gap:'6px'}}>
+                          {[{v:'coach',l:'Com Coach'},{v:'auto',l:'Autónomo'}].map(opt=>{
+                            const active = wizardSelectedChips.every(ds=>wizardSessionTypes[ds]===opt.v)
+                            return (
+                              <button key={opt.v}
+                                onClick={()=>setWizardSessionTypes(prev=>{
+                                  const next={...prev}
+                                  wizardSelectedChips.forEach(ds=>{ next[ds]=opt.v })
+                                  return next
+                                })}
+                                style={{flex:1,padding:'7px',borderRadius:'8px',fontFamily:F,fontSize:'12px',fontWeight:active?700:400,cursor:'pointer',
+                                  border:`1px solid ${active?typeColor:t.border}`,
+                                  background:active?typeColor+'18':'transparent',
+                                  color:active?typeColor:t.textMuted}}>
+                                {opt.l}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+
                     {isRestDay && (
                       <div style={{textAlign:'center',padding:'24px',color:'#f59e0b',fontSize:'13px',fontWeight:600}}>Dia de Descanso</div>
                     )}
@@ -1019,7 +1071,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
           {/* Create plan buttons — smaller coach cards */}
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px',marginBottom:'20px'}}>
             <div style={{background:'#eaf4ff',border:`2px solid ${golfColor}`,borderRadius:'12px',padding:'14px 16px',cursor:'pointer'}}
-              onClick={()=>{setWizardType('golf');setWizard(true);setWizardStep(1);setWizardStartDate('');setWizardEndDate('');setWizardActiveDays([0,1,2,3,4,5,6]);setWizardDayPlans({});setWizardSelectedChips([]);setWizardNote('');setWizardUserLib([]);setWizardError('')}}>
+              onClick={()=>{setWizardType('golf');setWizard(true);setWizardStep(1);setWizardStartDate('');setWizardEndDate('');setWizardActiveDays([0,1,2,3,4,5,6]);setWizardDayPlans({});setWizardSelectedChips([]);setWizardSessionTypes({});setWizardNote('');setWizardUserLib([]);setWizardError('')}}>
               <div style={{fontSize:'9px',letterSpacing:'2px',color:golfColor,fontWeight:700,marginBottom:'2px'}}>COACH GOLF</div>
               <div style={{fontSize:'14px',fontWeight:800,color:golfDark}}>Golf Plan</div>
               <div style={{fontSize:'11px',color:'#185FA5',marginTop:'4px',lineHeight:1.4}}>Drills · bolas · campo</div>
@@ -1028,7 +1080,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
               </div>
             </div>
             <div style={{background:'#eafff0',border:`2px solid ${gymColor}`,borderRadius:'12px',padding:'14px 16px',cursor:'pointer'}}
-              onClick={()=>{setWizardType('gym');setWizard(true);setWizardStep(1);setWizardStartDate('');setWizardEndDate('');setWizardActiveDays([0,1,2,3,4,5,6]);setWizardDayPlans({});setWizardSelectedChips([]);setWizardNote('');setWizardUserLib([]);setWizardError('')}}>
+              onClick={()=>{setWizardType('gym');setWizard(true);setWizardStep(1);setWizardStartDate('');setWizardEndDate('');setWizardActiveDays([0,1,2,3,4,5,6]);setWizardDayPlans({});setWizardSelectedChips([]);setWizardSessionTypes({});setWizardNote('');setWizardUserLib([]);setWizardError('')}}>
               <div style={{fontSize:'9px',letterSpacing:'2px',color:gymColor,fontWeight:700,marginBottom:'2px'}}>COACH GYM</div>
               <div style={{fontSize:'14px',fontWeight:800,color:gymDark}}>Gym Plan</div>
               <div style={{fontSize:'11px',color:'#27500A',marginTop:'4px',lineHeight:1.4}}>Séries · reps · carga</div>
@@ -1207,7 +1259,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
                     <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'10px'}}>
                       <div>
                         <div style={{fontSize:'8px',letterSpacing:'3px',color:session.isRest?'#f59e0b':color,marginBottom:'2px',fontWeight:600}}>
-                          {type.toUpperCase()}{session.free?' · CAMPO':session.isRest?' · DESCANSO':''}
+                          {type.toUpperCase()}{session.free?' · CAMPO':session.isRest?' · DESCANSO':session.session_type==='coach'?' · COM COACH':session.session_type==='auto'?' · AUTÓNOMO':''}
                         </div>
                         {session.notes&&<div style={{fontSize:'12px',color:t.textMuted}}>{session.notes}</div>}
                         {session.score&&<div style={{fontSize:'13px',fontWeight:700,color:t.text}}>Score: {session.score}{session.holes?` (${session.holes}h)`:''}</div>}
@@ -1342,7 +1394,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
               const items = s.items||[]
               const totalProg = items.reduce((a,item)=>a+itemProgress(item),0)
               const comp = items.length>0 ? Math.round(totalProg/items.length) : null
-              return { date, dateStr:date.toISOString().split('T')[0], plan_type:p.plan_type, cat:s.cat, itemsCount:items.length, completion:comp }
+              return { date, dateStr:date.toISOString().split('T')[0], plan_type:p.plan_type, cat:s.cat, session_type:s.session_type||null, itemsCount:items.length, completion:comp }
             })
           )
         ).sort((a,b)=>b.dateStr.localeCompare(a.dateStr)).slice(0,30)
@@ -1503,8 +1555,9 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
                           </div>
                           <div style={{fontSize:'10px',color:t.textMuted}}>{s.cat}</div>
                         </div>
-                        <div style={{fontSize:'9px',letterSpacing:'1px',color,fontWeight:700,flexShrink:0}}>
-                          {s.plan_type.toUpperCase()}
+                        <div style={{textAlign:'right',flexShrink:0}}>
+                          <div style={{fontSize:'9px',letterSpacing:'1px',color,fontWeight:700}}>{s.plan_type.toUpperCase()}</div>
+                          {s.session_type && <div style={{fontSize:'8px',color:t.textMuted,marginTop:'1px'}}>{s.session_type==='coach'?'Com Coach':'Autónomo'}</div>}
                         </div>
                         {s.itemsCount>0&&(
                           <div style={{textAlign:'right',flexShrink:0}}>

@@ -12,7 +12,7 @@ const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','A
 const WEEKDAYS = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom']
 const STATUS = ['confirmed','optional','cancelled']
 
-export default function Calendar({ theme, t, user, lang = 'en' }) {
+export default function Calendar({ theme, t, user, lang = 'en', onNavigate }) {
   const [view, setView] = useState('month')
   const [currentDate, setCurrentDate] = useState(new Date(2026, 3, 1))
   const [events, setEvents] = useState([])
@@ -112,10 +112,11 @@ export default function Calendar({ theme, t, user, lang = 'en' }) {
         const sessionDateStr = `${dayDate.getFullYear()}-${String(dayDate.getMonth()+1).padStart(2,'0')}-${String(dayDate.getDate()).padStart(2,'0')}`
         if (sessionDateStr !== d) return
         day.sessions.forEach(session => {
+          const typeTag = session.session_type === 'coach' ? ' [C]' : session.session_type === 'auto' ? ' [A]' : ''
           if (calFilters.golf && planType === 'golf')
-            trainingSessions.push({ ...session, _isTrain: true, type: 'golf', _color: '#22c55e', name: session.cat || 'Golf' })
+            trainingSessions.push({ ...session, _isTrain: true, type: 'golf', _color: '#22c55e', name: (session.cat || 'Golf') + typeTag })
           if (calFilters.gym && planType === 'gym')
-            trainingSessions.push({ ...session, _isTrain: true, type: 'gym', _color: '#f97316', name: session.cat || 'Gym' })
+            trainingSessions.push({ ...session, _isTrain: true, type: 'gym', _color: '#f97316', name: (session.cat || 'Gym') + typeTag })
         })
       })
     })
@@ -333,8 +334,8 @@ export default function Calendar({ theme, t, user, lang = 'en' }) {
                   style={{ background: isToday ? t.accentBg : day.current ? t.surface : t.bg, borderRight: `0.5px solid ${t.border}`, borderBottom: `0.5px solid ${t.border}` }}>
                   <div style={{ fontSize: '12px', color: day.current ? (isToday ? t.accent : t.text) : t.textFaint, fontWeight: isToday ? 800 : 600, marginBottom: '4px' }}>{day.date.getDate()}</div>
                   {dayEvents.slice(0, 2).map((ev, ei) => (
-                    <div key={ev.id || ei} onClick={e => { e.stopPropagation(); if (!ev._isTrain) openEdit(ev) }}
-                      style={{ background: ev._isTrain ? ev._color + '33' : (ev.color || getCatColor(ev.category)), borderRadius: '4px', padding: '3px 6px', fontSize: '10px', fontWeight: 700, color: ev._isTrain ? ev._color : '#fff', marginBottom: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: ev._isTrain ? 'default' : 'pointer', border: ev._isTrain ? `1px solid ${ev._color}44` : 'none' }}>
+                    <div key={ev.id || ei} onClick={e => { e.stopPropagation(); if (ev._isTrain) { onNavigate?.('training', { date: dateStr }) } else { openEdit(ev) } }}
+                      style={{ background: ev._isTrain ? ev._color + '33' : (ev.color || getCatColor(ev.category)), borderRadius: '4px', padding: '3px 6px', fontSize: '10px', fontWeight: 700, color: ev._isTrain ? ev._color : '#fff', marginBottom: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer', border: ev._isTrain ? `1px solid ${ev._color}44` : 'none' }}>
                       {ev._isTrain ? (ev.type === 'golf' ? '⛳' : '💪') + ' ' : ''}{ev.title || ev.session_name || ev.name || ev.cat}
                     </div>
                   ))}

@@ -356,6 +356,9 @@ export default function Performance({ theme, t, user, lang = 'en', initialTab = 
               const last = pts.length ? pts[pts.length - 1] : null
               const prev = pts.length > 1 ? pts[pts.length - 2] : null
               const delta = last && prev ? (parseFloat(last.value) - parseFloat(prev.value)).toFixed(1) : null
+              const nextRecord = last ? (() => { const d=new Date(last.entry_date+'T12:00:00'); d.setDate(d.getDate()+7); return d.toISOString().split('T')[0] })() : null
+              const todayStr = new Date().toISOString().split('T')[0]
+              const isOverdue = !!(nextRecord && nextRecord < todayStr)
               return (
                 <div key={m.id} style={card}>
                   <div style={{ fontSize: '9px', letterSpacing: '2px', color: t.textMuted, marginBottom: '4px', fontWeight: 600 }}>{m.label.toUpperCase()}</div>
@@ -365,6 +368,11 @@ export default function Performance({ theme, t, user, lang = 'en', initialTab = 
                   {delta !== null && (
                     <div style={{ fontSize: '11px', color: parseFloat(delta) >= 0 ? '#52E8A0' : t.danger, marginTop: '2px' }}>
                       {parseFloat(delta) >= 0 ? '+' : ''}{delta} {m.unit}
+                    </div>
+                  )}
+                  {last && (
+                    <div style={{ marginTop:'6px', fontSize:'9px', color:isOverdue?t.danger:t.textMuted, fontWeight:isOverdue?700:400, borderTop:`1px solid ${t.border}`, paddingTop:'5px' }}>
+                      {isOverdue ? '⚠️ Registo em atraso' : `📅 Próximo: ${new Date(nextRecord+'T12:00:00').toLocaleDateString('pt-PT',{day:'2-digit',month:'short'})}`}
                     </div>
                   )}
                   {m.target && last && (() => {
