@@ -181,7 +181,7 @@ function DonutChart({ segments, total, t }) {
     ctx.fillText(total, cx, cy)
     ctx.textBaseline = 'alphabetic'
   }, [segments, total, t])
-  return <canvas ref={canvasRef} style={{ width: '110px', height: '110px', display: 'block', flexShrink: 0 }} />
+  return <canvas ref={canvasRef} style={{ width: '130px', height: '130px', display: 'block', flexShrink: 0 }} />
 }
 
 function KpiLineChart({ entries, t, F, cardStyle }) {
@@ -931,48 +931,57 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
           {/* Treino — 2 donuts + barra carga */}
           <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '12px 16px' }}>
             <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:600, marginBottom:'10px' }}>TREINO — DISTRIBUIÇÃO E CARGA</div>
-            <div style={{ display:'flex', gap:'16px', alignItems:'flex-start' }}>
+            <div style={{ display:'flex', gap:'12px', alignItems:'flex-start' }}>
 
-              {/* Golf donut */}
-              <div style={{ minWidth:'110px' }}>
-                <div style={{ fontSize:'8px', letterSpacing:'1px', color:'#6366f1', fontWeight:600, marginBottom:'6px' }}>GOLF</div>
-                <DonutChart segments={golfDonut} total={golfDonutTotal} t={t} />
-                <div style={{ display:'flex', flexDirection:'column', gap:'3px', marginTop:'6px' }}>
-                  {golfDonut.length === 0
-                    ? <div style={{ fontSize:'9px', color:t.textMuted, fontStyle:'italic' }}>Sem dados</div>
-                    : golfDonut.map(seg => (
-                      <div key={seg.label} style={{ display:'flex', alignItems:'center', gap:'4px' }}>
-                        <div style={{ width:'6px', height:'6px', borderRadius:'50%', background:seg.color, flexShrink:0 }}/>
-                        <div style={{ fontSize:'9px', color:t.textMuted, whiteSpace:'nowrap' }}>
-                          {seg.label} <span style={{ fontWeight:700, color:t.text }}>{golfDonutTotal>0?Math.round(seg.value/golfDonutTotal*100):0}%</span>
-                        </div>
-                      </div>
-                    ))
-                  }
+              {/* Donuts: 55% da largura */}
+              <div style={{ flex:'0 0 55%', display:'flex', gap:'10px' }}>
+
+                {/* Golf donut */}
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:'8px', letterSpacing:'1px', color:'#6366f1', fontWeight:600, marginBottom:'6px' }}>GOLF</div>
+                  <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
+                    <DonutChart segments={golfDonut} total={golfDonutTotal} t={t} />
+                    <div style={{ display:'flex', flexDirection:'column', gap:'4px', minWidth:0 }}>
+                      {golfDonut.length === 0
+                        ? <div style={{ fontSize:'10px', color:t.textMuted, fontStyle:'italic' }}>Sem dados</div>
+                        : golfDonut.slice(0,5).map(seg => (
+                          <div key={seg.label} style={{ display:'flex', alignItems:'center', gap:'5px' }}>
+                            <div style={{ width:'7px', height:'7px', borderRadius:'50%', background:seg.color, flexShrink:0 }}/>
+                            <div style={{ fontSize:'10px', color:t.textMuted, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+                              {seg.label} <span style={{ fontWeight:700, color:t.text }}>{golfDonutTotal>0?Math.round(seg.value/golfDonutTotal*100):0}%</span>
+                            </div>
+                          </div>
+                        ))
+                      }
+                    </div>
+                  </div>
                 </div>
+
+                {/* Gym donut */}
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:'8px', letterSpacing:'1px', color:'#3b82f6', fontWeight:600, marginBottom:'6px' }}>GYM</div>
+                  <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
+                    <DonutChart segments={gymDonut} total={gymDonutTotal} t={t} />
+                    <div style={{ display:'flex', flexDirection:'column', gap:'4px', minWidth:0 }}>
+                      {gymDonut.length === 0
+                        ? <div style={{ fontSize:'10px', color:t.textMuted, fontStyle:'italic' }}>Sem dados</div>
+                        : gymDonut.slice(0,5).map(seg => (
+                          <div key={seg.label} style={{ display:'flex', alignItems:'center', gap:'5px' }}>
+                            <div style={{ width:'7px', height:'7px', borderRadius:'50%', background:seg.color, flexShrink:0 }}/>
+                            <div style={{ fontSize:'10px', color:t.textMuted, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+                              {seg.label} <span style={{ fontWeight:700, color:t.text }}>{gymDonutTotal>0?Math.round(seg.value/gymDonutTotal*100):0}%</span>
+                            </div>
+                          </div>
+                        ))
+                      }
+                    </div>
+                  </div>
+                </div>
+
               </div>
 
-              {/* Gym donut */}
-              <div style={{ minWidth:'110px' }}>
-                <div style={{ fontSize:'8px', letterSpacing:'1px', color:'#3b82f6', fontWeight:600, marginBottom:'6px' }}>GYM</div>
-                <DonutChart segments={gymDonut} total={gymDonutTotal} t={t} />
-                <div style={{ display:'flex', flexDirection:'column', gap:'3px', marginTop:'6px' }}>
-                  {gymDonut.length === 0
-                    ? <div style={{ fontSize:'9px', color:t.textMuted, fontStyle:'italic' }}>Sem dados</div>
-                    : gymDonut.map(seg => (
-                      <div key={seg.label} style={{ display:'flex', alignItems:'center', gap:'4px' }}>
-                        <div style={{ width:'6px', height:'6px', borderRadius:'50%', background:seg.color, flexShrink:0 }}/>
-                        <div style={{ fontSize:'9px', color:t.textMuted, whiteSpace:'nowrap' }}>
-                          {seg.label} <span style={{ fontWeight:700, color:t.text }}>{gymDonutTotal>0?Math.round(seg.value/gymDonutTotal*100):0}%</span>
-                        </div>
-                      </div>
-                    ))
-                  }
-                </div>
-              </div>
-
-              {/* Barra carga semanal */}
-              <div style={{ flex:1, minWidth:0 }}>
+              {/* Barra carga semanal: 45% */}
+              <div style={{ flex:'0 0 45%', minWidth:0 }}>
                 <div style={{ fontSize:'8px', letterSpacing:'1px', color:t.textMuted, fontWeight:600, marginBottom:'6px' }}>CARGA SEMANAL</div>
                 <WeeklyBarChart weeks={weeklyLoad} t={t} />
                 <div style={{ display:'flex', gap:'8px', marginTop:'4px', flexWrap:'wrap' }}>
