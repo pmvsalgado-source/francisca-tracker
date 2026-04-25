@@ -697,15 +697,13 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   return (
     <div style={{ fontFamily: F, color: t.text }}>
       <style>{`
-        .home-3col{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-        .h-l1{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:14px}
-        .h-l2{display:grid;grid-template-columns:3fr 2fr;gap:12px;margin-bottom:14px}
-        .h-l3{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
-        .h-l4{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
-        .h-kpi-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
-        .h-stats-mini{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
-        @media(max-width:700px){.h-l1,.h-l2,.h-l3,.h-l4{grid-template-columns:1fr}.h-kpi-grid{grid-template-columns:1fr}}
-        @media(max-width:420px){.home-3col{grid-template-columns:1fr 1fr}.h-stats-mini{grid-template-columns:1fr}}
+        .hm-grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+        .hm-grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+        .hm-main{display:grid;grid-template-columns:1fr 210px;gap:10px}
+        .hm-left{display:flex;flex-direction:column;gap:10px}
+        .hm-right{display:flex;flex-direction:column;gap:10px}
+        .hm-stats{display:flex;flex-wrap:nowrap;overflow:hidden;align-items:stretch}
+        @media(max-width:700px){.hm-main{grid-template-columns:1fr}.hm-grid2{grid-template-columns:1fr}}
       `}</style>
 
       {/* ── KPI MODAL ── */}
@@ -724,7 +722,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
               <button onClick={()=>setKpiModal(null)} style={{ background:'transparent',border:`1px solid ${t.border}`,borderRadius:'8px',color:t.textMuted,padding:'6px 12px',cursor:'pointer',fontFamily:F,fontSize:'12px' }}>Fechar</button>
             </div>
             {kpiModal.allEntries.length >= 2 && <div style={{ marginBottom:'16px' }}><MiniSpark pts={kpiModal.allEntries} t={t} color={kpiModal.color} /></div>}
-            <div className="home-3col" style={{ marginBottom:'16px' }}>
+            <div className="hm-grid3" style={{ marginBottom:'16px' }}>
               {[
                 { l:'MELHOR', v: kpiModal.allEntries.length ? Math.max(...kpiModal.allEntries.map(e=>parseFloat(e.value))).toFixed(2) : '—' },
                 { l:'MÍNIMO', v: kpiModal.allEntries.length ? Math.min(...kpiModal.allEntries.map(e=>parseFloat(e.value))).toFixed(2) : '—' },
@@ -762,9 +760,9 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
         </div>
       )}
 
-      {/* ── HEADER — original 6c4bb37 ── */}
+      {/* ── HEADER ── */}
       {editingAthlete ? (
-        <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '10px', padding: '16px', marginBottom: '14px' }}>
+        <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '10px', padding: '16px', marginBottom: '12px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '8px', marginBottom: '12px' }}>
             {[['hcp','Handicap'],['wagr','WAGR'],['club','Clube'],['category','Categoria'],['fed','Federação'],['fed_num','Nº Federado']].map(([k,l]) => (
               <div key={k}>
@@ -774,174 +772,148 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
             ))}
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button onClick={saveAthlete} disabled={athleteSaving} style={{ background: '#378ADD', border: 'none', borderRadius: '6px', color: '#fff', padding: '6px 16px', fontSize: '11px', fontWeight: 700, cursor: 'pointer', fontFamily: F, letterSpacing: '1px', opacity: athleteSaving ? 0.7 : 1 }}>{athleteSaving ? 'A GUARDAR...' : 'GUARDAR'}</button>
+            <button onClick={saveAthlete} disabled={athleteSaving} style={{ background: '#378ADD', border: 'none', borderRadius: '6px', color: '#fff', padding: '6px 16px', fontSize: '11px', fontWeight: 700, cursor: 'pointer', fontFamily: F, opacity: athleteSaving ? 0.7 : 1 }}>{athleteSaving ? 'A GUARDAR...' : 'GUARDAR'}</button>
             <button onClick={() => setEditingAthlete(false)} style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '6px', color: t.textMuted, padding: '6px 16px', fontSize: '11px', cursor: 'pointer', fontFamily: F }}>Cancelar</button>
           </div>
         </div>
       ) : (
-        <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '10px', padding: '14px 18px', marginBottom: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-          <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
-            {[
-              { label: 'HCP',   value: athlete.hcp || '—',      color: '#378ADD' },
-              { label: 'WAGR',  value: athlete.wagr || '—',     color: t.text },
-              { label: 'CLUBE', value: athlete.club || '—',     color: t.text },
-              { label: 'CAT.',  value: athlete.category || '—', color: t.text },
-            ].map(item => (
-              <div key={item.label}>
-                <div style={{ fontSize: '8px', letterSpacing: '2px', color: t.textMuted, marginBottom: '3px', fontWeight: 600 }}>{item.label}</div>
-                <div style={{ fontSize: '15px', fontWeight: 900, color: item.color, letterSpacing: '-0.3px' }}>{item.value}</div>
-              </div>
-            ))}
-          </div>
-          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
-            <button onClick={() => { setAthleteForm({...athlete}); setEditingAthlete(true) }} style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '6px', color: t.textMuted, padding: '5px 10px', fontSize: '10px', cursor: 'pointer', fontFamily: F, letterSpacing: '1px' }}>EDITAR</button>
-            <a href="https://www.wagr.com/playerprofile/francisca-salgado-43158" target="_blank" rel="noreferrer" style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '6px', color: t.textMuted, padding: '5px 10px', fontSize: '10px', fontFamily: F, textDecoration: 'none', letterSpacing: '1px' }}>WAGR ↗</a>
-            <a href="https://portal.fpg.pt/handicaps-course-rating/pesquisa-de-handicaps/" target="_blank" rel="noreferrer" style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '6px', color: t.textMuted, padding: '5px 10px', fontSize: '10px', fontFamily: F, textDecoration: 'none', letterSpacing: '1px' }}>FPG ↗</a>
+        <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '10px', padding: '12px 16px', marginBottom: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '18px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+              {[
+                { label: 'HCP',   value: athlete.hcp || '—',      color: '#378ADD' },
+                { label: 'WAGR',  value: athlete.wagr || '—',     color: t.text },
+                { label: 'CLUBE', value: athlete.club || '—',     color: t.text },
+                { label: 'CAT.',  value: athlete.category || '—', color: t.text },
+                { label: 'FED',   value: athlete.fed_num || '—',  color: t.text },
+              ].map(item => (
+                <div key={item.label}>
+                  <div style={{ fontSize: '8px', letterSpacing: '2px', color: t.textMuted, marginBottom: '2px', fontWeight: 600 }}>{item.label}</div>
+                  <div style={{ fontSize: '14px', fontWeight: 800, color: item.color }}>{item.value}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
+              <button onClick={() => { setAthleteForm({...athlete}); setEditingAthlete(true) }} style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '5px', color: t.textMuted, padding: '3px 8px', fontSize: '9px', cursor: 'pointer', fontFamily: F }}>Editar perfil</button>
+              <a href="https://www.wagr.com/playerprofile/francisca-salgado-43158" target="_blank" rel="noreferrer" style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '5px', color: t.textMuted, padding: '3px 8px', fontSize: '9px', fontFamily: F, textDecoration: 'none' }}>WAGR ↗</a>
+              <a href="https://portal.fpg.pt/handicaps-course-rating/pesquisa-de-handicaps/" target="_blank" rel="noreferrer" style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '5px', color: t.textMuted, padding: '3px 8px', fontSize: '9px', fontFamily: F, textDecoration: 'none' }}>FPG ↗</a>
+            </div>
           </div>
         </div>
       )}
 
-      {/* ── LINHA 1 — Stats 2026 | Melhor Resultado | Próxima Competição ── */}
-      <div className="h-l1">
-
-        {/* Stats 2026 */}
-        <div style={card}>
-          <div style={{ fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginBottom:'12px' }}>ÉPOCA 2026</div>
-          {stats2026.length === 0 ? (
-            <div style={{ fontSize:'12px',color:t.textMuted,fontStyle:'italic' }}>Sem dados de 2026</div>
-          ) : (
-            <div className="h-stats-mini">
-              {[
-                { l:'TORNEIOS',    v: stats2026.length,                                               c: t.text },
-                { l:'ÚLTIMO',      v: s26LastScore!=null ? fmtScore(s26LastScore) : '—',             c: s26LastScore!=null && parseFloat(s26LastScore)<=0 ? '#52E8A0' : '#f87171' },
-                { l:'MÉDIA SCORE', v: s26AvgScore != null ? fmtScore(s26AvgScore) : '—',             c: s26AvgScore!=null && parseFloat(s26AvgScore)<=0 ? '#52E8A0' : '#378ADD' },
-                { l:'MELHOR',      v: s26BestScore != null ? fmtScore(s26BestScore) : '—',           c: '#52E8A0' },
-                { l:'MELHOR POS.', v: s26BestPos != null ? `#${s26BestPos}` : '—',                  c: '#378ADD' },
-                { l:'TOP 10',      v: s26Top10 > 0 ? `${s26Top10}×` : '0',                          c: s26Top10 > 0 ? '#f59e0b' : t.textMuted },
-                { l:'FAIRWAYS %',  v: s26AvgFw != null ? `${s26AvgFw}%` : '—',                     c: t.text },
-                { l:'GIR %',       v: s26AvgGir != null ? `${s26AvgGir}%` : '—',                   c: t.text },
-                { l:'PUTTS/RND',   v: s26AvgPutts != null ? s26AvgPutts : '—',                     c: t.text },
-                { l:'TORNEIOS FPG',v: stats2026.filter(s=>(s.event_name||'').toLowerCase().includes('fpg')).length || '—', c: t.textMuted },
-              ].slice(0, 10).map((item, i) => (
-                <div key={i} style={{ background:t.bg,borderRadius:'8px',padding:'8px 10px' }}>
-                  <div style={{ fontSize:'7px',color:t.textMuted,letterSpacing:'1px',marginBottom:'3px',fontWeight:600 }}>{item.l}</div>
-                  <div style={{ fontSize:'16px',fontWeight:800,color:item.c,letterSpacing:'-0.5px',lineHeight:1 }}>{item.v}</div>
-                </div>
-              ))}
+      {/* ── LINHA 1 — MÉDIAS 2026 + MELHOR RESULTADO ── */}
+      <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '12px 16px', marginBottom: '10px' }}>
+        <div style={{ fontSize: '9px', letterSpacing: '2px', color: t.textMuted, fontWeight: 600, marginBottom: '10px' }}>MÉDIAS 2026</div>
+        <div className="hm-stats">
+          {[
+            { l:'TORNEIOS',    v: stats2026.length || '—',                                             c: t.text },
+            { l:'ÚLT. SCORE',  v: s26LastScore != null ? s26LastScore : '—',                          c: t.text },
+            { l:'MÉDIA SCORE', v: s26AvgScore != null ? s26AvgScore : '—',                            c: t.text },
+            { l:'MELHOR',      v: s26BestScore != null ? s26BestScore : '—',                          c: '#52E8A0' },
+            { l:'MELHOR POS.', v: s26BestPos != null ? `#${s26BestPos}` : '—',                       c: '#378ADD' },
+            { l:'TOP 10',      v: s26Top10 > 0 ? `${s26Top10}×` : '0×',                              c: s26Top10 > 0 ? '#f59e0b' : t.textMuted },
+            { l:'FAIRWAYS',    v: s26AvgFw != null ? `${s26AvgFw}%` : '—',                           c: t.text },
+            { l:'GIR',         v: s26AvgGir != null ? `${s26AvgGir}%` : '—',                         c: t.text },
+            { l:'PUTTS/RND',   v: s26AvgPutts != null ? s26AvgPutts : '—',                           c: t.text },
+          ].map((item, i, arr) => (
+            <div key={i} style={{ flex:1, padding:'0 10px', borderRight: i < arr.length - 1 ? `1px solid ${t.border}` : 'none', minWidth:0 }}>
+              <div style={{ fontSize:'16px', fontWeight:800, color:item.c, lineHeight:1, whiteSpace:'nowrap' }}>{item.v}</div>
+              <div style={{ fontSize:'8px', color:t.textMuted, marginTop:'3px', letterSpacing:'0.5px' }}>{item.l}</div>
             </div>
-          )}
-        </div>
-
-        {/* Melhor Resultado */}
-        <div style={card}>
-          <div style={{ fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginBottom:'12px' }}>MELHOR RESULTADO DA ÉPOCA</div>
-          {!bestResult ? (
-            <div style={{ fontSize:'12px',color:t.textMuted,fontStyle:'italic' }}>Sem resultados</div>
-          ) : (
-            <div style={{ display:'flex',flexDirection:'column',gap:'10px' }}>
-              <div style={{ display:'flex',alignItems:'center',gap:'12px' }}>
-                <div style={{ fontSize:'38px',lineHeight:1 }}>🏆</div>
-                <div>
-                  {isNewPR && <div style={{ fontSize:'8px',letterSpacing:'2px',color:'#52E8A0',fontWeight:700,marginBottom:'2px' }}>NOVO RECORDE ↑</div>}
-                  <div style={{ fontSize:'42px',fontWeight:900,color:parseFloat(bestResult.values.score)<=0?'#52E8A0':'#f87171',letterSpacing:'-2px',lineHeight:0.9 }}>
-                    {fmtScore(bestResult.values.score)}
-                  </div>
-                  {bestResult.values.par && <div style={{ fontSize:'10px',color:t.textMuted,marginTop:'4px' }}>par {bestResult.values.par}</div>}
-                </div>
+          ))}
+          {bestResult && (
+            <div style={{ paddingLeft:'14px', borderLeft:`1px solid ${t.border}`, flexShrink:0, minWidth:'160px' }}>
+              <div style={{ fontSize:'8px', letterSpacing:'1.5px', color:'#5b8aff', fontWeight:600, marginBottom:'4px' }}>MELHOR RESULTADO</div>
+              <div style={{ display:'flex', alignItems:'center', gap:'6px' }}>
+                <div style={{ fontSize:'18px', fontWeight:900, color: parseFloat(bestResult.values.score)<=0?'#52E8A0':'#f87171' }}>{fmtScore(bestResult.values.score)}</div>
+                {isNewPR && <div style={{ fontSize:'9px', color:'#52E8A0', background:'#052a1a', borderRadius:'4px', padding:'1px 6px', fontWeight:700 }}>novo PR</div>}
               </div>
-              <div style={{ background:t.bg,borderRadius:'8px',padding:'8px 12px' }}>
-                <div style={{ fontSize:'12px',fontWeight:600,color:t.text }}>{bestResult.event_name}</div>
-                <div style={{ display:'flex',alignItems:'center',gap:'8px',marginTop:'2px' }}>
-                  <div style={{ fontSize:'10px',color:t.textMuted }}>{formatDate(bestResult.event_date)}</div>
-                  {bestResult.values?.position && <div style={{ fontSize:'10px',color:'#378ADD',fontWeight:700 }}>#{bestResult.values.position}</div>}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Próxima Competição */}
-        <div style={{ ...card, border: nextComp ? '1px solid #f59e0b44' : `1px solid ${t.border}` }}>
-          <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px' }}>
-            <div style={{ fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600 }}>PRÓXIMA COMPETIÇÃO</div>
-            <button onClick={()=>onNavigate&&onNavigate('calendar')} style={{ background:'transparent',border:'none',color:'#378ADD',fontSize:'11px',cursor:'pointer',fontFamily:F,padding:0 }}>Ver calendário →</button>
-          </div>
-          {!nextComp ? (
-            <div style={{ fontSize:'12px',color:t.textMuted,fontStyle:'italic' }}>Sem competições agendadas</div>
-          ) : (
-            <div style={{ display:'flex',flexDirection:'column',gap:'8px' }}>
-              <div style={{ textAlign:'center',padding:'12px 0' }}>
-                <div style={{ fontSize:'64px',fontWeight:900,color:'#f59e0b',lineHeight:0.9,letterSpacing:'-3px' }}>{daysToNext}</div>
-                <div style={{ fontSize:'10px',color:t.textMuted,letterSpacing:'2px',marginTop:'4px',fontWeight:600 }}>DIAS</div>
-              </div>
-              <div style={{ background:'#f59e0b0d',border:'1px solid #f59e0b33',borderRadius:'8px',padding:'10px 12px' }}>
-                <div style={{ fontSize:'13px',fontWeight:700,color:t.text }}>{nextComp.title}</div>
-                <div style={{ fontSize:'10px',color:t.textMuted,marginTop:'2px' }}>
-                  {formatDate(nextComp.start_date)}{nextComp.end_date&&nextComp.end_date!==nextComp.start_date?` – ${formatDate(nextComp.end_date)}` : ''}
-                </div>
-              </div>
+              <div style={{ fontSize:'9px', color:t.textMuted, marginTop:'2px' }}>{bestResult.event_name}</div>
+              <div style={{ fontSize:'9px', color:t.textMuted }}>{formatDate(bestResult.event_date)}{bestResult.values?.par ? ` · Par ${bestResult.values.par}` : ''}</div>
             </div>
           )}
         </div>
       </div>
 
-      {/* ── LINHA 2 — Gráficos de Treino | Próximas Comps + Coach ── */}
-      <div className="h-l2">
+      {/* ── MAIN GRID — esquerda + direita ── */}
+      <div className="hm-main">
+        <div className="hm-left">
 
-        {/* Coluna esquerda 60%: donut + bar chart */}
-        <div style={card}>
-          <div style={{ fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginBottom:'14px' }}>DISTRIBUIÇÃO DE TREINO — 4 SEMANAS</div>
-          <div style={{ display:'flex',alignItems:'center',gap:'16px',marginBottom:'16px' }}>
-            <DonutChart segments={trainingDonut} total={trainingDonutTotal} t={t} />
-            <div style={{ display:'flex',flexDirection:'column',gap:'5px',flex:1 }}>
-              {trainingDonut.length === 0 ? (
-                <div style={{ fontSize:'11px',color:t.textMuted,fontStyle:'italic' }}>Sem dados de plano</div>
-              ) : (
-                trainingDonut.map(seg => (
-                  <div key={seg.label} style={{ display:'flex',alignItems:'center',gap:'8px' }}>
-                    <div style={{ width:'8px',height:'8px',borderRadius:'50%',background:seg.color,flexShrink:0 }}/>
-                    <div style={{ fontSize:'10px',color:t.textMuted,flex:1 }}>{seg.label}</div>
-                    <div style={{ fontSize:'12px',fontWeight:700,color:t.text }}>{seg.value}</div>
-                    <div style={{ fontSize:'9px',color:t.textMuted }}>{trainingDonutTotal>0?Math.round(seg.value/trainingDonutTotal*100):0}%</div>
+          {/* Treino — Distribuição + Carga */}
+          <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '12px 16px' }}>
+            <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:600, marginBottom:'12px' }}>TREINO — DISTRIBUIÇÃO E CARGA</div>
+            <div className="hm-grid2">
+              <div>
+                <div style={{ fontSize:'9px', color:t.textMuted, marginBottom:'8px' }}>Distribuição · 4 semanas</div>
+                <div style={{ display:'flex', alignItems:'center', gap:'12px' }}>
+                  <DonutChart segments={trainingDonut} total={trainingDonutTotal} t={t} />
+                  <div style={{ display:'flex', flexDirection:'column', gap:'4px', flex:1 }}>
+                    {trainingDonut.length === 0 ? (
+                      <div style={{ fontSize:'10px', color:t.textMuted, fontStyle:'italic' }}>Sem dados</div>
+                    ) : trainingDonut.map(seg => (
+                      <div key={seg.label} style={{ display:'flex', alignItems:'center', gap:'6px' }}>
+                        <div style={{ width:'7px', height:'7px', borderRadius:'50%', background:seg.color, flexShrink:0 }}/>
+                        <div style={{ fontSize:'10px', color:t.textMuted, flex:1 }}>{seg.label}</div>
+                        <div style={{ fontSize:'10px', fontWeight:700, color:t.text }}>{trainingDonutTotal>0?Math.round(seg.value/trainingDonutTotal*100):0}%</div>
+                      </div>
+                    ))}
                   </div>
-                ))
-              )}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize:'9px', color:t.textMuted, marginBottom:'8px' }}>Carga e cumprimento · 8 semanas</div>
+                <WeeklyBarChart weeks={weeklyLoad} t={t} />
+                <div style={{ display:'flex', gap:'8px', marginTop:'4px', flexWrap:'wrap' }}>
+                  {[{c:'#52E8A0',l:'Actual'},{c:'#378ADD',l:'≥80%'},{c:'#f59e0b88',l:'50-79%'},{c:'#f8717188',l:'<50%'}].map(({c,l})=>(
+                    <div key={l} style={{ display:'flex', alignItems:'center', gap:'3px' }}>
+                      <div style={{ width:'7px', height:'7px', borderRadius:'2px', background:c }}/>
+                      <span style={{ fontSize:'8px', color:t.textMuted }}>{l}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
-          <div style={{ fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginBottom:'8px' }}>CARGA — 8 SEMANAS</div>
-          <WeeklyBarChart weeks={weeklyLoad} t={t} />
-          <div style={{ display:'flex',gap:'10px',marginTop:'6px',flexWrap:'wrap' }}>
-            {[{c:'#52E8A0',l:'Actual'},{c:'#378ADD',l:'≥80%'},{c:'#f59e0b88',l:'50–79%'},{c:'#f8717188',l:'<50%'},{c:'#378ADD44',l:'Sem plano'}].map(({c,l})=>(
-              <div key={l} style={{ display:'flex',alignItems:'center',gap:'4px' }}>
-                <div style={{ width:'8px',height:'8px',borderRadius:'2px',background:c }}/>
-                <span style={{ fontSize:'8px',color:t.textMuted }}>{l}</span>
+
+          {/* Indicadores de Performance — 2 gráficos */}
+          <div className="hm-grid2">
+            <KpiLineChart entries={entries} t={t} F={F} cardStyle={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'12px', padding:'12px 16px' }} />
+            <KpiLineChart entries={entries} t={t} F={F} cardStyle={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'12px', padding:'12px 16px' }} />
+          </div>
+
+          {/* HCP & WAGR — Placeholders */}
+          <div className="hm-grid2">
+            {[{label:'EVOLUÇÃO HCP',color:'#378ADD'},{label:'EVOLUÇÃO WAGR',color:'#52E8A0'}].map(({label,color}) => (
+              <div key={label} style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'12px', padding:'12px 16px', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:'90px', gap:'6px', opacity:0.6 }}>
+                <div style={{ fontSize:'9px', letterSpacing:'2px', color, fontWeight:700 }}>{label}</div>
+                <div style={{ fontSize:'10px', color:t.textMuted, fontStyle:'italic' }}>Em breve — S2</div>
               </div>
             ))}
           </div>
+
         </div>
 
-        {/* Coluna direita 40%: próximas comps + coach */}
-        <div style={{ display:'flex',flexDirection:'column',gap:'12px' }}>
-          <div style={card}>
-            <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'10px' }}>
-              <div style={{ fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600 }}>PRÓXIMAS COMPETIÇÕES</div>
-              <button onClick={()=>onNavigate&&onNavigate('competition')} style={{ background:'transparent',border:'none',color:'#378ADD',fontSize:'10px',cursor:'pointer',fontFamily:F,padding:0 }}>Stats →</button>
-            </div>
+        <div className="hm-right">
+
+          {/* Próximas Competições */}
+          <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '12px 14px' }}>
+            <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:600, marginBottom:'10px' }}>PRÓXIMAS COMPETIÇÕES</div>
             {slotAItems.length === 0 ? (
-              <div style={{ fontSize:'11px',color:t.textMuted,fontStyle:'italic' }}>Sem competições</div>
+              <div style={{ fontSize:'11px', color:t.textMuted, fontStyle:'italic' }}>Sem competições</div>
             ) : (
-              <div style={{ display:'flex',flexDirection:'column',gap:'6px' }}>
-                {slotAItems.slice(0,5).map(ev => {
+              <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
+                {slotAItems.slice(0,3).map(ev => {
                   const d = Math.ceil((new Date(ev.start_date) - new Date()) / 86400000)
                   return (
-                    <div key={ev.id} style={{ display:'flex',alignItems:'center',gap:'8px',padding:'6px 8px',background:t.bg,borderRadius:'6px',border:`1px solid ${d<=14?'#f59e0b33':t.border}` }}>
-                      <div style={{ textAlign:'center',flexShrink:0,minWidth:'28px' }}>
-                        <div style={{ fontSize:'14px',fontWeight:900,color:d<=14?'#f59e0b':'#378ADD',lineHeight:1 }}>{d}</div>
-                        <div style={{ fontSize:'6px',color:t.textMuted,letterSpacing:'0.5px',fontWeight:600 }}>DIAS</div>
+                    <div key={ev.id} style={{ display:'flex', alignItems:'center', gap:'10px', padding:'7px 10px', background:t.bg, borderRadius:'8px', border:`1px solid ${d<=14?'#f59e0b33':t.border}` }}>
+                      <div style={{ textAlign:'center', flexShrink:0, minWidth:'34px' }}>
+                        <div style={{ fontSize:'22px', fontWeight:900, color:d<=14?'#f59e0b':'#378ADD', lineHeight:1 }}>{d}</div>
+                        <div style={{ fontSize:'7px', color:t.textMuted, letterSpacing:'0.5px', fontWeight:600 }}>DIAS</div>
                       </div>
-                      <div style={{ flex:1,minWidth:0 }}>
-                        <div style={{ fontSize:'10px',fontWeight:600,color:t.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{ev.title}</div>
-                        <div style={{ fontSize:'9px',color:t.textMuted }}>{formatDate(ev.start_date)}</div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:'11px', fontWeight:600, color:t.text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{ev.title}</div>
+                        <div style={{ fontSize:'9px', color:t.textMuted }}>{formatDate(ev.start_date)}{ev.end_date&&ev.end_date!==ev.start_date?` – ${formatDate(ev.end_date)}`:''}</div>
                       </div>
                     </div>
                   )
@@ -950,89 +922,68 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
             )}
           </div>
 
-          <div style={card}>
-            <div style={{ fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginBottom:'10px' }}>PRÓXIMO COM COACH</div>
-            <div style={{ display:'flex',flexDirection:'column',gap:'6px' }}>
+          {/* Agenda & Alertas */}
+          <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '12px 14px', flex:1 }}>
+            <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:600, marginBottom:'10px' }}>AGENDA & ALERTAS</div>
+            <div style={{ display:'flex', flexDirection:'column', gap:'5px' }}>
+
+              <div style={{ fontSize:'8px', letterSpacing:'1px', color:t.textMuted, margin:'2px 0', fontWeight:600 }}>PRÓXIMO TREINO COM COACH</div>
               {[
-                { label:'GOLF', date: nextGolfCoachDate, color:'#378ADD' },
-                { label:'GYM',  date: nextGymCoachDate,  color:'#52E8A0' },
+                { label:'Golf Coach', date: nextGolfCoachDate, color:'#378ADD' },
+                { label:'Gym Coach',  date: nextGymCoachDate,  color:'#52E8A0' },
               ].map(({ label, date, color }) => (
-                <div key={label} style={{ display:'flex',alignItems:'center',justifyContent:'space-between',padding:'7px 10px',background:t.bg,borderRadius:'6px' }}>
-                  <div style={{ fontSize:'9px',letterSpacing:'1.5px',color,fontWeight:700 }}>{label}</div>
-                  <div style={{ fontSize:'13px',fontWeight:800,color: date && date < todayStr ? '#f87171' : color }}>
+                <div key={label} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'6px 10px', background:t.bg, borderRadius:'7px' }}>
+                  <div style={{ fontSize:'11px', color:t.textMuted }}>{label}</div>
+                  <div style={{ fontSize:'11px', fontWeight:700, color: date && date < todayStr ? '#f87171' : color }}>
                     {date ? formatDate(date) : '—'}
                   </div>
                 </div>
               ))}
-              <button onClick={()=>onNavigate&&onNavigate('training')} style={{ background:'transparent',border:`1px solid ${t.border}`,borderRadius:'6px',color:t.textMuted,padding:'5px',cursor:'pointer',fontSize:'10px',fontFamily:F,marginTop:'2px' }}>Ver Plano →</button>
+
+              <div style={{ fontSize:'8px', letterSpacing:'1px', color:t.textMuted, margin:'6px 0 2px', fontWeight:600 }}>PROGRAMAR TREINOS</div>
+              {(() => {
+                const golfEnd = trainingPlans.filter(p=>p.plan_type==='golf').reduce((m,p)=>p.week_end>m?p.week_end:m,'')
+                const gymEnd  = trainingPlans.filter(p=>p.plan_type==='gym').reduce((m,p)=>p.week_end>m?p.week_end:m,'')
+                return [
+                  { label:'Golf — plano até', end: golfEnd },
+                  { label:'Gym — plano até',  end: gymEnd  },
+                ].map(({ label, end }) => {
+                  const isOk = end >= todayStr
+                  const overdue = !end || end < todayStr
+                  const overdueDays = overdue && end ? Math.ceil((new Date(todayStr) - new Date(end+'T12:00:00')) / 86400000) : 0
+                  return (
+                    <div key={label} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'6px 10px', background: overdue ? '#f8717108' : t.bg, border: `1px solid ${overdue ? '#f8717133' : t.border}`, borderRadius:'7px' }}>
+                      <div style={{ fontSize:'11px', color:t.textMuted }}>{label}</div>
+                      {isOk
+                        ? <div style={{ fontSize:'11px', fontWeight:700, color:'#52E8A0' }}>OK · {formatDate(end)}</div>
+                        : <div style={{ fontSize:'11px', fontWeight:700, color:'#f87171', display:'flex', alignItems:'center', gap:'4px' }}>
+                            <span>⚠</span>{overdueDays > 0 ? `${overdueDays}d em atraso` : 'Sem plano'}
+                          </div>
+                      }
+                    </div>
+                  )
+                })
+              })()}
+
+              <div style={{ fontSize:'8px', letterSpacing:'1px', color:t.textMuted, margin:'6px 0 2px', fontWeight:600 }}>REGISTAR PRIORIDADES</div>
+              {(() => {
+                const overdueKpis = activeKpis.filter(k => k.isOverdue)
+                const okKpis = activeKpis.filter(k => !k.isOverdue)
+                return (
+                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'6px 10px', background: overdueKpis.length > 0 ? '#f8717108' : t.bg, border: `1px solid ${overdueKpis.length > 0 ? '#f8717133' : t.border}`, borderRadius:'7px' }}>
+                    <div style={{ fontSize:'11px', color:t.textMuted }}>KPIs de performance</div>
+                    {overdueKpis.length > 0
+                      ? <div style={{ fontSize:'11px', fontWeight:700, color:'#f87171', display:'flex', alignItems:'center', gap:'4px' }}><span>⚠</span>{overdueKpis.length} em atraso</div>
+                      : <div style={{ fontSize:'11px', fontWeight:700, color:'#52E8A0' }}>OK · {okKpis.length} actualizados</div>
+                    }
+                  </div>
+                )
+              })()}
+
             </div>
           </div>
+
         </div>
-      </div>
-
-      {/* ── LINHA 3 — Evolução de KPIs ── */}
-      <div className="h-l3">
-        <KpiLineChart entries={entries} t={t} F={F} cardStyle={card} />
-        <KpiLineChart entries={entries} t={t} F={F} cardStyle={card} />
-      </div>
-
-      {/* ── LINHA 4 — Placeholders HCP + WAGR ── */}
-      <div className="h-l4">
-        {[
-          { label:'EVOLUÇÃO HCP', color:'#378ADD' },
-          { label:'EVOLUÇÃO WAGR', color:'#52E8A0' },
-        ].map(({ label, color }) => (
-          <div key={label} style={{ ...card, display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',minHeight:'100px',gap:'8px',opacity:0.6 }}>
-            <div style={{ fontSize:'22px' }}>📈</div>
-            <div style={{ fontSize:'9px',letterSpacing:'2px',color,fontWeight:700 }}>{label}</div>
-            <div style={{ fontSize:'11px',color:t.textMuted,fontStyle:'italic' }}>Em breve</div>
-          </div>
-        ))}
-      </div>
-
-      {/* ── LINHA 5 — KPIs Activos ── */}
-      <div style={{ ...card, marginBottom:'14px' }}>
-        <div style={{ fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginBottom:'12px' }}>KPIs ACTIVOS</div>
-        {activeKpis.length === 0 ? (
-          <div style={{ fontSize:'12px',color:t.textMuted,fontStyle:'italic' }}>Sem registos de KPIs</div>
-        ) : (
-          <div className="h-kpi-grid">
-            {activeKpis.map(k => {
-              const overdueDays = k.isOverdue ? Math.ceil((new Date(todayStr) - new Date(k.nextDate+'T12:00:00')) / 86400000) : 0
-              return (
-                <div key={k.id} onClick={() => openKpiModal(k)}
-                  style={{ display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 12px',
-                    background:k.isOverdue?'#f8717108':t.bg,
-                    border:`1px solid ${k.isOverdue?'#f8717144':t.border}`,
-                    borderRadius:'8px',cursor:'pointer' }}
-                  onMouseEnter={e=>e.currentTarget.style.opacity='0.8'}
-                  onMouseLeave={e=>e.currentTarget.style.opacity='1'}>
-                  <div style={{ flex:1,minWidth:0 }}>
-                    <div style={{ fontSize:'9px',letterSpacing:'1.5px',color:k.color,fontWeight:600 }}>{k.label}</div>
-                    <div style={{ fontSize:'10px',color:t.textMuted,marginTop:'2px' }}>
-                      Reg. até {formatDate(k.nextDate)}
-                    </div>
-                    {k.isOverdue && (
-                      <div style={{ fontSize:'9px',color:'#f87171',fontWeight:700,marginTop:'1px' }}>
-                        ⚠ Atrasado {overdueDays > 0 ? `${overdueDays}d` : ''}
-                      </div>
-                    )}
-                  </div>
-                  <div style={{ textAlign:'right',flexShrink:0,marginLeft:'10px' }}>
-                    <div style={{ fontSize:'18px',fontWeight:900,color:t.text,lineHeight:1 }}>
-                      {k.lastValue}<span style={{ fontSize:'9px',color:t.textMuted,fontWeight:400 }}>{k.unit}</span>
-                    </div>
-                    {k.delta !== null && (
-                      <div style={{ fontSize:'9px',fontWeight:700,color:parseFloat(k.delta)>=0?'#52E8A0':'#f87171' }}>
-                        {parseFloat(k.delta)>=0?'↑':'↓'} {Math.abs(parseFloat(k.delta)).toFixed(2)}{k.unit}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
       </div>
     </div>
   )
