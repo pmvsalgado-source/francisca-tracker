@@ -75,7 +75,6 @@ function Sparkline({ data, t, target }) {
   return <canvas ref={canvasRef} style={{ width: '100%', height: '100px', display: 'block' }} />
 }
 
-// Mini sparkline for KPI modal history
 function MiniSpark({ pts, t, color = '#378ADD' }) {
   const canvasRef = useRef(null)
   useEffect(() => {
@@ -102,10 +101,95 @@ function MiniSpark({ pts, t, color = '#378ADD' }) {
   return <canvas ref={canvasRef} style={{ width: '100%', height: '36px', display: 'block' }} />
 }
 
+function WeeklyBarChart({ weeks, t }) {
+  const canvasRef = useRef(null)
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas || !weeks.length) return
+    const dpr = window.devicePixelRatio || 1
+    const rect = canvas.getBoundingClientRect()
+    canvas.width = rect.width * dpr
+    canvas.height = rect.height * dpr
+    const ctx = canvas.getContext('2d')
+    ctx.scale(dpr, dpr)
+    const W = rect.width, H = rect.height
+    ctx.clearRect(0, 0, W, H)
+    const maxVal = Math.max(...weeks.map(w => w.count), 1)
+    const pad = { t: 14, r: 4, b: 22, l: 4 }
+    const cw = W - pad.l - pad.r
+    const ch = H - pad.t - pad.b
+    const barW = cw / weeks.length
+    weeks.forEach((w, i) => {
+      const bh = Math.max(w.count > 0 ? (w.count / maxVal) * ch : 0, w.count > 0 ? 3 : 0)
+      const x = pad.l + i * barW + barW * 0.12
+      const bw = barW * 0.76
+      const y = pad.t + ch - bh
+      ctx.fillStyle = w.isCurrent ? '#378ADD' : '#378ADD44'
+      ctx.fillRect(x, y, bw, bh)
+      if (w.count > 0) {
+        ctx.fillStyle = w.isCurrent ? t.text : t.textMuted
+        ctx.font = `${w.isCurrent ? 'bold ' : ''}9px system-ui`
+        ctx.textAlign = 'center'
+        ctx.fillText(w.count, x + bw / 2, y - 3)
+      }
+      ctx.fillStyle = t.textMuted
+      ctx.font = '7px system-ui'
+      ctx.textAlign = 'center'
+      ctx.fillText(w.label, x + bw / 2, H - 4)
+    })
+  }, [weeks, t])
+  return <canvas ref={canvasRef} style={{ width: '100%', height: '90px', display: 'block' }} />
+}
+
+function DonutChart({ segments, total, t }) {
+  const canvasRef = useRef(null)
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const dpr = window.devicePixelRatio || 1
+    const rect = canvas.getBoundingClientRect()
+    canvas.width = rect.width * dpr
+    canvas.height = rect.height * dpr
+    const ctx = canvas.getContext('2d')
+    ctx.scale(dpr, dpr)
+    const W = rect.width, H = rect.height
+    ctx.clearRect(0, 0, W, H)
+    const cx = W / 2, cy = H / 2
+    const r = Math.min(W, H) / 2 - 4
+    const innerR = r * 0.56
+    if (!segments.length || total === 0) {
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2)
+      ctx.strokeStyle = t.border; ctx.lineWidth = 2; ctx.stroke()
+      return
+    }
+    let angle = -Math.PI / 2
+    segments.forEach(seg => {
+      const sweep = (seg.value / total) * Math.PI * 2
+      ctx.beginPath(); ctx.moveTo(cx, cy)
+      ctx.arc(cx, cy, r, angle, angle + sweep)
+      ctx.closePath(); ctx.fillStyle = seg.color; ctx.fill()
+      angle += sweep
+    })
+    ctx.beginPath(); ctx.arc(cx, cy, innerR, 0, Math.PI * 2)
+    ctx.fillStyle = t.surface || t.bg; ctx.fill()
+    ctx.fillStyle = t.text; ctx.font = 'bold 13px system-ui'
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+    ctx.fillText(total, cx, cy)
+    ctx.textBaseline = 'alphabetic'
+  }, [segments, total, t])
+  return <canvas ref={canvasRef} style={{ width: '72px', height: '72px', display: 'block', flexShrink: 0 }} />
+}
+
 const PERIOD_OPTIONS = [
   { key: '7d', label: '7 dias' },
   { key: '30d', label: '30 dias' },
   { key: '90d', label: '3 meses' },
+  { key: 'all', label: 'Tudo' },
+]
+const COMP_PERIOD_OPTIONS = [
+  { key: '30d', label: '30d' },
+  { key: '90d', label: '3m' },
+  { key: '1y', label: '1a' },
   { key: 'all', label: 'Tudo' },
 ]
 
@@ -115,12 +199,13 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   const [trainingPlans, setTrainingPlans] = useState([])
   const [compStats, setCompStats] = useState([])
   const [period, setPeriod] = useState('30d')
-  const [kpiModal, setKpiModal] = useState(null) // { id, label, unit, entries }
-  const [kpiPrefs, setKpiPrefs] = useState(null) // from Supabase
+  const [compPeriod, setCompPeriod] = useState('all')
+  const [goals, setGoals] = useState([])
+  const [kpiModal, setKpiModal] = useState(null)
   const [savingPrefs, setSavingPrefs] = useState(false)
   const [kpiOrder, setKpiOrder] = useState(['smash_factor','carry','stack_speed','deadlift','medball','thoracic'])
 
-  const ATHLETE_DEFAULTS = { hcp: '1.1', wagr: '—', club: 'Vale de Janelas', category: 'Sub-18', fed: 'FPG', fed_num: '43832' }
+  const ATHLETE_DEFAULTS = { hcp: '1.1', wagr: '—', prev_hcp: null, prev_wagr: null, club: 'Vale de Janelas', category: 'Sub-18', fed: 'FPG', fed_num: '43832' }
   const [athlete, setAthlete] = useState(ATHLETE_DEFAULTS)
   const [editingAthlete, setEditingAthlete] = useState(false)
   const [athleteForm, setAthleteForm] = useState(ATHLETE_DEFAULTS)
@@ -129,13 +214,22 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   useEffect(() => {
     supabase.from('entries').select('*').order('entry_date', { ascending: true }).then(({ data }) => setEntries(data || []))
     supabase.from('events').select('*').order('start_date').then(({ data }) => setEvents(data || []))
-    supabase.from('training_plans').select('*').order('week_start', { ascending: false }).limit(4).then(({ data }) => setTrainingPlans(data || []))
+    supabase.from('training_plans').select('*').order('week_start', { ascending: false }).then(({ data }) => setTrainingPlans(data || []))
     supabase.from('competition_stats').select('*').order('event_date', { ascending: false }).then(({ data }) => setCompStats(data || []))
     if (user?.id) {
-      supabase.from('profiles').select('hcp,wagr,athlete_club,category,fed,fed_num,home_kpi_order').eq('id', user.id).single()
+      supabase.from('profiles').select('hcp,wagr,prev_hcp,prev_wagr,athlete_club,category,fed,fed_num,home_kpi_order').eq('id', user.id).single()
         .then(({ data }) => {
           if (data) {
-            const a = { hcp: data.hcp || '1.1', wagr: data.wagr || '—', club: data.athlete_club || 'Vale de Janelas', category: data.category || 'Sub-18', fed: data.fed || 'FPG', fed_num: data.fed_num || '43832' }
+            const a = {
+              hcp: data.hcp || '1.1',
+              wagr: data.wagr || '—',
+              prev_hcp: data.prev_hcp || null,
+              prev_wagr: data.prev_wagr || null,
+              club: data.athlete_club || 'Vale de Janelas',
+              category: data.category || 'Sub-18',
+              fed: data.fed || 'FPG',
+              fed_num: data.fed_num || '43832',
+            }
             setAthlete(a); setAthleteForm(a)
             if (data.home_kpi_order) {
               try { setKpiOrder(JSON.parse(data.home_kpi_order)) } catch (_) {}
@@ -144,6 +238,10 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
         })
     }
   }, [user])
+
+  useEffect(() => {
+    supabase.from('goals').select('*').order('created_at', { ascending: false }).then(({ data }) => setGoals(data || []))
+  }, [])
 
   const saveAthlete = async () => {
     if (!user?.id) return
@@ -162,7 +260,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
     setSavingPrefs(false)
   }
 
-  // Period filter
+  // Period filter for session counts
   const periodStart = (() => {
     const now = new Date()
     if (period === '7d') { const d = new Date(now); d.setDate(d.getDate()-7); return d.toISOString().split('T')[0] }
@@ -187,14 +285,13 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   const pct = lastSwing ? Math.min(100, Math.round((lastSwing / swingTarget) * 100)) : 0
   const delta = swingEntries.length > 1 ? (parseFloat(swingEntries[swingEntries.length - 1].value) - parseFloat(swingEntries[swingEntries.length - 2].value)).toFixed(1) : null
 
-  // Period-filtered session counts
   const golfMetrics = ['swing_speed', 'smash_factor', 'carry', 'stack_speed']
   const gymMetrics = ['deadlift', 'medball', 'thoracic']
   const golfSessions = [...new Set(filteredEntries.filter(e => golfMetrics.includes(e.metric_id)).map(e => e.entry_date))].length
   const gymSessions = [...new Set(filteredEntries.filter(e => gymMetrics.includes(e.metric_id)).map(e => e.entry_date))].length
 
-  const today = new Date().toISOString().split('T')[0]
-  const upcomingEvents = events.filter(e => e.start_date >= today && e.status !== 'cancelled' && e.status !== 'cancelado').slice(0, 4)
+  const todayStr = new Date().toISOString().split('T')[0]
+  const upcomingEvents = events.filter(e => e.start_date >= todayStr && e.status !== 'cancelled' && e.status !== 'cancelado').slice(0, 4)
   const nextComp = upcomingEvents[0]
   const daysToNext = nextComp ? Math.ceil((new Date(nextComp.start_date) - new Date()) / 86400000) : null
 
@@ -206,7 +303,6 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
 
   const formatDate = (d) => d ? new Date(d + 'T12:00:00').toLocaleDateString('pt-PT', { day: '2-digit', month: 'short' }) : ''
 
-  // All KPI definitions (ordered by kpiOrder)
   const ALL_KPIS = [
     { id: 'smash_factor', label: 'SMASH FACTOR', unit: '', color: '#378ADD' },
     { id: 'carry', label: 'CARRY DRIVER', unit: 'm', color: '#378ADD' },
@@ -220,35 +316,160 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
     ...ALL_KPIS.filter(k => !kpiOrder.includes(k.id)),
   ].filter(k => lastMetrics[k.id])
 
-  // Competition stats
-  const scores = compStats.map(s => parseFloat(s.values?.score)).filter(v => !isNaN(v))
-  const positions = compStats.map(s => parseFloat(s.values?.position)).filter(v => !isNaN(v))
-  const avgScore = scores.length ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : null
-  const bestPos = positions.length ? Math.min(...positions) : null
-  const top10 = compStats.filter(s => parseFloat(s.values?.position) <= 10).length
-  const recentResults = compStats.slice(0, 3)
-
-  // Training this week
   const todayDate = new Date()
-  const weekStart = new Date(todayDate); weekStart.setDate(todayDate.getDate() - (todayDate.getDay() === 0 ? 6 : todayDate.getDay() - 1))
-  const weekStartStr = weekStart.toISOString().split('T')[0]
-  const currentPlan = trainingPlans.find(p => p.week_start <= weekStartStr && p.week_end >= weekStartStr) || trainingPlans[0]
+  const weekStartDate = new Date(todayDate)
+  weekStartDate.setDate(todayDate.getDate() - (todayDate.getDay() === 0 ? 6 : todayDate.getDay() - 1))
+  const weekStartStr = weekStartDate.toISOString().split('T')[0]
   const DAYS_PT_SHORT = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb']
   const todayDayPT = DAYS_PT_SHORT[todayDate.getDay()]
 
   const getWeekSessions = (plan) => {
     if (!plan?.days) return []
     const sessions = []
-    Object.entries(plan.days).forEach(([day, dayData]) => {
-      if (dayData?.golf?.length > 0) sessions.push({ day, type: 'Golf', detail: dayData.golf[0]?.category || 'Golf' })
-      if (dayData?.gym?.length > 0) sessions.push({ day, type: 'Gym', detail: dayData.gym[0]?.category || 'Gym' })
-    })
+    if (Array.isArray(plan.days)) {
+      const dayNames = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom']
+      plan.days.forEach((dayData, i) => {
+        if (dayData?.sessions?.length > 0 && !dayData.sessions[0]?.isRest) {
+          sessions.push({ day: dayNames[i], type: plan.plan_type === 'gym' ? 'Gym' : 'Golf', detail: dayData.sessions[0]?.cat || dayData.sessions[0]?.name || 'Treino' })
+        }
+      })
+    } else {
+      Object.entries(plan.days).forEach(([day, dayData]) => {
+        if (dayData?.golf?.length > 0) sessions.push({ day, type: 'Golf', detail: dayData.golf[0]?.category || 'Golf' })
+        if (dayData?.gym?.length > 0) sessions.push({ day, type: 'Gym', detail: dayData.gym[0]?.category || 'Gym' })
+      })
+    }
     return sessions
   }
+  const currentPlan = trainingPlans.find(p => p.week_start <= weekStartStr && p.week_end >= weekStartStr) || trainingPlans[0]
   const weekSessions = getWeekSessions(currentPlan)
-  const todaySession = weekSessions.find(s => s.day === todayDayPT)
 
-  // KPI deep-dive modal
+  // HCP / WAGR deltas (compare with previous values)
+  const hcpDelta = athlete.prev_hcp && athlete.hcp && athlete.hcp !== '—'
+    ? (parseFloat(athlete.hcp) - parseFloat(athlete.prev_hcp)).toFixed(1)
+    : null
+  const wagrDelta = athlete.prev_wagr && athlete.wagr && athlete.wagr !== '—' && athlete.prev_wagr !== '—'
+    ? parseInt(athlete.wagr) - parseInt(athlete.prev_wagr)
+    : null
+
+  // Plan coverage (Slot B)
+  const latestPlanEnd = trainingPlans.length > 0
+    ? trainingPlans.reduce((max, p) => p.week_end > max ? p.week_end : max, '')
+    : null
+
+  const nextTrainingDate = (() => {
+    for (let i = 0; i <= 14; i++) {
+      const d = new Date(todayDate); d.setDate(todayDate.getDate() + i)
+      const ds = d.toISOString().split('T')[0]
+      const plan = trainingPlans.find(p => p.week_start <= ds && p.week_end >= ds)
+      if (!plan?.days) continue
+      if (Array.isArray(plan.days)) {
+        const dow = d.getDay(); const di = dow === 0 ? 6 : dow - 1
+        const day = plan.days[di]
+        if (day?.sessions?.length > 0 && !day.sessions[0]?.isRest) return ds
+      } else {
+        const dayName = DAYS_PT_SHORT[d.getDay()]
+        const dayData = plan.days[dayName]
+        if (dayData?.golf?.length > 0 || dayData?.gym?.length > 0) return ds
+      }
+    }
+    return null
+  })()
+
+  const nextCoachDate = (() => {
+    for (let i = 0; i <= 14; i++) {
+      const d = new Date(todayDate); d.setDate(todayDate.getDate() + i)
+      const ds = d.toISOString().split('T')[0]
+      const plan = trainingPlans.find(p => p.week_start <= ds && p.week_end >= ds)
+      if (!plan?.days || !Array.isArray(plan.days)) continue
+      const dow = d.getDay(); const di = dow === 0 ? 6 : dow - 1
+      const day = plan.days[di]
+      if (day?.sessions?.some(s => s.session_type === 'coach' && !s.isRest)) return ds
+    }
+    return null
+  })()
+
+  // Weekly training load: last 8 weeks from entries (unique session dates per week)
+  const weeklyLoad = (() => {
+    const today = new Date()
+    return Array.from({ length: 8 }, (_, i) => {
+      const wkOffset = 7 - i
+      const d = new Date(today); d.setDate(today.getDate() - 7 * wkOffset)
+      const wd = d.getDay()
+      const wsD = new Date(d); wsD.setDate(d.getDate() - (wd === 0 ? 6 : wd - 1))
+      const weD = new Date(wsD); weD.setDate(wsD.getDate() + 6)
+      const ws = wsD.toISOString().split('T')[0]
+      const we = weD.toISOString().split('T')[0]
+      const uniqueDates = new Set(entries.filter(e => e.entry_date >= ws && e.entry_date <= we).map(e => e.entry_date))
+      const isCurrent = ws === weekStartStr
+      const label = wsD.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' }).slice(0, 5)
+      return { ws, label, count: uniqueDates.size, isCurrent }
+    })
+  })()
+
+  // Donut: golf vs gym session distribution across the 8-week window
+  const donutSegments = (() => {
+    const winStart = weeklyLoad[0]?.ws || ''
+    const golfDates = new Set(entries.filter(e => golfMetrics.includes(e.metric_id) && e.entry_date >= winStart).map(e => e.entry_date))
+    const gymDates = new Set(entries.filter(e => gymMetrics.includes(e.metric_id) && e.entry_date >= winStart).map(e => e.entry_date))
+    const segs = []
+    if (golfDates.size > 0) segs.push({ label: 'Golfe', value: golfDates.size, color: '#378ADD' })
+    if (gymDates.size > 0) segs.push({ label: 'Ginásio', value: gymDates.size, color: '#52E8A0' })
+    return segs
+  })()
+  const donutTotal = donutSegments.reduce((s, seg) => s + seg.value, 0)
+
+  // Active KPIs (Slot C): each KPI with last value + next registration date
+  const activeKpis = ALL_KPIS.map(k => {
+    const kpiEntries = entries.filter(e => e.metric_id === k.id && e.value && e.entry_date)
+      .sort((a, b) => a.entry_date.localeCompare(b.entry_date))
+    const last = kpiEntries[kpiEntries.length - 1]
+    if (!last) return null
+    const lastD = new Date(last.entry_date + 'T12:00:00')
+    const nextD = new Date(lastD); nextD.setDate(nextD.getDate() + 7)
+    const nextDateStr = nextD.toISOString().split('T')[0]
+    const isOverdue = nextDateStr < todayStr
+    const prevEntry = kpiEntries[kpiEntries.length - 2]
+    const d = prevEntry ? (parseFloat(last.value) - parseFloat(prevEntry.value)).toFixed(2) : null
+    return { ...k, lastValue: last.value, lastDate: last.entry_date, nextDate: nextDateStr, isOverdue, delta: d }
+  }).filter(Boolean)
+
+  // Competition stats filtered by compPeriod
+  const compPeriodStart = (() => {
+    const now = new Date()
+    if (compPeriod === '30d') { const d = new Date(now); d.setDate(d.getDate()-30); return d.toISOString().split('T')[0] }
+    if (compPeriod === '90d') { const d = new Date(now); d.setDate(d.getDate()-90); return d.toISOString().split('T')[0] }
+    if (compPeriod === '1y') { const d = new Date(now); d.setFullYear(d.getFullYear()-1); return d.toISOString().split('T')[0] }
+    return null
+  })()
+  const filteredCompStats = compPeriodStart ? compStats.filter(s => s.event_date >= compPeriodStart) : compStats
+
+  // Slot E stats
+  const fcScores = filteredCompStats.map(s => parseFloat(s.values?.score)).filter(v => !isNaN(v))
+  const fcPositions = filteredCompStats.map(s => parseFloat(s.values?.position)).filter(v => !isNaN(v))
+  const fcFairways = filteredCompStats.map(s => parseFloat(s.values?.fairways)).filter(v => !isNaN(v))
+  const fcGir = filteredCompStats.map(s => parseFloat(s.values?.gir)).filter(v => !isNaN(v))
+  const fcPutts = filteredCompStats.map(s => parseFloat(s.values?.putts)).filter(v => !isNaN(v))
+  const avgScore = fcScores.length ? (fcScores.reduce((a,b)=>a+b,0)/fcScores.length).toFixed(1) : null
+  const bestPos = fcPositions.length ? Math.min(...fcPositions) : null
+  const top10 = filteredCompStats.filter(s => parseFloat(s.values?.position) <= 10).length
+  const avgFairways = fcFairways.length ? (fcFairways.reduce((a,b)=>a+b,0)/fcFairways.length).toFixed(1) : null
+  const avgGir = fcGir.length ? (fcGir.reduce((a,b)=>a+b,0)/fcGir.length).toFixed(1) : null
+  const avgPutts = fcPutts.length ? (fcPutts.reduce((a,b)=>a+b,0)/fcPutts.length).toFixed(1) : null
+  const lastScore = filteredCompStats.length > 0 ? filteredCompStats[0].values?.score : null
+
+  // Best result ever
+  const scoresAll = compStats.filter(s => s.values?.score !== undefined && s.values?.score !== null && s.values?.score !== '')
+  const bestResult = scoresAll.length > 0
+    ? scoresAll.reduce((best, s) => parseFloat(s.values.score) < parseFloat(best.values.score) ? s : best)
+    : null
+  const isNewPR = bestResult && compStats.length > 0 && compStats[0]?.id === bestResult?.id
+
+  // Upcoming competitions for Slot A
+  const isCompEvent = e => (e.category||'').toLowerCase().includes('competi') || (e.title||'').toLowerCase().includes('torneio')
+  const upcomingComps = events.filter(e => e.start_date >= todayStr && !['cancelled','cancelado'].includes(e.status||'')).filter(isCompEvent).slice(0, 5)
+  const slotAItems = upcomingComps.length > 0 ? upcomingComps : upcomingEvents.slice(0, 5)
+
   const openKpiModal = (k) => {
     const kpiEntries = entries.filter(e => e.metric_id === k.id && e.value && e.entry_date)
       .sort((a, b) => a.entry_date.localeCompare(b.entry_date))
@@ -266,19 +487,21 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
     saveKpiPrefs(arr)
   }
 
+  const card = { background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '16px 18px' }
+
   return (
     <div style={{ fontFamily: F, color: t.text }}>
       <style>{`
-        .h-kpi{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
-        .h-bottom{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
         .h-hero-sub{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
-        .h-today-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+        .h-4slot{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
         .home-3col{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-        @media(max-width:700px){.h-bottom{grid-template-columns:1fr}.h-kpi{grid-template-columns:repeat(2,1fr)}.h-today-grid{grid-template-columns:repeat(2,1fr)}}
-        @media(max-width:420px){.h-kpi{grid-template-columns:1fr 1fr}.h-today-grid{grid-template-columns:1fr 1fr}.home-3col{grid-template-columns:1fr 1fr}}
+        .h-stats4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+        .h-comp-filter{display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+        @media(max-width:700px){.h-4slot{grid-template-columns:1fr}.h-stats4{grid-template-columns:repeat(2,1fr)}}
+        @media(max-width:420px){.home-3col{grid-template-columns:1fr 1fr}.h-stats4{grid-template-columns:1fr 1fr}}
       `}</style>
 
-      {/* ── KPI MODAL ── */}
+      {/* KPI MODAL */}
       {kpiModal && (
         <div style={{ position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:300,padding:'20px' }}
           onClick={e => { if (e.target===e.currentTarget) setKpiModal(null) }}>
@@ -332,7 +555,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
         </div>
       )}
 
-      {/* ── ATHLETE EDIT FORM ── */}
+      {/* ATHLETE EDIT FORM */}
       {editingAthlete && (
         <div style={{ background:t.surface,border:`1px solid ${t.border}`,borderRadius:'12px',padding:'18px',marginBottom:'14px' }}>
           <div style={{ fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginBottom:'14px' }}>EDITAR PERFIL</div>
@@ -351,12 +574,11 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
         </div>
       )}
 
-      {/* ── HERO CARD ── */}
+      {/* HERO CARD */}
       {!editingAthlete && (
         <div style={{ background:t.surface,border:`1px solid ${t.border}`,borderRadius:'16px',padding:'20px 22px',marginBottom:'14px',position:'relative',overflow:'hidden' }}>
           <div style={{ position:'absolute',top:0,left:0,right:0,height:'3px',background:'linear-gradient(90deg,#378ADD,#52E8A0)' }}/>
 
-          {/* Top row: swing speed + athlete badge */}
           <div style={{ display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'16px' }}>
             <div>
               <div style={{ fontSize:'8px',letterSpacing:'3px',color:t.textMuted,fontWeight:600,marginBottom:'8px' }}>
@@ -374,8 +596,14 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
               )}
             </div>
             <div style={{ display:'flex',flexDirection:'column',alignItems:'flex-end',gap:'8px',flexShrink:0 }}>
+              {/* HCP badge with delta arrow */}
               <div style={{ background:'#378ADD15',border:'1px solid #378ADD33',borderRadius:'10px',padding:'8px 14px',textAlign:'center' }}>
                 <div style={{ fontSize:'22px',fontWeight:900,color:'#378ADD',lineHeight:1 }}>{athlete.hcp||'—'}</div>
+                {hcpDelta !== null && (
+                  <div style={{ fontSize:'9px',fontWeight:700,marginTop:'1px',color:parseFloat(hcpDelta)<0?'#52E8A0':'#f87171' }}>
+                    {parseFloat(hcpDelta)<0?'↓':'↑'} {Math.abs(parseFloat(hcpDelta)).toFixed(1)}
+                  </div>
+                )}
                 <div style={{ fontSize:'8px',color:t.textMuted,letterSpacing:'1.5px',fontWeight:600,marginTop:'1px' }}>HCP</div>
               </div>
               <div style={{ textAlign:'right' }}>
@@ -402,9 +630,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
           {/* Progress bar */}
           <div style={{ marginBottom:'14px' }}>
             <div style={{ display:'flex',justifyContent:'space-between',marginBottom:'5px' }}>
-              <div style={{ fontSize:'9px',color:t.textMuted,letterSpacing:'2px' }}>
-                PROGRESSO PARA {swingTarget} MPH
-              </div>
+              <div style={{ fontSize:'9px',color:t.textMuted,letterSpacing:'2px' }}>PROGRESSO PARA {swingTarget} MPH</div>
               <div style={{ fontSize:'12px',fontWeight:900,color:'#378ADD' }}>{pct}%</div>
             </div>
             <div style={{ height:'4px',background:t.border,borderRadius:'2px',overflow:'hidden' }}>
@@ -417,10 +643,9 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
             </div>
           </div>
 
-          {/* Sparkline */}
           <Sparkline data={swingEntries} t={t} target={swingTarget} />
 
-          {/* Sessions + Next comp sub-row */}
+          {/* Sessions + Next comp / WAGR sub-row */}
           <div className="h-hero-sub">
             <div style={{ background:t.bg,borderRadius:'10px',padding:'10px 14px',display:'flex',alignItems:'center',gap:'12px' }}>
               <div style={{ flex:1 }}>
@@ -449,7 +674,14 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
             ) : (
               <div style={{ background:t.bg,borderRadius:'10px',padding:'10px 14px' }}>
                 <div style={{ fontSize:'8px',letterSpacing:'2px',color:t.textMuted,marginBottom:'4px',fontWeight:600 }}>WAGR</div>
-                <div style={{ fontSize:'22px',fontWeight:900,color:t.text,lineHeight:1 }}>{athlete.wagr||'—'}</div>
+                <div style={{ fontSize:'22px',fontWeight:900,color:t.text,lineHeight:1,display:'flex',alignItems:'baseline',gap:'6px' }}>
+                  {athlete.wagr||'—'}
+                  {wagrDelta !== null && (
+                    <span style={{ fontSize:'11px',fontWeight:700,color:wagrDelta<0?'#52E8A0':'#f87171' }}>
+                      {wagrDelta<0?'↑':'↓'} {Math.abs(wagrDelta)}
+                    </span>
+                  )}
+                </div>
                 <div style={{ fontSize:'10px',color:t.textMuted,marginTop:'2px' }}>ranking mundial</div>
               </div>
             )}
@@ -457,203 +689,243 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
         </div>
       )}
 
-      {/* ── PERIOD FILTER ── */}
-      <div style={{ display:'flex',gap:'5px',marginBottom:'14px',flexWrap:'wrap',alignItems:'center' }}>
-        <div style={{ fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginRight:'4px' }}>PERÍODO</div>
-        {PERIOD_OPTIONS.map(opt => (
-          <button key={opt.key} onClick={()=>setPeriod(opt.key)}
-            style={{ padding:'4px 12px',borderRadius:'16px',border:`1px solid ${period===opt.key?'#378ADD':t.border}`,
-              background:period===opt.key?'#378ADD15':'transparent',color:period===opt.key?'#378ADD':t.textMuted,
-              cursor:'pointer',fontSize:'11px',fontWeight:period===opt.key?700:400,fontFamily:F }}>
-            {opt.label}
-          </button>
-        ))}
-      </div>
+      {/* 4-SLOT GRID */}
+      <div className="h-4slot">
 
-      {/* ── HOJE — treino do dia ── */}
-      {weekSessions.length > 0 && (
-        <div style={{ background:t.surface,border:`1px solid ${t.border}`,borderRadius:'12px',padding:'14px 18px',marginBottom:'14px' }}>
+        {/* SLOT A — Próximas Competições */}
+        <div style={{ ...card }}>
           <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px' }}>
-            <div style={{ fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600 }}>
-              {lang==='pt'?'TREINO ESTA SEMANA':'TRAINING THIS WEEK'}
+            <div style={{ fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600 }}>PRÓXIMAS COMPETIÇÕES</div>
+            <button onClick={()=>onNavigate&&onNavigate('calendar')}
+              style={{ background:'transparent',border:'none',color:'#378ADD',fontSize:'11px',cursor:'pointer',fontFamily:F,padding:0 }}>
+              Calendário →
+            </button>
+          </div>
+          {slotAItems.length === 0 ? (
+            <div style={{ fontSize:'12px',color:t.textMuted,fontStyle:'italic' }}>Sem competições próximas</div>
+          ) : (
+            <div style={{ display:'flex',flexDirection:'column',gap:'8px' }}>
+              {slotAItems.map(ev => {
+                const d = Math.ceil((new Date(ev.start_date) - new Date()) / 86400000)
+                const urgent = d <= 14
+                return (
+                  <div key={ev.id} style={{ display:'flex',alignItems:'center',gap:'10px',padding:'8px 10px',background:t.bg,borderRadius:'8px',border:`1px solid ${urgent?'#f59e0b33':t.border}` }}>
+                    <div style={{ textAlign:'center',flexShrink:0,minWidth:'36px' }}>
+                      <div style={{ fontSize:'18px',fontWeight:900,color:urgent?'#f59e0b':'#378ADD',lineHeight:1 }}>{d}</div>
+                      <div style={{ fontSize:'7px',color:t.textMuted,letterSpacing:'1px',fontWeight:600 }}>DIAS</div>
+                    </div>
+                    <div style={{ flex:1,minWidth:0 }}>
+                      <div style={{ fontSize:'11px',fontWeight:600,color:t.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{ev.title}</div>
+                      <div style={{ fontSize:'10px',color:t.textMuted }}>{formatDate(ev.start_date)}{ev.end_date&&ev.end_date!==ev.start_date?` – ${formatDate(ev.end_date)}`:''}</div>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
+          )}
+        </div>
+
+        {/* SLOT B — Cobertura do Plano */}
+        <div style={{ ...card }}>
+          <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px' }}>
+            <div style={{ fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600 }}>PLANO DE TREINO</div>
             <button onClick={()=>onNavigate&&onNavigate('training')}
               style={{ background:'transparent',border:'none',color:'#378ADD',fontSize:'11px',cursor:'pointer',fontFamily:F,padding:0 }}>
               Ver plano →
             </button>
           </div>
-          <div className="h-today-grid">
-            {weekSessions.slice(0,8).map((s,i) => {
-              const isToday = s.day === todayDayPT
-              const color = s.type==='Golf' ? '#378ADD' : '#52E8A0'
-              return (
-                <div key={i} style={{ background:isToday?color+'18':t.bg,border:`1px solid ${isToday?color+'55':t.border}`,borderRadius:'8px',padding:'8px 10px' }}>
-                  <div style={{ fontSize:'9px',letterSpacing:'1px',color:isToday?color:t.textMuted,fontWeight:700,marginBottom:'2px' }}>
-                    {s.day}{isToday&&' · HOJE'}
-                  </div>
-                  <div style={{ fontSize:'11px',fontWeight:isToday?700:500,color:isToday?t.text:t.textMuted,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>
-                    {s.detail}
-                  </div>
-                  <div style={{ marginTop:'4px',display:'inline-flex',padding:'1px 6px',borderRadius:'4px',fontSize:'8px',fontWeight:700,
-                    background:s.type==='Golf'?'#378ADD18':'#52E8A018',color }}>
-                    {s.type}
+          {trainingPlans.length === 0 ? (
+            <div style={{ fontSize:'12px',color:t.textMuted,fontStyle:'italic' }}>Sem plano activo</div>
+          ) : (
+            <div style={{ display:'flex',flexDirection:'column',gap:'10px' }}>
+              {[
+                { label:'PLANO ATÉ', value: latestPlanEnd ? formatDate(latestPlanEnd) : '—', color: t.text },
+                { label:'PRÓXIMO TREINO', value: nextTrainingDate ? formatDate(nextTrainingDate) : '—', color: nextTrainingDate && nextTrainingDate < todayStr ? '#f87171' : '#378ADD' },
+                { label:'PRÓXIMO COM COACH', value: nextCoachDate ? formatDate(nextCoachDate) : '—', color: '#52E8A0' },
+              ].map(item => (
+                <div key={item.label} style={{ display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 10px',background:t.bg,borderRadius:'8px' }}>
+                  <div style={{ fontSize:'9px',letterSpacing:'1.5px',color:t.textMuted,fontWeight:600 }}>{item.label}</div>
+                  <div style={{ fontSize:'13px',fontWeight:800,color:item.color }}>{item.value}</div>
+                </div>
+              ))}
+              {weekSessions.length > 0 && (
+                <div>
+                  <div style={{ fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginBottom:'6px' }}>ESTA SEMANA</div>
+                  <div style={{ display:'flex',flexWrap:'wrap',gap:'4px' }}>
+                    {weekSessions.slice(0, 7).map((s, i) => {
+                      const isToday = s.day === todayDayPT
+                      const color = s.type === 'Golf' ? '#378ADD' : '#52E8A0'
+                      return (
+                        <div key={i} style={{ padding:'3px 8px',borderRadius:'6px',fontSize:'10px',fontWeight:isToday?700:500,
+                          background:isToday?color+'22':t.bg,color:isToday?color:t.textMuted,border:`1px solid ${isToday?color+'55':t.border}` }}>
+                          {s.day}{isToday?' ·':''} {s.detail.length > 8 ? s.detail.slice(0,8)+'…' : s.detail}
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
-              )
-            })}
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* SLOT C — KPIs Activos */}
+        <div style={{ ...card }}>
+          <div style={{ fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginBottom:'12px' }}>KPIs ACTIVOS</div>
+          {activeKpis.length === 0 ? (
+            <div style={{ fontSize:'12px',color:t.textMuted,fontStyle:'italic' }}>Sem registos</div>
+          ) : (
+            <div style={{ display:'flex',flexDirection:'column',gap:'6px' }}>
+              {activeKpis.map(k => (
+                <div key={k.id} onClick={()=>openKpiModal(k)}
+                  style={{ display:'flex',alignItems:'center',justifyContent:'space-between',padding:'8px 10px',background:k.isOverdue?'#f8717114':t.bg,
+                    border:`1px solid ${k.isOverdue?'#f8717144':t.border}`,borderRadius:'8px',cursor:'pointer' }}
+                  onMouseEnter={e=>e.currentTarget.style.opacity='0.8'}
+                  onMouseLeave={e=>e.currentTarget.style.opacity='1'}>
+                  <div style={{ flex:1,minWidth:0 }}>
+                    <div style={{ fontSize:'9px',letterSpacing:'1.5px',color:k.color,fontWeight:600 }}>{k.label}</div>
+                    <div style={{ fontSize:'10px',color:t.textMuted,marginTop:'1px' }}>
+                      Reg. até {formatDate(k.nextDate)}
+                      {k.isOverdue && <span style={{ color:'#f87171',marginLeft:'6px',fontWeight:700 }}>⚠ Atrasado</span>}
+                    </div>
+                  </div>
+                  <div style={{ textAlign:'right',flexShrink:0,marginLeft:'8px' }}>
+                    <div style={{ fontSize:'16px',fontWeight:900,color:t.text,lineHeight:1 }}>
+                      {k.lastValue}<span style={{ fontSize:'9px',color:t.textMuted,fontWeight:400 }}>{k.unit}</span>
+                    </div>
+                    {k.delta !== null && (
+                      <div style={{ fontSize:'9px',fontWeight:700,color:parseFloat(k.delta)>=0?'#52E8A0':'#f87171' }}>
+                        {parseFloat(k.delta)>=0?'↑':'↓'} {Math.abs(parseFloat(k.delta)).toFixed(2)}{k.unit}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* SLOT D — Evolução */}
+        <div style={{ ...card }}>
+          <div style={{ fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginBottom:'10px' }}>EVOLUÇÃO — 8 SEMANAS</div>
+          <WeeklyBarChart weeks={weeklyLoad} t={t} />
+          <div style={{ display:'flex',alignItems:'center',gap:'12px',marginTop:'12px' }}>
+            <DonutChart segments={donutSegments} total={donutTotal} t={t} />
+            <div style={{ display:'flex',flexDirection:'column',gap:'6px',flex:1 }}>
+              {donutSegments.length === 0 ? (
+                <div style={{ fontSize:'11px',color:t.textMuted,fontStyle:'italic' }}>Sem dados</div>
+              ) : (
+                donutSegments.map(seg => (
+                  <div key={seg.label} style={{ display:'flex',alignItems:'center',gap:'8px' }}>
+                    <div style={{ width:'8px',height:'8px',borderRadius:'50%',background:seg.color,flexShrink:0 }}/>
+                    <div style={{ fontSize:'10px',color:t.textMuted,flex:1 }}>{seg.label}</div>
+                    <div style={{ fontSize:'12px',fontWeight:700,color:t.text }}>{seg.value}</div>
+                    <div style={{ fontSize:'9px',color:t.textMuted }}>{donutTotal > 0 ? Math.round(seg.value/donutTotal*100) : 0}%</div>
+                  </div>
+                ))
+              )}
+              <div style={{ fontSize:'9px',color:t.textMuted,marginTop:'2px' }}>sessões registadas</div>
+            </div>
           </div>
         </div>
-      )}
+      </div>
 
-      {/* ── KPI GRID — todos os KPIs como cards ── */}
-      {orderedKpis.length > 0 && (
-        <div className="h-kpi">
-          {orderedKpis.map(k => {
-            const entry = lastMetrics[k.id]
-            const prevEntries = entries.filter(e=>e.metric_id===k.id&&e.value).sort((a,b)=>(a.entry_date||'').localeCompare(b.entry_date||''))
-            const d = prevEntries.length>1 ? (parseFloat(prevEntries[prevEntries.length-1].value)-parseFloat(prevEntries[prevEntries.length-2].value)).toFixed(2) : null
-            const isGolf = golfMetrics.includes(k.id)
-            const accent = isGolf ? '#378ADD' : '#52E8A0'
-            return (
-              <div key={k.id} onClick={()=>openKpiModal(k)}
-                style={{ background:t.surface,border:`1px solid ${t.border}`,borderLeft:`3px solid ${accent}`,borderRadius:'10px',padding:'14px 16px',cursor:'pointer',transition:'opacity 0.15s' }}
-                onMouseEnter={e=>e.currentTarget.style.opacity='0.8'}
-                onMouseLeave={e=>e.currentTarget.style.opacity='1'}>
-                <div style={{ fontSize:'8px',letterSpacing:'2px',color:accent,marginBottom:'8px',fontWeight:600 }}>
-                  {k.label} ↗
-                </div>
-                <div style={{ fontSize:'28px',fontWeight:900,color:t.text,lineHeight:1,letterSpacing:'-1px' }}>
-                  {entry?entry.value:'—'}<span style={{ fontSize:'11px',color:t.textMuted,letterSpacing:0,fontWeight:400 }}>{entry?` ${k.unit}`:''}</span>
-                </div>
-                {d!==null && (
-                  <div style={{ fontSize:'10px',color:parseFloat(d)>=0?'#52E8A0':'#f87171',marginTop:'6px',fontWeight:700 }}>
-                    {parseFloat(d)>=0?'↑':'↓'} {Math.abs(d)}{k.unit}
-                  </div>
-                )}
-                {!d && entry && (
-                  <div style={{ fontSize:'10px',color:t.textFaint||t.textMuted,marginTop:'6px' }}>
-                    {new Date(entry.entry_date+'T12:00:00').toLocaleDateString('pt-PT',{day:'2-digit',month:'short'})}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      {/* ── BOTTOM GRID: competição + resultados + eventos ── */}
-      <div className="h-bottom">
-        {/* Competição */}
-        <div style={{ background:t.surface,border:`1px solid ${t.border}`,borderRadius:'12px',padding:'16px 18px' }}>
-          <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px' }}>
-            <div style={{ fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600 }}>
-              {lang==='pt'?'STATS COMPETIÇÃO':'COMPETITION STATS'}
-            </div>
+      {/* SLOT E — Resultados em Competição */}
+      <div style={{ ...card, marginBottom:'14px' }}>
+        <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px',flexWrap:'wrap',gap:'8px' }}>
+          <div style={{ fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600 }}>RESULTADOS EM COMPETIÇÃO</div>
+          <div style={{ display:'flex',gap:'4px',flexWrap:'wrap',alignItems:'center' }}>
+            {COMP_PERIOD_OPTIONS.map(opt => (
+              <button key={opt.key} onClick={()=>setCompPeriod(opt.key)}
+                style={{ padding:'3px 10px',borderRadius:'12px',border:`1px solid ${compPeriod===opt.key?'#378ADD':t.border}`,
+                  background:compPeriod===opt.key?'#378ADD15':'transparent',color:compPeriod===opt.key?'#378ADD':t.textMuted,
+                  cursor:'pointer',fontSize:'10px',fontWeight:compPeriod===opt.key?700:400,fontFamily:F }}>
+                {opt.label}
+              </button>
+            ))}
             <button onClick={()=>onNavigate&&onNavigate('competition')}
-              style={{ background:'transparent',border:'none',color:'#378ADD',fontSize:'11px',cursor:'pointer',fontFamily:F,padding:0 }}>
+              style={{ background:'transparent',border:'none',color:'#378ADD',fontSize:'11px',cursor:'pointer',fontFamily:F,padding:0,marginLeft:'4px' }}>
               Ver stats →
             </button>
           </div>
-          {compStats.length===0 ? (
-            <div style={{ fontSize:'12px',color:t.textMuted,fontStyle:'italic' }}>
-              {lang==='pt'?'Sem competições registadas':'No competitions recorded'}
-            </div>
-          ) : (
-            <>
-              <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:'8px',marginBottom:'12px' }}>
-                {[
-                  { label:lang==='pt'?'MÉDIA SCORE':'AVG SCORE', value:avgScore?(parseFloat(avgScore)>=0?`+${avgScore}`:avgScore):'—', color:'#378ADD' },
-                  { label:lang==='pt'?'MELHOR POS.':'BEST POS.', value:bestPos?`#${bestPos}`:'—', color:'#52E8A0' },
-                  { label:'TOP 10', value:`${top10}×`, color:t.text },
-                  { label:lang==='pt'?'TORNEIOS':'EVENTS', value:compStats.length, color:t.text },
-                ].map((item,i) => (
-                  <div key={i} style={{ background:t.bg,borderRadius:'8px',padding:'10px 12px' }}>
-                    <div style={{ fontSize:'8px',color:t.textMuted,letterSpacing:'1px',marginBottom:'4px',fontWeight:600 }}>{item.label}</div>
-                    <div style={{ fontSize:'20px',fontWeight:800,color:item.color,letterSpacing:'-0.5px' }}>{item.value}</div>
-                  </div>
-                ))}
-              </div>
-              <div style={{ display:'flex',flexDirection:'column',gap:'1px' }}>
-                {recentResults.map((r,i) => {
-                  const score=r.values?.score; const pos=r.values?.position; const scoreNum=parseFloat(score)
-                  return (
-                    <div key={i} style={{ display:'flex',alignItems:'center',justifyContent:'space-between',padding:'7px 0',borderBottom:i<recentResults.length-1?`0.5px solid ${t.border}`:'none' }}>
-                      <div style={{ flex:1,minWidth:0 }}>
-                        <div style={{ fontSize:'11px',fontWeight:600,color:t.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{r.event_name}</div>
-                        <div style={{ fontSize:'10px',color:t.textMuted }}>{formatDate(r.event_date)}</div>
-                      </div>
-                      <div style={{ textAlign:'right',flexShrink:0,marginLeft:'8px' }}>
-                        {score&&<div style={{ fontSize:'12px',fontWeight:700,color:t.text }}>{scoreNum>=0?`+${score}`:score}</div>}
-                        {pos&&<div style={{ fontSize:'10px',fontWeight:600,color:'#378ADD' }}>#{pos}</div>}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </>
-          )}
         </div>
 
-        {/* Eventos + Swing sub-KPIs */}
-        <div style={{ display:'flex',flexDirection:'column',gap:'12px' }}>
-          {/* Upcoming events */}
-          <div style={{ background:t.surface,border:`1px solid ${t.border}`,borderRadius:'12px',padding:'16px 18px' }}>
-            <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px' }}>
-              <div style={{ fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600 }}>
-                {lang==='pt'?'PRÓXIMOS EVENTOS':'UPCOMING EVENTS'}
+        {/* Best result card */}
+        {bestResult && (
+          <div style={{ background:parseFloat(bestResult.values.score)<=0?'#52E8A014':'#378ADD0d',border:`1px solid ${parseFloat(bestResult.values.score)<=0?'#52E8A044':'#378ADD33'}`,borderRadius:'10px',padding:'12px 14px',marginBottom:'12px',display:'flex',alignItems:'center',gap:'14px' }}>
+            <div style={{ fontSize:'28px',lineHeight:1 }}>🏆</div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:'8px',letterSpacing:'2px',color:parseFloat(bestResult.values.score)<=0?'#52E8A0':'#378ADD',fontWeight:600,marginBottom:'2px' }}>
+                MELHOR RESULTADO{isNewPR ? ' · NOVO RECORDE ↑' : ''}
               </div>
-              <button onClick={()=>onNavigate&&onNavigate('calendar')}
-                style={{ background:'transparent',border:'none',color:'#378ADD',fontSize:'11px',cursor:'pointer',fontFamily:F,padding:0 }}>
-                Calendário →
-              </button>
+              <div style={{ fontSize:'22px',fontWeight:900,color:t.text,lineHeight:1 }}>
+                {parseFloat(bestResult.values.score)>=0?`+${bestResult.values.score}`:bestResult.values.score}
+                {bestResult.values.par && <span style={{ fontSize:'11px',color:t.textMuted,fontWeight:400,marginLeft:'6px' }}>par {bestResult.values.par}</span>}
+              </div>
+              <div style={{ fontSize:'11px',color:t.textMuted,marginTop:'2px' }}>
+                {bestResult.event_name} · {formatDate(bestResult.event_date)}
+                {bestResult.values?.position && <span style={{ color:'#378ADD',fontWeight:600,marginLeft:'6px' }}>#{bestResult.values.position}</span>}
+              </div>
             </div>
-            {upcomingEvents.length===0 ? (
-              <div style={{ fontSize:'12px',color:t.textMuted,fontStyle:'italic' }}>Sem eventos próximos</div>
-            ) : (
-              <div style={{ display:'flex',flexDirection:'column',gap:'8px' }}>
-                {upcomingEvents.slice(0,4).map(ev => {
-                  const d=Math.ceil((new Date(ev.start_date)-new Date())/86400000)
-                  return (
-                    <div key={ev.id} style={{ display:'flex',alignItems:'center',gap:'10px',padding:'7px 10px',background:t.bg,borderRadius:'8px' }}>
-                      <div style={{ width:'3px',height:'32px',background:ev.color||'#378ADD',borderRadius:'2px',flexShrink:0 }}/>
-                      <div style={{ flex:1,minWidth:0 }}>
-                        <div style={{ fontSize:'11px',fontWeight:600,color:t.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{ev.title}</div>
-                        <div style={{ fontSize:'10px',color:t.textMuted }}>{formatDate(ev.start_date)}{ev.end_date&&ev.end_date!==ev.start_date?` – ${formatDate(ev.end_date)}`:''}</div>
-                      </div>
-                      <div style={{ fontSize:'13px',fontWeight:700,color:d<=7?'#f59e0b':'#378ADD',flexShrink:0 }}>{d}d</div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
           </div>
+        )}
 
-          {/* Golf sub-KPIs quick view */}
-          {orderedKpis.filter(k=>['smash_factor','carry','stack_speed'].includes(k.id)).length>0 && (
-            <div style={{ background:t.surface,border:`1px solid ${t.border}`,borderRadius:'12px',padding:'14px 18px' }}>
-              <div style={{ fontSize:'9px',letterSpacing:'2px',color:'#378ADD',fontWeight:600,marginBottom:'10px' }}>GOLF KPIs</div>
-              <div style={{ display:'flex',flexDirection:'column',gap:'8px' }}>
-                {orderedKpis.filter(k=>['smash_factor','carry','stack_speed'].includes(k.id)).map(k => {
-                  const entry=lastMetrics[k.id]
-                  const prevE=entries.filter(e=>e.metric_id===k.id&&e.value).sort((a,b)=>(a.entry_date||'').localeCompare(b.entry_date||''))
-                  const d=prevE.length>1?(parseFloat(prevE[prevE.length-1].value)-parseFloat(prevE[prevE.length-2].value)).toFixed(2):null
+        {/* Stats cards */}
+        {filteredCompStats.length > 0 && (
+          <div className="h-stats4" style={{ marginBottom:'14px' }}>
+            {[
+              { label:'ÚLTIMO SCORE', value: lastScore !== null && lastScore !== '' ? (parseFloat(lastScore)>=0?`+${lastScore}`:String(lastScore)) : '—', color:'#378ADD' },
+              { label:'MÉDIA SCORE', value: avgScore !== null ? (parseFloat(avgScore)>=0?`+${avgScore}`:avgScore) : '—', color:'#378ADD' },
+              { label:'MELHOR POS.', value: bestPos !== null ? `#${bestPos}` : '—', color:'#52E8A0' },
+              { label:'TOP 10', value: `${top10}×`, color: top10 > 0 ? '#f59e0b' : t.textMuted },
+              avgFairways !== null ? { label:'FAIRWAYS', value: `${avgFairways}%`, color: t.text } : null,
+              avgGir !== null ? { label:'GIR', value: `${avgGir}%`, color: t.text } : null,
+              avgPutts !== null ? { label:'PUTTS/ROUND', value: avgPutts, color: t.text } : null,
+              { label:'TORNEIOS', value: filteredCompStats.length, color: t.textMuted },
+            ].filter(Boolean).slice(0,8).map((item, i) => (
+              <div key={i} style={{ background:t.bg,borderRadius:'8px',padding:'10px 12px' }}>
+                <div style={{ fontSize:'8px',color:t.textMuted,letterSpacing:'1px',marginBottom:'4px',fontWeight:600 }}>{item.label}</div>
+                <div style={{ fontSize:'18px',fontWeight:800,color:item.color,letterSpacing:'-0.5px' }}>{item.value}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Competition table */}
+        {filteredCompStats.length === 0 ? (
+          <div style={{ fontSize:'12px',color:t.textMuted,fontStyle:'italic',padding:'12px 0' }}>Sem competições no período seleccionado.</div>
+        ) : (
+          <div style={{ overflowX:'auto' }}>
+            <table style={{ width:'100%',borderCollapse:'collapse',fontSize:'12px',minWidth:'400px' }}>
+              <thead>
+                <tr style={{ background:t.bg }}>
+                  {['DATA','COMPETIÇÃO','SCORE','POS.','FAIRWAYS','GIR','PUTTS'].map(h => (
+                    <th key={h} style={{ padding:'8px 10px',textAlign:'left',fontSize:'9px',letterSpacing:'1.5px',color:t.textMuted,fontWeight:600,borderBottom:`1px solid ${t.border}`,whiteSpace:'nowrap' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filteredCompStats.map((r, i) => {
+                  const score = r.values?.score; const pos = r.values?.position
+                  const scoreNum = parseFloat(score)
                   return (
-                    <div key={k.id} onClick={()=>openKpiModal(k)}
-                      style={{ display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer',padding:'2px 0' }}
-                      onMouseEnter={e=>e.currentTarget.style.opacity='0.7'}
-                      onMouseLeave={e=>e.currentTarget.style.opacity='1'}>
-                      <div style={{ fontSize:'11px',color:t.textMuted,fontWeight:600 }}>{k.label}</div>
-                      <div style={{ display:'flex',alignItems:'center',gap:'8px' }}>
-                        {d!==null&&<div style={{ fontSize:'10px',color:parseFloat(d)>=0?'#52E8A0':'#f87171',fontWeight:700 }}>{parseFloat(d)>=0?'↑':'↓'}{Math.abs(d)}</div>}
-                        <div style={{ fontSize:'14px',fontWeight:800,color:t.text }}>{entry?entry.value:'—'}<span style={{ fontSize:'10px',color:t.textMuted,fontWeight:400 }}>{entry?k.unit:''}</span></div>
-                      </div>
-                    </div>
+                    <tr key={r.id||i} style={{ borderBottom:`1px solid ${t.border}` }}>
+                      <td style={{ padding:'8px 10px',color:t.textMuted,whiteSpace:'nowrap' }}>{formatDate(r.event_date)}</td>
+                      <td style={{ padding:'8px 10px',fontWeight:600,color:t.text,maxWidth:'180px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{r.event_name}</td>
+                      <td style={{ padding:'8px 10px',fontWeight:700,color:score!==undefined&&score!==''?(scoreNum<=0?'#52E8A0':'#f87171'):t.textMuted }}>
+                        {score!==undefined&&score!==''?(scoreNum>=0?`+${score}`:score):'—'}
+                      </td>
+                      <td style={{ padding:'8px 10px',color:'#378ADD',fontWeight:600 }}>{pos?`#${pos}`:'—'}</td>
+                      <td style={{ padding:'8px 10px',color:t.textMuted }}>{r.values?.fairways!=null?`${r.values.fairways}%`:'—'}</td>
+                      <td style={{ padding:'8px 10px',color:t.textMuted }}>{r.values?.gir!=null?`${r.values.gir}%`:'—'}</td>
+                      <td style={{ padding:'8px 10px',color:t.textMuted }}>{r.values?.putts!=null?r.values.putts:'—'}</td>
+                    </tr>
                   )
                 })}
-              </div>
-            </div>
-          )}
-        </div>
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   )
