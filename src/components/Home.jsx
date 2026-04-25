@@ -639,8 +639,8 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   const s26BestScore = s26scores.length ? Math.min(...s26scores) : null
 
   // Two separate donuts: Golf categories + Gym exercises (last 4 weeks)
-  const GOLF_COLORS = ['#6366f1','#06b6d4','#10b981','#f59e0b','#f43f5e','#8b5cf6']
-  const GYM_COLORS  = ['#8b5cf6','#ec4899','#14b8a6','#f97316','#3b82f6','#06b6d4']
+  const GOLF_COLORS = ['#6366f1','#818cf8','#a5b4fc','#c7d2fe','#e0e7ff']
+  const GYM_COLORS  = ['#06b6d4','#67e8f9','#a5f3fc','#e0f2fe','#0891b2']
   const fwaStr4w = (() => { const d = new Date(); d.setDate(d.getDate()-28); return d.toISOString().split('T')[0] })()
 
   const golfDonut = (() => {
