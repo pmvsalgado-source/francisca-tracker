@@ -199,6 +199,11 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
   const [progressPeriod, setProgressPeriod] = useState('all')
   const [eventsData, setEventsData] = useState([])
   const [wizardSessionTypes, setWizardSessionTypes] = useState({})
+  const [templates, setTemplates] = useState([])
+  const [wizardTemplateName, setWizardTemplateName] = useState('')
+  const [savingTemplate, setSavingTemplate] = useState(false)
+  const [showSaveTemplate, setShowSaveTemplate] = useState(false)
+  const [showLegend, setShowLegend] = useState(false)
 
   const email = (user?.email||'').toLowerCase()
   const DAYS_LONG  = lang==='pt' ? DAYS_PT : DAYS_EN
@@ -231,8 +236,13 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
   }, [])
 
   useEffect(() => { fetchPlans() }, [fetchPlans])
+  const fetchTemplates = useCallback(async () => {
+    const { data } = await supabase.from('training_plan_templates').select('*').order('created_at',{ascending:false})
+    setTemplates(data||[])
+  }, [])
+  useEffect(() => { fetchTemplates() }, [fetchTemplates])
   useEffect(() => {
-    supabase.from('events').select('id,title,start_date,end_date').then(({data})=>setEventsData(data||[]))
+    supabase.from('events').select('id,title,category,start_date,end_date').then(({data})=>setEventsData(data||[]))
   }, [])
 
   const focusDateRef = useRef(null)
@@ -635,6 +645,86 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
       bg:t.navActive||'#f5f5f5', color:t.textMuted },
   ]
 
+  // ── PERIODIZAÇÃO ────────────────────────────────────────────────────────────
+  const PHASES = {
+    descarga:      { id:'descarga',      label:'DESCARGA',        color:'#9ca3af', bg:'#f3f4f6', foco:'Recuperação activa, volume baixo',              sessoes:'2–3' },
+    peak:          { id:'peak',          label:'PEAK',            color:'#ef4444', bg:'#fef2f2', foco:'Intensidade máxima, simulação de torneio',       sessoes:'3–4' },
+    manutencao:    { id:'manutencao',    label:'MANUTENÇÃO B2B',  color:'#f97316', bg:'#fff7ed', foco:'Manutenção técnica, sem nova carga',             sessoes:'3' },
+    afinacao:      { id:'afinacao',      label:'AFINAÇÃO',        color:'#eab308', bg:'#fefce8', foco:'Técnica fina, putting, simulação de campo',      sessoes:'3–4' },
+    desenvolvimento:{ id:'desenvolvimento',label:'DESENVOLVIMENTO',color:'#3b82f6', bg:'#eff6ff', foco:'Carga moderada-alta, skills e técnica',          sessoes:'4–5' },
+    acumulacao:    { id:'acumulacao',    label:'ACUMULAÇÃO',      color:'#22c55e', bg:'#f0fdf4', foco:'Volume alto, desenvolvimento físico e técnico',   sessoes:'5–6' },
+  }
+
+  const computeAllPhases = (weekStarts, evts) => {
+    const isCompEvent = (e) => (e.category||'').toLowerCase().includes('competi') || (e.title||'').toLowerCase().includes('torneio')
+    const comps = evts.filter(isCompEvent)
+    const msDay = 86400000
+    const wsMs = (ws) => new Date(ws+'T12:00:00').getTime()
+    const weekHasComp = (ws) => { const s=wsMs(ws),e=s+6*msDay; return comps.some(c=>{ const cs=new Date(c.start_date+'T12:00:00').getTime(),ce=c.end_date?new Date(c.end_date+'T12:00:00').getTime():cs; return cs<=e&&ce>=s }) }
+    const addW = (ws,n) => { const d=new Date(ws+'T12:00:00'); d.setDate(d.getDate()+n*7); return d.toISOString().split('T')[0] }
+    const lastCompEndBefore = (ws) => { const wsM=wsMs(ws); let lat=null; comps.forEach(c=>{ const ce=c.end_date?new Date(c.end_date+'T12:00:00').getTime():new Date(c.start_date+'T12:00:00').getTime(); if(ce<wsM&&(lat===null||ce>lat))lat=ce }); return lat }
+    const nextCompStartFrom = (ws) => { const wsM=wsMs(ws); let ear=null; comps.forEach(c=>{ const cs=new Date(c.start_date+'T12:00:00').getTime(); if(cs>=wsM&&(ear===null||cs<ear))ear=cs }); return ear }
+    const sorted=[...weekStarts].sort()
+    const phases={}, alerts={}
+    let blockLen=0, lastWasPeak=false
+    sorted.forEach(ws=>{
+      const thisC=weekHasComp(ws),next1C=weekHasComp(addW(ws,1)),next2C=weekHasComp(addW(ws,2))
+      let phId
+      if(lastWasPeak||blockLen>=3) phId='descarga'
+      else if(thisC) phId='peak'
+      else if(next1C){ const lce=lastCompEndBefore(ws),ncs=nextCompStartFrom(addW(ws,1)); const gap=lce&&ncs?(ncs-lce)/msDay:99; phId=gap<7?'manutencao':'afinacao' }
+      else if(next2C) phId='desenvolvimento'
+      else phId='acumulacao'
+      phases[ws]=phId
+      const wa=[]
+      if(phId==='peak'&&weekHasComp(addW(ws,1))) wa.push({icon:'🔴',text:'B2B — competições consecutivas'})
+      const idx=sorted.indexOf(ws)
+      if(idx>=3){ const prev4=sorted.slice(idx-3,idx+1); if(prev4.every(w=>phases[w]&&phases[w]!=='descarga')) wa.push({icon:'⚠️',text:'Sem descarga há 4+ semanas'}) }
+      if(idx>=4){ const prev5=sorted.slice(idx-4,idx+1); if(prev5.every(w=>phases[w]&&phases[w]!=='descarga')) wa.push({icon:'⚠️',text:'Sem pausa há 5+ semanas'}) }
+      alerts[ws]=wa
+      lastWasPeak=phId==='peak'
+      if(phId==='descarga') blockLen=0; else blockLen++
+    })
+    return {phases,alerts}
+  }
+
+  const applyTemplate = (tpl) => {
+    const newDayPlans={}, newSessionTypes={}
+    ;(tpl.days||[]).forEach((dayConfig,dayIdx)=>{
+      datesInRange.forEach(ds=>{
+        const d=new Date(ds+'T12:00:00'); const dow=d.getDay(); const di=dow===0?6:dow-1
+        if(di===dayIdx){
+          if(dayConfig?.isRest) newDayPlans[ds]=[{id:'rest',name:'Descanso',cat:'Descanso',isRest:true}]
+          else if(dayConfig?.items?.length){ newDayPlans[ds]=dayConfig.items; if(dayConfig.session_type) newSessionTypes[ds]=dayConfig.session_type }
+        }
+      })
+    })
+    setWizardDayPlans(prev=>({...prev,...newDayPlans}))
+    setWizardSessionTypes(prev=>({...prev,...newSessionTypes}))
+  }
+
+  const saveAsTemplate = async (name) => {
+    if(!name.trim()) return
+    setSavingTemplate(true)
+    const tplDays=Array(7).fill(null).map((_,dayIdx)=>{
+      const ds=datesInRange.find(d=>{ const dd=new Date(d+'T12:00:00'); const dow=dd.getDay(); return (dow===0?6:dow-1)===dayIdx })
+      if(!ds) return {items:[],session_type:null,isRest:false}
+      const items=wizardDayPlans[ds]||[]
+      if(items[0]?.isRest) return {items:[],session_type:null,isRest:true}
+      return {items,session_type:wizardSessionTypes[ds]||null,isRest:false}
+    })
+    await supabase.from('training_plan_templates').insert({name:name.trim(),plan_type:wizardType,days:tplDays,created_by:email,created_at:new Date().toISOString()})
+    setSavingTemplate(false)
+    setShowSaveTemplate(false)
+    setWizardTemplateName('')
+    fetchTemplates()
+  }
+
+  const deleteTemplate = async (id) => {
+    await supabase.from('training_plan_templates').delete().eq('id',id)
+    fetchTemplates()
+  }
+
   // ── WIZARD ─────────────────────────────────────────────────────────────────
   if (wizard) {
     const primaryItems = wizardDayPlans[primaryChip] || []
@@ -657,6 +747,8 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
       })
       return weeks
     })()
+    const wizardWeekStarts = Object.keys(chipsByWeek)
+    const { phases: weekPhases, alerts: weekAlerts } = computeAllPhases(wizardWeekStarts, eventsData)
 
     return (
       <div style={{fontFamily:F,color:t.text}}>
@@ -667,7 +759,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
             </div>
             <div style={{fontSize:'20px',fontWeight:800,color:t.text}}>Criar Plano</div>
           </div>
-          <button onClick={()=>{setWizard(false);setWizardStep(1);setWizardDayPlans({});setWizardSelectedChips([]);setWizardSessionTypes({});setWizardError('')}}
+          <button onClick={()=>{setWizard(false);setWizardStep(1);setWizardDayPlans({});setWizardSelectedChips([]);setWizardSessionTypes({});setShowSaveTemplate(false);setWizardTemplateName('');setWizardError('')}}
             style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'8px',color:t.textMuted,padding:'8px 16px',cursor:'pointer',fontSize:'13px',fontFamily:F}}>
             Cancelar
           </button>
@@ -695,6 +787,31 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
         {wizardStep===1 && (
           <div style={card}>
             <div style={{fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginBottom:'18px'}}>PERÍODO DO PLANO</div>
+
+            {/* Template selector */}
+            {templates.filter(tpl=>tpl.plan_type===wizardType).length > 0 && (
+              <div style={{marginBottom:'20px'}}>
+                <div style={{fontSize:'9px',letterSpacing:'2px',color:typeColor,fontWeight:600,marginBottom:'10px'}}>TEMPLATES GUARDADOS</div>
+                <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
+                  {templates.filter(tpl=>tpl.plan_type===wizardType).map(tpl=>(
+                    <div key={tpl.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',background:t.bg,border:`1px solid ${t.border}`,borderRadius:'8px',padding:'10px 14px'}}>
+                      <div style={{fontSize:'13px',fontWeight:600,color:t.text}}>{tpl.name}</div>
+                      <div style={{display:'flex',gap:'6px'}}>
+                        <button onClick={()=>applyTemplate(tpl)} title='Aplicar template'
+                          style={{background:typeColor,border:'none',borderRadius:'6px',color:'#fff',padding:'4px 10px',cursor:'pointer',fontSize:'11px',fontWeight:700,fontFamily:F}}>
+                          Aplicar
+                        </button>
+                        <button onClick={()=>deleteTemplate(tpl.id)} title='Apagar template'
+                          style={{background:'transparent',border:`1px solid #ef4444`,borderRadius:'6px',color:'#ef4444',padding:'4px 8px',cursor:'pointer',fontSize:'11px',fontFamily:F}}>
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{height:'1px',background:t.border,margin:'14px 0'}}/>
+              </div>
+            )}
 
             {/* Dates stacked vertically */}
             <div style={{display:'flex',flexDirection:'column',gap:'12px',marginBottom:'20px'}}>
@@ -727,7 +844,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
             </div>
 
             <button disabled={datesInRange.length===0}
-              onClick={()=>{ setWizardSelectedChips([...datesInRange]); setWizardStep(2) }}
+              onClick={()=>{ setWizardSelectedChips([]); setWizardStep(2) }}
               style={{background:datesInRange.length===0?t.border:typeColor,border:'none',borderRadius:'8px',
                 color:datesInRange.length===0?t.textMuted:'#fff',padding:'12px 24px',fontSize:'14px',
                 fontWeight:700,cursor:datesInRange.length===0?'not-allowed':'pointer',fontFamily:F,width:'100%'}}>
@@ -749,9 +866,16 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
                   ← Período
                 </button>
               </div>
-              {Object.entries(chipsByWeek).map(([ws,dates])=>(
-                <div key={ws} style={{marginBottom:'10px'}}>
-                  <div style={{fontSize:'9px',letterSpacing:'1px',color:t.textMuted,fontWeight:600,marginBottom:'5px'}}>{formatWeek(ws)}</div>
+              {Object.entries(chipsByWeek).map(([ws,dates])=>{
+                const ph = weekPhases[ws] ? PHASES[weekPhases[ws]] : null
+                const wa = weekAlerts[ws] || []
+                return (
+                <div key={ws} style={{marginBottom:'12px'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'5px',flexWrap:'wrap'}}>
+                    <div style={{fontSize:'9px',letterSpacing:'1px',color:t.textMuted,fontWeight:600}}>{formatWeek(ws)}</div>
+                    {ph && <div style={{padding:'2px 8px',borderRadius:'4px',fontSize:'8px',fontWeight:700,letterSpacing:'1px',color:ph.color,background:ph.bg}}>{ph.label}</div>}
+                    {wa.map((a,i)=><div key={i} style={{fontSize:'9px',color:a.icon==='🔴'?'#ef4444':'#f59e0b'}}>{a.icon} {a.text}</div>)}
+                  </div>
                   <div style={{display:'flex',gap:'4px',flexWrap:'wrap'}}>
                     {dates.map(ds=>{
                       const d = new Date(ds+'T12:00:00')
@@ -777,7 +901,8 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
                     })}
                   </div>
                 </div>
-              ))}
+                )
+              })}
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:'6px',flexWrap:'wrap',gap:'6px'}}>
                 {wizardSelectedChips.length>1 ? (
                   <div style={{fontSize:'11px',color:typeColor,fontWeight:600}}>
@@ -828,6 +953,27 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
                       </button>
                     )}
                   </div>
+
+                  {!isRestDay && !dateHasComp(primaryChip) && (
+                    <div style={{...card,marginBottom:'10px',padding:'11px 14px'}}>
+                      <div style={{fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginBottom:'8px'}}>TIPO DE SESSÃO</div>
+                      <div style={{display:'flex',gap:'6px'}}>
+                        {[{v:'coach',l:'Com Coach'},{v:'auto',l:'Autónomo'}].map(opt=>{
+                          const active = wizardSelectedChips.length>0 && wizardSelectedChips.every(ds=>wizardSessionTypes[ds]===opt.v)
+                          return (
+                            <button key={opt.v}
+                              onClick={()=>setWizardSessionTypes(prev=>{ const next={...prev}; wizardSelectedChips.forEach(ds=>{ next[ds]=opt.v }); return next })}
+                              style={{flex:1,padding:'7px',borderRadius:'8px',fontFamily:F,fontSize:'12px',fontWeight:active?700:400,cursor:'pointer',
+                                border:`1px solid ${active?typeColor:t.border}`,
+                                background:active?typeColor+'18':'transparent',
+                                color:active?typeColor:t.textMuted}}>
+                              {opt.l}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
 
                   {!isRestDay && cats.map(cat=>{
                     const catItems = allLib.filter(e=>e.cat===cat)
@@ -920,31 +1066,6 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
                       )}
                     </div>
 
-                    {!isRestDay && !dateHasComp(primaryChip) && (
-                      <div style={{marginBottom:'12px'}}>
-                        <div style={{fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginBottom:'6px'}}>TIPO DE SESSÃO</div>
-                        <div style={{display:'flex',gap:'6px'}}>
-                          {[{v:'coach',l:'Com Coach'},{v:'auto',l:'Autónomo'}].map(opt=>{
-                            const active = wizardSelectedChips.every(ds=>wizardSessionTypes[ds]===opt.v)
-                            return (
-                              <button key={opt.v}
-                                onClick={()=>setWizardSessionTypes(prev=>{
-                                  const next={...prev}
-                                  wizardSelectedChips.forEach(ds=>{ next[ds]=opt.v })
-                                  return next
-                                })}
-                                style={{flex:1,padding:'7px',borderRadius:'8px',fontFamily:F,fontSize:'12px',fontWeight:active?700:400,cursor:'pointer',
-                                  border:`1px solid ${active?typeColor:t.border}`,
-                                  background:active?typeColor+'18':'transparent',
-                                  color:active?typeColor:t.textMuted}}>
-                                {opt.l}
-                              </button>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )}
-
                     {isRestDay && (
                       <div style={{textAlign:'center',padding:'24px',color:'#f59e0b',fontSize:'13px',fontWeight:600}}>Dia de Descanso</div>
                     )}
@@ -988,7 +1109,27 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
               </div>
             )}
 
-            <div style={{display:'flex',justifyContent:'flex-end',marginTop:'16px'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:'16px',flexWrap:'wrap',gap:'8px'}}>
+              {/* Save as template */}
+              {showSaveTemplate ? (
+                <div style={{display:'flex',gap:'6px',alignItems:'center',flex:1,flexWrap:'wrap'}}>
+                  <input value={wizardTemplateName} onChange={e=>setWizardTemplateName(e.target.value)}
+                    placeholder='Nome do template' style={{...inp,flex:1,minWidth:'160px'}}/>
+                  <button onClick={()=>saveAsTemplate(wizardTemplateName)} disabled={savingTemplate||!wizardTemplateName.trim()}
+                    style={{background:savingTemplate?t.border:typeColor,border:'none',borderRadius:'8px',color:'#fff',padding:'8px 16px',cursor:savingTemplate?'not-allowed':'pointer',fontSize:'12px',fontWeight:700,fontFamily:F}}>
+                    {savingTemplate?'...':'💾 Guardar Template'}
+                  </button>
+                  <button onClick={()=>{setShowSaveTemplate(false);setWizardTemplateName('')}}
+                    style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'8px',color:t.textMuted,padding:'8px 12px',cursor:'pointer',fontSize:'12px',fontFamily:F}}>
+                    Cancelar
+                  </button>
+                </div>
+              ) : (
+                <button onClick={()=>setShowSaveTemplate(true)}
+                  style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'8px',color:t.textMuted,padding:'8px 14px',cursor:'pointer',fontSize:'12px',fontFamily:F}}>
+                  💾 Guardar como Template
+                </button>
+              )}
               <button onClick={saveWizard} disabled={saving||datesInRange.length===0}
                 style={{background:saving?t.border:typeColor,border:'none',borderRadius:'8px',color:saving?t.textMuted:'#fff',
                   padding:'12px 28px',fontSize:'14px',fontWeight:700,cursor:saving?'not-allowed':'pointer',fontFamily:F}}>
@@ -1068,6 +1209,53 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
       {/* ── SET THE PLAN ── */}
       {subTab==='plan' && (
         <div>
+          {/* Legenda de periodização */}
+          <div style={{...card,marginBottom:'16px',padding:'14px 16px'}}>
+            <button onClick={()=>setShowLegend(p=>!p)} style={{width:'100%',display:'flex',justifyContent:'space-between',alignItems:'center',background:'transparent',border:'none',cursor:'pointer',fontFamily:F,padding:0}}>
+              <div style={{fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600}}>LEGENDA DE PERIODIZAÇÃO</div>
+              <div style={{fontSize:'12px',color:t.textMuted}}>{showLegend?'▲':'▼'}</div>
+            </button>
+            {showLegend && (
+              <div style={{marginTop:'12px',display:'flex',flexDirection:'column',gap:'8px'}}>
+                {Object.values(PHASES).map(ph=>(
+                  <div key={ph.id} style={{display:'flex',gap:'10px',alignItems:'flex-start'}}>
+                    <div style={{padding:'3px 8px',borderRadius:'4px',fontSize:'8px',fontWeight:700,letterSpacing:'1px',color:ph.color,background:ph.bg,flexShrink:0,minWidth:'110px',textAlign:'center'}}>
+                      {ph.label}
+                    </div>
+                    <div>
+                      <div style={{fontSize:'11px',color:t.text,fontWeight:600,marginBottom:'1px'}}>{ph.foco}</div>
+                      <div style={{fontSize:'10px',color:t.textMuted}}>{ph.sessoes} sessões/sem. recomendadas</div>
+                    </div>
+                  </div>
+                ))}
+                <div style={{marginTop:'8px',fontSize:'10px',color:t.textMuted,borderTop:`1px solid ${t.border}`,paddingTop:'8px'}}>
+                  🔴 B2B = competições consecutivas · ⚠️ sem descarga há 4+ semanas · ⚠️ sem pausa há 5+ semanas
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Templates guardados */}
+          {templates.length > 0 && (
+            <div style={{...card,marginBottom:'16px',padding:'14px 16px'}}>
+              <div style={{fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginBottom:'10px'}}>TEMPLATES DE PLANO</div>
+              <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
+                {templates.map(tpl=>(
+                  <div key={tpl.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',background:t.bg,border:`1px solid ${t.border}`,borderRadius:'8px',padding:'8px 12px'}}>
+                    <div>
+                      <div style={{fontSize:'12px',fontWeight:700,color:t.text}}>{tpl.name}</div>
+                      <div style={{fontSize:'9px',color:t.textMuted,marginTop:'1px'}}>{tpl.plan_type==='golf'?'Golf':'Gym'} · {(tpl.days||[]).filter(d=>d?.items?.length||d?.isRest).length} dias configurados</div>
+                    </div>
+                    <button onClick={()=>deleteTemplate(tpl.id)}
+                      style={{background:'transparent',border:`1px solid #ef4444`,borderRadius:'6px',color:'#ef4444',padding:'4px 10px',cursor:'pointer',fontSize:'11px',fontFamily:F}}>
+                      ✕ Apagar
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Create plan buttons — smaller coach cards */}
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px',marginBottom:'20px'}}>
             <div style={{background:'#eaf4ff',border:`2px solid ${golfColor}`,borderRadius:'12px',padding:'14px 16px',cursor:'pointer'}}
@@ -1188,16 +1376,21 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
       )}
 
       {/* ── RECORD WHAT YOU DID ── */}
-      {subTab==='log' && (
+      {subTab==='log' && (() => {
+        const allKnownWeeks = [...new Set(plans.map(p=>p.week_start).concat([weekStart]))].sort()
+        const { phases: logPhases } = computeAllPhases(allKnownWeeks, eventsData)
+        const logPhase = logPhases[weekStart] ? PHASES[logPhases[weekStart]] : null
+        return (
         <div>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'14px',flexWrap:'wrap',gap:'8px'}}>
-            <div style={{display:'flex',gap:'6px',alignItems:'center'}}>
+            <div style={{display:'flex',gap:'6px',alignItems:'center',flexWrap:'wrap'}}>
               <button onClick={()=>setWeekOffset(w=>w-1)} style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'6px',color:t.textMuted,padding:'6px 10px',cursor:'pointer',fontFamily:F}}>‹</button>
               <div style={{fontSize:'13px',fontWeight:600,color:t.text,minWidth:'150px',textAlign:'center'}}>{formatWeek(weekStart)}</div>
               <button onClick={()=>setWeekOffset(w=>w+1)} style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'6px',color:t.textMuted,padding:'6px 10px',cursor:'pointer',fontFamily:F}}>›</button>
               <button onClick={()=>setWeekOffset(0)} style={{background:isCurrentWeek?'#eaf4ff':'transparent',border:`1px solid ${isCurrentWeek?golfColor:t.border}`,borderRadius:'6px',color:isCurrentWeek?golfColor:t.textMuted,padding:'6px 10px',cursor:'pointer',fontFamily:F,fontSize:'11px'}}>
                 HOJE
               </button>
+              {logPhase && <div style={{padding:'3px 8px',borderRadius:'4px',fontSize:'8px',fontWeight:700,letterSpacing:'1px',color:logPhase.color,background:logPhase.bg}}>{logPhase.label}</div>}
             </div>
             <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
               {prog.totalItems>0 && (
@@ -1339,7 +1532,8 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
             </div>
           </div>
         </div>
-      )}
+        )
+      })()}
 
       {/* ── TRACK PROGRESS ── */}
       {subTab==='progress' && (() => {
