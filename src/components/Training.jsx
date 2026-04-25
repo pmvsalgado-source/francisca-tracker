@@ -156,7 +156,7 @@ const estimateMins = (item) => {
   if (item.cat === 'Jogo Curto') return qty * 0.85
   if (item.cat === 'Bunker') return qty * 1.0
   if (item.cat === 'Campo') return qty * 13
-  return qty * 1.0 // Driving Range
+  return qty * 0.6 // Driving Range (30 min / 50 bolas)
 }
 const fmtMins = (m) => {
   const r = Math.round(m)
@@ -178,7 +178,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
   const [wizardType, setWizardType] = useState('golf')
   const [wizardStartDate, setWizardStartDate] = useState('')
   const [wizardEndDate, setWizardEndDate] = useState('')
-  const [wizardActiveDays, setWizardActiveDays] = useState([0,1,2,3,4])
+  const [wizardActiveDays, setWizardActiveDays] = useState([0,1,2,3,4,5,6])
   const [wizardDayPlans, setWizardDayPlans] = useState({})
   const [wizardSelectedChips, setWizardSelectedChips] = useState([])
   const [wizardOpenCat, setWizardOpenCat] = useState(null)
@@ -197,6 +197,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
   // Track Progress filters
   const [progressType, setProgressType] = useState('all')
   const [progressPeriod, setProgressPeriod] = useState('all')
+  const [eventsData, setEventsData] = useState([])
 
   const email = (user?.email||'').toLowerCase()
   const DAYS_LONG  = lang==='pt' ? DAYS_PT : DAYS_EN
@@ -229,6 +230,9 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
   }, [])
 
   useEffect(() => { fetchPlans() }, [fetchPlans])
+  useEffect(() => {
+    supabase.from('events').select('id,title,start_date,end_date').then(({data})=>setEventsData(data||[]))
+  }, [])
 
   const golfPlan = plans.find(p => p.week_start===weekStart && p.plan_type==='golf')
   const gymPlan  = plans.find(p => p.week_start===weekStart && p.plan_type==='gym')
@@ -237,11 +241,14 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
     const ws = new Date(weekStart+'T12:00:00')
     const d = new Date(ws); d.setDate(ws.getDate() + dayIdx)
     const dateStr = d.toISOString().split('T')[0]
-    return (events||[]).some(e => dateStr >= e.start_date && dateStr <= (e.end_date || e.start_date))
+    return eventsData.some(e => dateStr >= e.start_date && dateStr <= (e.end_date || e.start_date))
   }
 
   const dateHasComp = (dateStr) =>
-    (events||[]).some(e => dateStr >= e.start_date && dateStr <= (e.end_date || e.start_date))
+    eventsData.some(e => dateStr >= e.start_date && dateStr <= (e.end_date || e.start_date))
+
+  const compOnDate = (dateStr) =>
+    eventsData.find(e => dateStr >= e.start_date && dateStr <= (e.end_date || e.start_date))
 
   const savePlan = async (newDays, type, ws=weekStart) => {
     setSaving(true)
@@ -306,6 +313,32 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
     const newPlans = {...wizardDayPlans}
     wizardSelectedChips.forEach(ds => { newPlans[ds] = [] })
     setWizardDayPlans(newPlans)
+  }
+
+  const openEditWizard = (type, focusDate) => {
+    const plan = type==='golf' ? golfPlan : gymPlan
+    if (!plan) return
+    const newDayPlans = {}
+    ;(plan.days||[]).forEach((day,dayIdx)=>{
+      ;(day?.sessions||[]).forEach(s=>{
+        const d=new Date(plan.week_start+'T12:00:00'); d.setDate(d.getDate()+dayIdx)
+        const ds=d.toISOString().split('T')[0]
+        if(s.isRest) newDayPlans[ds]=[{id:'rest',name:'Descanso',cat:'Descanso',isRest:true}]
+        else newDayPlans[ds]=s.items||[]
+      })
+    })
+    const allWeekDates=Array(7).fill(0).map((_,i)=>{const d=new Date(plan.week_start+'T12:00:00');d.setDate(d.getDate()+i);return d.toISOString().split('T')[0]})
+    setWizardType(type)
+    setWizardStartDate(plan.week_start)
+    setWizardEndDate(getWeekEnd(plan.week_start))
+    setWizardActiveDays([0,1,2,3,4,5,6])
+    setWizardDayPlans(newDayPlans)
+    setWizardSelectedChips(focusDate?[focusDate]:allWeekDates.filter(ds=>newDayPlans[ds]))
+    setWizardNote('')
+    setWizardUserLib([])
+    setWizardError('')
+    setWizardStep(2)
+    setWizard(true)
   }
 
   const isDrillSelected = (exId) =>
@@ -520,6 +553,13 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
   const noGolfNext3 = upcomingGolf.length===0 || upcomingGolf[0]?.offset > 3
   const noGymNext3  = upcomingGym.length===0  || upcomingGym[0]?.offset  > 3
 
+  const weekPlannedDaysGolf = (golfPlan?.days||[]).filter(d=>d?.sessions?.some(s=>!s.isRest)).length
+  const weekMissingDaysGolf = 7 - weekPlannedDaysGolf
+  const lastUpdatedGolf = [...plans].filter(p=>p.plan_type==='golf').sort((a,b)=>(b.updated_at||'').localeCompare(a.updated_at||''))[0]?.updated_at
+  const weekPlannedDaysGym = (gymPlan?.days||[]).filter(d=>d?.sessions?.some(s=>!s.isRest)).length
+  const weekMissingDaysGym = 7 - weekPlannedDaysGym
+  const lastUpdatedGym = [...plans].filter(p=>p.plan_type==='gym').sort((a,b)=>(b.updated_at||'').localeCompare(a.updated_at||''))[0]?.updated_at
+
   const combinedDays = Array(7).fill(null).map((_,i) => {
     const g  = (golfPlan?.days||[])[i]||{sessions:[]}
     const gy = (gymPlan?.days||[])[i]||{sessions:[]}
@@ -615,11 +655,11 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
             <div style={{display:'flex',flexDirection:'column',gap:'12px',marginBottom:'20px'}}>
               <div>
                 <div style={{fontSize:'10px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginBottom:'6px'}}>DATA DE INÍCIO</div>
-                <input type='date' value={wizardStartDate} onChange={e=>setWizardStartDate(e.target.value)} style={inp}/>
+                <input type='date' value={wizardStartDate} onChange={e=>setWizardStartDate(e.target.value)} style={{...inp,maxWidth:'200px'}}/>
               </div>
               <div>
                 <div style={{fontSize:'10px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginBottom:'6px'}}>DATA DE FIM</div>
-                <input type='date' value={wizardEndDate} onChange={e=>setWizardEndDate(e.target.value)} style={inp}/>
+                <input type='date' value={wizardEndDate} onChange={e=>setWizardEndDate(e.target.value)} style={{...inp,maxWidth:'200px'}}/>
               </div>
             </div>
 
@@ -698,11 +738,13 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
                             border:`1px solid ${isComp?'#BA7517':selected?typeColor:hasData?typeColor+'55':t.border}`,
                             background:isComp?'#FFF3CD':selected?typeColor:hasData?typeColor+'11':'transparent',
                             color:isComp?'#854F0B':selected?'#fff':hasData?typeColor:t.textMuted,
-                            position:'relative'}}>
-                          {DAYS_SHORT_PT[dayIdx]} {d.getDate()}
-                          {isComp && <span style={{marginLeft:'3px',fontSize:'9px'}}>🏆</span>}
-                          {!isComp && hasData && <span style={{marginLeft:'3px'}}>✓</span>}
-                          {!isComp && !hasData && selected && <span style={{marginLeft:'3px',opacity:0.7}}>✓</span>}
+                            display:'flex',flexDirection:'column',alignItems:'center',gap:'1px',minWidth:0}}>
+                          <span>{DAYS_SHORT_PT[dayIdx]} {d.getDate()} {isComp?'🏆':!isComp&&hasData?'✓':selected?'✓':''}</span>
+                          {isComp && compOnDate(ds)?.title && (
+                            <span style={{fontSize:'7px',maxWidth:'68px',overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis',lineHeight:1.2,color:'#854F0B'}}>
+                              {compOnDate(ds).title}
+                            </span>
+                          )}
                         </button>
                       )
                     })}
@@ -911,10 +953,10 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
   return (
     <div style={{fontFamily:F,color:t.text}}>
       <style>{`
-        .train-coach-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+        .train-coach-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
         .train-stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
-        @media(max-width:600px){.train-coach-grid{grid-template-columns:1fr 1fr}.train-stats-grid{grid-template-columns:repeat(2,1fr)}}
-        @media(max-width:400px){.train-coach-grid{grid-template-columns:1fr}}
+        @media(max-width:700px){.train-coach-grid{grid-template-columns:repeat(2,1fr)}.train-stats-grid{grid-template-columns:repeat(2,1fr)}}
+        @media(max-width:400px){.train-coach-grid{grid-template-columns:1fr 1fr}}
       `}</style>
 
       {/* Free session modal */}
@@ -977,7 +1019,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
           {/* Create plan buttons — smaller coach cards */}
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px',marginBottom:'20px'}}>
             <div style={{background:'#eaf4ff',border:`2px solid ${golfColor}`,borderRadius:'12px',padding:'14px 16px',cursor:'pointer'}}
-              onClick={()=>{setWizardType('golf');setWizard(true);setWizardStep(1);setWizardStartDate('');setWizardEndDate('');setWizardActiveDays([0,1,2,3,4]);setWizardDayPlans({});setWizardSelectedChips([]);setWizardNote('');setWizardUserLib([]);setWizardError('')}}>
+              onClick={()=>{setWizardType('golf');setWizard(true);setWizardStep(1);setWizardStartDate('');setWizardEndDate('');setWizardActiveDays([0,1,2,3,4,5,6]);setWizardDayPlans({});setWizardSelectedChips([]);setWizardNote('');setWizardUserLib([]);setWizardError('')}}>
               <div style={{fontSize:'9px',letterSpacing:'2px',color:golfColor,fontWeight:700,marginBottom:'2px'}}>COACH GOLF</div>
               <div style={{fontSize:'14px',fontWeight:800,color:golfDark}}>Golf Plan</div>
               <div style={{fontSize:'11px',color:'#185FA5',marginTop:'4px',lineHeight:1.4}}>Drills · bolas · campo</div>
@@ -986,7 +1028,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
               </div>
             </div>
             <div style={{background:'#eafff0',border:`2px solid ${gymColor}`,borderRadius:'12px',padding:'14px 16px',cursor:'pointer'}}
-              onClick={()=>{setWizardType('gym');setWizard(true);setWizardStep(1);setWizardStartDate('');setWizardEndDate('');setWizardActiveDays([0,1,2,3,4]);setWizardDayPlans({});setWizardSelectedChips([]);setWizardNote('');setWizardUserLib([]);setWizardError('')}}>
+              onClick={()=>{setWizardType('gym');setWizard(true);setWizardStep(1);setWizardStartDate('');setWizardEndDate('');setWizardActiveDays([0,1,2,3,4,5,6]);setWizardDayPlans({});setWizardSelectedChips([]);setWizardNote('');setWizardUserLib([]);setWizardError('')}}>
               <div style={{fontSize:'9px',letterSpacing:'2px',color:gymColor,fontWeight:700,marginBottom:'2px'}}>COACH GYM</div>
               <div style={{fontSize:'14px',fontWeight:800,color:gymDark}}>Gym Plan</div>
               <div style={{fontSize:'11px',color:'#27500A',marginTop:'4px',lineHeight:1.4}}>Séries · reps · carga</div>
@@ -1002,19 +1044,14 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
             <div style={{fontSize:'9px',letterSpacing:'2px',color:golfColor,fontWeight:600,marginBottom:'10px'}}>COACH GOLF</div>
             <div className="train-coach-grid" style={{marginBottom:noGolfNext3?'10px':'0'}}>
               <div>
-                <div style={{fontSize:'10px',color:t.textMuted,marginBottom:'2px'}}>Próx. 2 semanas</div>
-                <div style={{fontSize:'22px',fontWeight:900,color:golfColor,lineHeight:1}}>{upcomingCountGolf}</div>
+                <div style={{fontSize:'10px',color:t.textMuted,marginBottom:'2px'}}>Esta semana</div>
+                <div style={{fontSize:'22px',fontWeight:900,color:weekPlannedDaysGolf>0?golfColor:t.textMuted,lineHeight:1}}>{weekPlannedDaysGolf}</div>
                 <div style={{fontSize:'10px',color:t.textMuted}}>dias planeados</div>
               </div>
               <div>
-                <div style={{fontSize:'10px',color:t.textMuted,marginBottom:'2px'}}>Plano até</div>
-                {planUntilGolf ? (
-                  <div style={{fontSize:'15px',fontWeight:800,color:t.text,lineHeight:1.2}}>
-                    {new Date(planUntilGolf+'T12:00:00').toLocaleDateString('pt-PT',{day:'2-digit',month:'short',year:'numeric'})}
-                  </div>
-                ) : (
-                  <div style={{fontSize:'13px',color:t.textMuted}}>Sem plano</div>
-                )}
+                <div style={{fontSize:'10px',color:t.textMuted,marginBottom:'2px'}}>Em falta</div>
+                <div style={{fontSize:'22px',fontWeight:900,color:weekMissingDaysGolf===7?'#ef4444':weekMissingDaysGolf>3?'#f59e0b':golfColor,lineHeight:1}}>{weekMissingDaysGolf}</div>
+                <div style={{fontSize:'10px',color:t.textMuted}}>dias sem plano</div>
               </div>
               <div>
                 <div style={{fontSize:'10px',color:t.textMuted,marginBottom:'2px'}}>Próximo treino</div>
@@ -1024,6 +1061,16 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
                   </div>
                 ) : (
                   <div style={{fontSize:'13px',color:'#ef4444',fontWeight:700}}>Nenhum</div>
+                )}
+              </div>
+              <div>
+                <div style={{fontSize:'10px',color:t.textMuted,marginBottom:'2px'}}>Actualizado</div>
+                {lastUpdatedGolf ? (
+                  <div style={{fontSize:'13px',fontWeight:700,color:t.text,lineHeight:1.3}}>
+                    {new Date(lastUpdatedGolf).toLocaleDateString('pt-PT',{day:'2-digit',month:'short',year:'numeric'})}
+                  </div>
+                ) : (
+                  <div style={{fontSize:'13px',color:t.textMuted}}>—</div>
                 )}
               </div>
             </div>
@@ -1044,19 +1091,14 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
             <div style={{fontSize:'9px',letterSpacing:'2px',color:gymColor,fontWeight:600,marginBottom:'10px'}}>COACH GYM</div>
             <div className="train-coach-grid" style={{marginBottom:noGymNext3?'10px':'0'}}>
               <div>
-                <div style={{fontSize:'10px',color:t.textMuted,marginBottom:'2px'}}>Próx. 2 semanas</div>
-                <div style={{fontSize:'22px',fontWeight:900,color:gymColor,lineHeight:1}}>{upcomingCountGym}</div>
+                <div style={{fontSize:'10px',color:t.textMuted,marginBottom:'2px'}}>Esta semana</div>
+                <div style={{fontSize:'22px',fontWeight:900,color:weekPlannedDaysGym>0?gymColor:t.textMuted,lineHeight:1}}>{weekPlannedDaysGym}</div>
                 <div style={{fontSize:'10px',color:t.textMuted}}>dias planeados</div>
               </div>
               <div>
-                <div style={{fontSize:'10px',color:t.textMuted,marginBottom:'2px'}}>Plano até</div>
-                {planUntilGym ? (
-                  <div style={{fontSize:'15px',fontWeight:800,color:t.text,lineHeight:1.2}}>
-                    {new Date(planUntilGym+'T12:00:00').toLocaleDateString('pt-PT',{day:'2-digit',month:'short',year:'numeric'})}
-                  </div>
-                ) : (
-                  <div style={{fontSize:'13px',color:t.textMuted}}>Sem plano</div>
-                )}
+                <div style={{fontSize:'10px',color:t.textMuted,marginBottom:'2px'}}>Em falta</div>
+                <div style={{fontSize:'22px',fontWeight:900,color:weekMissingDaysGym===7?'#ef4444':weekMissingDaysGym>3?'#f59e0b':gymColor,lineHeight:1}}>{weekMissingDaysGym}</div>
+                <div style={{fontSize:'10px',color:t.textMuted}}>dias sem plano</div>
               </div>
               <div>
                 <div style={{fontSize:'10px',color:t.textMuted,marginBottom:'2px'}}>Próximo treino</div>
@@ -1066,6 +1108,16 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
                   </div>
                 ) : (
                   <div style={{fontSize:'13px',color:'#ef4444',fontWeight:700}}>Nenhum</div>
+                )}
+              </div>
+              <div>
+                <div style={{fontSize:'10px',color:t.textMuted,marginBottom:'2px'}}>Actualizado</div>
+                {lastUpdatedGym ? (
+                  <div style={{fontSize:'13px',fontWeight:700,color:t.text,lineHeight:1.3}}>
+                    {new Date(lastUpdatedGym).toLocaleDateString('pt-PT',{day:'2-digit',month:'short',year:'numeric'})}
+                  </div>
+                ) : (
+                  <div style={{fontSize:'13px',color:t.textMuted}}>—</div>
                 )}
               </div>
             </div>
@@ -1160,9 +1212,19 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
                         {session.notes&&<div style={{fontSize:'12px',color:t.textMuted}}>{session.notes}</div>}
                         {session.score&&<div style={{fontSize:'13px',fontWeight:700,color:t.text}}>Score: {session.score}{session.holes?` (${session.holes}h)`:''}</div>}
                       </div>
-                      {avgProg!==null&&(
-                        <div style={{fontSize:'12px',fontWeight:700,color:avgProg===100?gymColor:avgProg>0?'#f59e0b':t.textMuted,flexShrink:0}}>{avgProg}%</div>
-                      )}
+                      <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:'4px',flexShrink:0}}>
+                        {(email===COACH_GOLF||email===ADMIN)&&!session.free&&(
+                          <button onClick={()=>{
+                            const focusDate=(()=>{const d=new Date(weekStart+'T12:00:00');d.setDate(d.getDate()+selectedDay);return d.toISOString().split('T')[0]})()
+                            openEditWizard(type,focusDate)
+                          }} style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'6px',color:t.textMuted,padding:'2px 8px',cursor:'pointer',fontSize:'10px',fontFamily:F}}>
+                            ✏ Editar
+                          </button>
+                        )}
+                        {avgProg!==null&&(
+                          <div style={{fontSize:'12px',fontWeight:700,color:avgProg===100?gymColor:avgProg>0?'#f59e0b':t.textMuted}}>{avgProg}%</div>
+                        )}
+                      </div>
                     </div>
                     {session.isRest&&<div style={{fontSize:'13px',color:'#f59e0b',fontWeight:600}}>Dia de Descanso</div>}
                     {(!sessItems.length&&!session.isRest)&&<div style={{fontSize:'12px',color:t.textMuted,fontStyle:'italic'}}>Sessão registada.</div>}
@@ -1180,7 +1242,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
                               </div>
                             </div>
                             {/* 3-state progress — compact */}
-                            <div style={{display:'flex',gap:'3px'}}>
+                            <div style={{display:'flex',gap:'3px',justifyContent:'flex-start'}}>
                               {[
                                 {v:0,  label:'Não fiz', color:'#6b7280'},
                                 {v:50, label:'50%',     color:'#f59e0b'},
@@ -1189,9 +1251,9 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
                                 const active = prog===v
                                 return (
                                   <button key={v} onClick={()=>setItemProgress(realSi,ii,type,v)}
-                                    style={{flex:1,padding:'3px 2px',borderRadius:'5px',border:`1px solid ${active?btnColor:t.border}`,
+                                    style={{padding:'3px 10px',borderRadius:'5px',border:`1px solid ${active?btnColor:t.border}`,
                                       background:active?btnColor+'22':'transparent',color:active?btnColor:t.textMuted,
-                                      fontSize:'9px',fontWeight:active?700:400,cursor:'pointer',fontFamily:F}}>
+                                      fontSize:'9px',fontWeight:active?700:400,cursor:'pointer',fontFamily:F,whiteSpace:'nowrap'}}>
                                     {label}
                                   </button>
                                 )
@@ -1292,7 +1354,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
           const avg = items.reduce((a,i)=>a+itemProgress(i),0)/items.length
           return avg>=80
         })
-        const highCompPct = sessionsWithComp.length>0 ? Math.round(highCompPct/sessionsWithComp.length*100) : 0
+        const highCompPct = sessionsWithComp.length>0 ? Math.round(highCompSessions.length/sessionsWithComp.length*100) : 0
 
         const filterBtn = (val, current, setter, label) => (
           <button key={val} onClick={()=>setter(val)}
