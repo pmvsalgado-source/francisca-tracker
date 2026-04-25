@@ -181,7 +181,7 @@ function DonutChart({ segments, total, t }) {
     ctx.fillText(total, cx, cy)
     ctx.textBaseline = 'alphabetic'
   }, [segments, total, t])
-  return <canvas ref={canvasRef} style={{ width: '60px', height: '60px', display: 'block', flexShrink: 0 }} />
+  return <canvas ref={canvasRef} style={{ width: '100px', height: '100px', display: 'block', flexShrink: 0 }} />
 }
 
 function KpiLineChart({ entries, t, F, cardStyle }) {
@@ -706,31 +706,32 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   const card = { background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '16px 18px' }
   const fmtScore = v => { const n = parseFloat(v); return isNaN(n) ? '—' : n >= 0 ? `+${v}` : String(v) }
 
-  const ALL_STATS_DEFAULT = [
-    { k:'torneios',   l:'TORNEIOS',    v: String(stats2026.length || '—'),                     c: t.text },
-    { k:'ult_score',  l:'ÚLT. SCORE',  v: s26LastScore != null ? String(s26LastScore) : '—',   c: t.text },
-    { k:'avg_score',  l:'MÉDIA SCORE', v: s26AvgScore != null ? s26AvgScore : '—',             c: t.text },
-    { k:'best_score', l:'MELHOR',      v: s26BestScore != null ? String(s26BestScore) : '—',   c: '#52E8A0' },
-    { k:'best_pos',   l:'MELHOR POS.', v: s26BestPos != null ? `#${s26BestPos}` : '—',         c: '#378ADD' },
-    { k:'top10',      l:'TOP 10',      v: s26Top10 > 0 ? `${s26Top10}×` : '0×',               c: s26Top10 > 0 ? '#f59e0b' : t.textMuted },
-    { k:'fairways',   l:'FAIRWAYS',    v: s26AvgFw != null ? `${s26AvgFw}%` : '—',             c: t.text },
-    { k:'gir',        l:'GIR',         v: s26AvgGir != null ? `${s26AvgGir}%` : '—',           c: t.text },
-    { k:'putts',      l:'PUTTS/RND',   v: s26AvgPutts != null ? s26AvgPutts : '—',             c: t.text },
+  // Derive available stat fields from competition_stats.values keys
+  const FIELD_META = {
+    score:    { l:'SCORE',       c: t.text },
+    position: { l:'POSIÇÃO',     c: '#378ADD' },
+    fairways: { l:'FAIRWAYS',    c: t.text },
+    gir:      { l:'GIR',         c: t.text },
+    putts:    { l:'PUTTS/RND',   c: t.text },
+    par:      { l:'PAR',         c: t.textMuted },
+    birdies:  { l:'BIRDIES',     c: '#52E8A0' },
+    bogeys:   { l:'BOGEYS',      c: '#f87171' },
+    eagles:   { l:'EAGLES',      c: '#f59e0b' },
+  }
+  const dynamicFields = [...new Set(compStats.flatMap(s => s.values && typeof s.values === 'object' ? Object.keys(s.values) : []))]
+  const ALL_STATS = [
+    { k:'torneios', l:'TORNEIOS', v:String(stats2026.length||'—'), c:t.text },
+    ...dynamicFields.map(fk => {
+      const meta = FIELD_META[fk] || { l:fk.toUpperCase(), c:t.text }
+      const vals = stats2026.map(s => parseFloat(s.values?.[fk])).filter(v => !isNaN(v))
+      let v = '—'
+      if (vals.length) {
+        if (fk === 'position') v = `#${Math.min(...vals)}`
+        else v = (vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1)
+      }
+      return { k:fk, l:meta.l, v, c:meta.c }
+    }),
   ]
-  const ALL_STATS = compConfig.length > 0
-    ? compConfig.map(cfg => {
-        const fk = cfg.key || cfg.field_key || cfg.field || ''
-        if (!fk || fk === 'count') return { k:'torneios', l:(cfg.label||'TORNEIOS').toUpperCase(), v:String(stats2026.length||'—'), c:t.text }
-        if (fk === 'position') {
-          const poses = stats2026.map(s=>parseFloat(s.values?.position)).filter(v=>!isNaN(v))
-          return { k:fk, l:(cfg.label||'POSIÇÃO').toUpperCase(), v:poses.length?`#${Math.min(...poses)}`:'—', c:'#378ADD' }
-        }
-        const vals = stats2026.map(s=>parseFloat(s.values?.[fk])).filter(v=>!isNaN(v))
-        const avg = vals.length?(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1):'—'
-        const suffix = cfg.unit==='%'?'%':cfg.unit?` ${cfg.unit}`:''
-        return { k:fk, l:(cfg.label||fk).toUpperCase(), v:avg!=='—'?`${avg}${suffix}`:avg, c:t.text }
-      })
-    : ALL_STATS_DEFAULT
   const DEFAULT_STAT_KEYS = ALL_STATS.map(s => s.k)
   const activeStatKeys = statPrefs || DEFAULT_STAT_KEYS
   const activeStats = ALL_STATS.filter(s => activeStatKeys.includes(s.k))
@@ -740,7 +741,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
       <style>{`
         .hm-grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
         .hm-grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
-        .hm-main{display:grid;grid-template-columns:1fr 300px;gap:10px}
+        .hm-main{display:grid;grid-template-columns:1fr 360px;gap:10px}
         .hm-left{display:flex;flex-direction:column;gap:10px}
         .hm-right{display:flex;flex-direction:column;gap:10px}
         .hm-stats{display:flex;flex-direction:row;flex-wrap:nowrap;overflow-x:auto;align-items:stretch}
@@ -843,56 +844,74 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
         </div>
       )}
 
-      {/* ── LINHA 1 — ÉPOCA 2026 + MELHOR RESULTADO ── */}
-      <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '12px 16px', marginBottom: '10px' }}>
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'10px' }}>
-          <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:600 }}>ÉPOCA 2026</div>
-          <div style={{ position:'relative' }}>
-            <button onClick={() => setStatPanelOpen(v => !v)}
-              style={{ background:t.bg, border:`1px solid ${t.border}`, borderRadius:'4px', color:t.textMuted, padding:'2px 8px', fontSize:'9px', cursor:'pointer', fontFamily:F, lineHeight:'1.4' }}>
-              ⚙ Configurar
-            </button>
-            {statPanelOpen && (
-              <>
-                <div onClick={() => setStatPanelOpen(false)} style={{ position:'fixed', inset:0, zIndex:10 }} />
-                <div style={{ position:'absolute', right:0, top:'calc(100% + 4px)', zIndex:20, background:t.surface, border:`1px solid ${t.border}`, borderRadius:'8px', padding:'10px 12px', minWidth:'170px', boxShadow:'0 6px 24px rgba(0,0,0,0.35)' }}>
-                  <div style={{ fontSize:'8px', letterSpacing:'1px', color:t.textMuted, marginBottom:'8px', fontWeight:600 }}>STATS VISÍVEIS</div>
-                  {ALL_STATS.map(s => {
-                    const checked = activeStatKeys.includes(s.k)
-                    return (
-                      <label key={s.k} style={{ display:'flex', alignItems:'center', gap:'7px', padding:'3px 0', cursor:'pointer', fontSize:'11px', color:t.text }}>
-                        <input type="checkbox" checked={checked} onChange={e => {
-                          const next = e.target.checked ? [...activeStatKeys, s.k] : activeStatKeys.filter(k => k !== s.k)
-                          setStatPrefs(next); saveStatPrefs(next)
-                        }} style={{ accentColor:'#378ADD', cursor:'pointer' }} />
-                        {s.l}
-                      </label>
-                    )
-                  })}
-                </div>
-              </>
-            )}
+      {/* ── LINHA 1 — ÉPOCA 2026 + MELHOR RESULTADO (cards side-by-side) ── */}
+      <div style={{ display:'flex', gap:'10px', marginBottom:'10px', alignItems:'stretch' }}>
+
+        {/* Card ÉPOCA 2026 */}
+        <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '12px 16px', flex:1, minWidth:0 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'10px' }}>
+            <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:600 }}>ÉPOCA 2026</div>
+            <div style={{ position:'relative' }}>
+              <button onClick={() => setStatPanelOpen(v => !v)}
+                style={{ background:t.bg, border:`1px solid ${t.border}`, borderRadius:'4px', color:t.textMuted, padding:'2px 8px', fontSize:'9px', cursor:'pointer', fontFamily:F, lineHeight:'1.4' }}>
+                ⚙ Configurar
+              </button>
+              {statPanelOpen && (
+                <>
+                  <div onClick={() => setStatPanelOpen(false)} style={{ position:'fixed', inset:0, zIndex:10 }} />
+                  <div style={{ position:'absolute', right:0, top:'calc(100% + 4px)', zIndex:20, background:t.surface, border:`1px solid ${t.border}`, borderRadius:'8px', padding:'10px 12px', minWidth:'170px', boxShadow:'0 6px 24px rgba(0,0,0,0.35)' }}>
+                    <div style={{ fontSize:'8px', letterSpacing:'1px', color:t.textMuted, marginBottom:'8px', fontWeight:600 }}>STATS VISÍVEIS</div>
+                    {ALL_STATS.map(s => {
+                      const checked = activeStatKeys.includes(s.k)
+                      return (
+                        <label key={s.k} style={{ display:'flex', alignItems:'center', gap:'7px', padding:'3px 0', cursor:'pointer', fontSize:'11px', color:t.text }}>
+                          <input type="checkbox" checked={checked} onChange={e => {
+                            const next = e.target.checked ? [...activeStatKeys, s.k] : activeStatKeys.filter(k => k !== s.k)
+                            setStatPrefs(next); saveStatPrefs(next)
+                          }} style={{ accentColor:'#378ADD', cursor:'pointer' }} />
+                          {s.l}
+                        </label>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+          <div className="hm-stats">
+            {activeStats.map((item, i, arr) => (
+              <div key={item.k} style={{ flex:1, padding:'0 8px', borderRight: i < arr.length - 1 ? `1px solid ${t.border}` : 'none', minWidth:'52px', textAlign:'center' }}>
+                <div style={{ fontSize:'15px', fontWeight:800, color:item.c, lineHeight:1, whiteSpace:'nowrap' }}>{item.v}</div>
+                <div style={{ fontSize:'7px', color:t.textMuted, marginTop:'3px', letterSpacing:'0.5px', textTransform:'uppercase' }}>{item.l}</div>
+              </div>
+            ))}
           </div>
         </div>
-        <div className="hm-stats">
-          {activeStats.map((item, i, arr) => (
-            <div key={item.k} style={{ flex:1, padding:'0 8px', borderRight: i < arr.length - 1 ? `1px solid ${t.border}` : 'none', minWidth:'52px', textAlign:'center' }}>
-              <div style={{ fontSize:'15px', fontWeight:800, color:item.c, lineHeight:1, whiteSpace:'nowrap' }}>{item.v}</div>
-              <div style={{ fontSize:'7px', color:t.textMuted, marginTop:'3px', letterSpacing:'0.5px', textTransform:'uppercase' }}>{item.l}</div>
-            </div>
-          ))}
-          {bestResult && (
-            <div style={{ paddingLeft:'14px', borderLeft:`1px solid ${t.border}`, flexShrink:0, minWidth:'150px' }}>
-              <div style={{ fontSize:'8px', letterSpacing:'1.5px', color:'#5b8aff', fontWeight:600, marginBottom:'4px' }}>MELHOR RESULTADO</div>
-              <div style={{ display:'flex', alignItems:'center', gap:'6px' }}>
-                <div style={{ fontSize:'18px', fontWeight:900, color: parseFloat(bestResult.values.score)<=0?'#52E8A0':'#f87171' }}>{fmtScore(bestResult.values.score)}</div>
-                {isNewPR && <div style={{ fontSize:'9px', color:'#52E8A0', background:'#052a1a', borderRadius:'4px', padding:'1px 6px', fontWeight:700 }}>novo PR</div>}
+
+        {/* Card MELHOR RESULTADO */}
+        <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '14px 18px', width:'220px', flexShrink:0, display:'flex', flexDirection:'column', justifyContent:'center' }}>
+          <div style={{ fontSize:'8px', letterSpacing:'2px', color:'#5b8aff', fontWeight:600, marginBottom:'8px' }}>MELHOR RESULTADO</div>
+          {bestResult ? (
+            <>
+              <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'4px' }}>
+                <span style={{ fontSize:'22px', lineHeight:1 }}>🏆</span>
+                <div style={{ fontSize:'26px', fontWeight:900, lineHeight:1, color: parseFloat(bestResult.values?.score)<=0?'#52E8A0':'#f87171' }}>
+                  {fmtScore(bestResult.values?.score)}
+                </div>
+                {isNewPR && (
+                  <div style={{ fontSize:'9px', color:'#52E8A0', background:'#052a1a', borderRadius:'4px', padding:'2px 7px', fontWeight:700 }}>novo PR</div>
+                )}
               </div>
-              <div style={{ fontSize:'9px', color:t.textMuted, marginTop:'2px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:'140px' }}>{bestResult.event_name}</div>
-              <div style={{ fontSize:'9px', color:t.textMuted }}>{formatDate(bestResult.event_date)}{bestResult.values?.par ? ` · Par ${bestResult.values.par}` : ''}</div>
-            </div>
+              <div style={{ fontSize:'11px', fontWeight:600, color:t.text, marginBottom:'2px' }}>{bestResult.event_name || '—'}</div>
+              <div style={{ fontSize:'10px', color:t.textMuted }}>
+                {formatDate(bestResult.event_date)}{bestResult.values?.par ? ` · Par ${bestResult.values.par}` : ''}
+              </div>
+            </>
+          ) : (
+            <div style={{ fontSize:'11px', color:t.textMuted, fontStyle:'italic' }}>Sem dados</div>
           )}
         </div>
+
       </div>
 
       {/* ── MAIN GRID — esquerda + direita ── */}
@@ -900,11 +919,10 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
         <div className="hm-left">
 
           {/* Treino — Distribuição + Carga */}
-          <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '12px 16px', maxHeight: '200px', overflow: 'hidden' }}>
-            <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:600, marginBottom:'12px' }}>TREINO — DISTRIBUIÇÃO E CARGA</div>
+          <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '12px 16px' }}>
+            <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:600, marginBottom:'10px' }}>TREINO — DISTRIBUIÇÃO E CARGA</div>
             <div className="hm-grid2">
               <div>
-                <div style={{ fontSize:'9px', color:t.textMuted, marginBottom:'8px' }}>Distribuição · 4 semanas</div>
                 <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
                   <DonutChart segments={trainingDonut} total={trainingDonutTotal} t={t} />
                   <div style={{ display:'flex', flexDirection:'column', gap:'3px', flex:1, minWidth:0 }}>
@@ -922,7 +940,6 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
                 </div>
               </div>
               <div>
-                <div style={{ fontSize:'9px', color:t.textMuted, marginBottom:'8px' }}>Carga e cumprimento · 8 semanas</div>
                 <WeeklyBarChart weeks={weeklyLoad} t={t} />
                 <div style={{ display:'flex', gap:'8px', marginTop:'4px', flexWrap:'wrap' }}>
                   {[{c:'#52E8A0',l:'Actual'},{c:'#378ADD',l:'≥80%'},{c:'#f59e0b88',l:'50-79%'},{c:'#f8717188',l:'<50%'}].map(({c,l})=>(
