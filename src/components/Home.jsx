@@ -269,16 +269,16 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   return (
     <div style={{ fontFamily: F, color: t.text }}>
       <style>{`
-        .home-grid{display:grid;grid-template-columns:1fr 280px;gap:14px}
-        .kpi-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-        .kpi-golf{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px;padding-top:12px;border-top:0.5px solid ${t.border}}
+        .h-kpi{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+        .h-bottom{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+        .h-hero-sub{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+        .h-today-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
         .home-3col{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-        .home-bottom-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px}
-        @media(max-width:800px){.home-grid{grid-template-columns:1fr}.kpi-row{grid-template-columns:repeat(2,1fr)}.kpi-golf{grid-template-columns:repeat(2,1fr)}.home-bottom-grid{grid-template-columns:1fr}}
-        @media(max-width:480px){.kpi-row{grid-template-columns:1fr 1fr}.kpi-golf{grid-template-columns:1fr 1fr}.home-3col{grid-template-columns:1fr 1fr}.home-bottom-grid{grid-template-columns:1fr}}
+        @media(max-width:700px){.h-bottom{grid-template-columns:1fr}.h-kpi{grid-template-columns:repeat(2,1fr)}.h-today-grid{grid-template-columns:repeat(2,1fr)}}
+        @media(max-width:420px){.h-kpi{grid-template-columns:1fr 1fr}.h-today-grid{grid-template-columns:1fr 1fr}.home-3col{grid-template-columns:1fr 1fr}}
       `}</style>
 
-      {/* KPI deep-dive modal */}
+      {/* ── KPI MODAL ── */}
       {kpiModal && (
         <div style={{ position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:300,padding:'20px' }}
           onClick={e => { if (e.target===e.currentTarget) setKpiModal(null) }}>
@@ -293,14 +293,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
               </div>
               <button onClick={()=>setKpiModal(null)} style={{ background:'transparent',border:`1px solid ${t.border}`,borderRadius:'8px',color:t.textMuted,padding:'6px 12px',cursor:'pointer',fontFamily:F,fontSize:'12px' }}>Fechar</button>
             </div>
-
-            {kpiModal.allEntries.length >= 2 && (
-              <div style={{ marginBottom:'16px' }}>
-                <MiniSpark pts={kpiModal.allEntries} t={t} color={kpiModal.color} />
-              </div>
-            )}
-
-            {/* Stats */}
+            {kpiModal.allEntries.length >= 2 && <div style={{ marginBottom:'16px' }}><MiniSpark pts={kpiModal.allEntries} t={t} color={kpiModal.color} /></div>}
             <div className="home-3col" style={{ marginBottom:'16px' }}>
               {[
                 { l:'MELHOR', v: kpiModal.allEntries.length ? Math.max(...kpiModal.allEntries.map(e=>parseFloat(e.value))).toFixed(2) : '—' },
@@ -313,8 +306,6 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
                 </div>
               ))}
             </div>
-
-            {/* Full history */}
             <div style={{ fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginBottom:'8px' }}>HISTÓRICO COMPLETO</div>
             <div style={{ display:'flex',flexDirection:'column',gap:'4px',maxHeight:'200px',overflowY:'auto' }}>
               {[...kpiModal.allEntries].reverse().map((e, i) => {
@@ -332,295 +323,180 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
               })}
               {!kpiModal.allEntries.length && <div style={{ fontSize:'12px',color:t.textMuted,fontStyle:'italic',padding:'12px' }}>Sem registos.</div>}
             </div>
-
-            {/* Move in order */}
             <div style={{ display:'flex',gap:'6px',marginTop:'14px',paddingTop:'14px',borderTop:`1px solid ${t.border}` }}>
               <button onClick={()=>{ moveKpi(kpiModal.id,'up') }} style={{ background:'transparent',border:`1px solid ${t.border}`,borderRadius:'6px',color:t.textMuted,padding:'4px 10px',cursor:'pointer',fontSize:'11px',fontFamily:F }}>↑ Subir</button>
               <button onClick={()=>{ moveKpi(kpiModal.id,'down') }} style={{ background:'transparent',border:`1px solid ${t.border}`,borderRadius:'6px',color:t.textMuted,padding:'4px 10px',cursor:'pointer',fontSize:'11px',fontFamily:F }}>↓ Descer</button>
-              <div style={{ fontSize:'10px',color:t.textMuted,marginLeft:'auto',display:'flex',alignItems:'center' }}>
-                {savingPrefs ? 'A guardar...' : 'Ordem guardada'}
-              </div>
+              <div style={{ fontSize:'10px',color:t.textMuted,marginLeft:'auto',display:'flex',alignItems:'center' }}>{savingPrefs ? 'A guardar...' : 'Ordem guardada'}</div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Athlete bar */}
-      {editingAthlete ? (
-        <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '10px', padding: '16px', marginBottom: '14px' }}>
-          <div className="home-3col" style={{ marginBottom: '12px' }}>
+      {/* ── ATHLETE EDIT FORM ── */}
+      {editingAthlete && (
+        <div style={{ background:t.surface,border:`1px solid ${t.border}`,borderRadius:'12px',padding:'18px',marginBottom:'14px' }}>
+          <div style={{ fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginBottom:'14px' }}>EDITAR PERFIL</div>
+          <div className="home-3col" style={{ marginBottom:'14px' }}>
             {[['hcp','Handicap'],['wagr','WAGR'],['club',lang==='pt'?'Clube':'Club'],['category',lang==='pt'?'Categoria':'Category'],['fed',lang==='pt'?'Federação':'Federation'],['fed_num',lang==='pt'?'Nº Federado':'Fed. No.']].map(([k,l]) => (
-              <div key={k}><div style={{ fontSize: '8px', color: t.textMuted, marginBottom: '3px', letterSpacing: '1px' }}>{l.toUpperCase()}</div>
-              <input value={athleteForm[k] || ''} onChange={e => setAthleteForm(p => ({...p,[k]:e.target.value}))} style={inp} /></div>
-            ))}
-          </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button onClick={saveAthlete} disabled={athleteSaving} style={{ background: t.accent, border: 'none', borderRadius: '6px', color: theme === 'dark' ? '#000' : '#fff', padding: '6px 16px', fontSize: '11px', fontWeight: 700, cursor: 'pointer', fontFamily: F, letterSpacing: '1px', opacity: athleteSaving ? 0.7 : 1 }}>{athleteSaving ? 'A GUARDAR...' : 'GUARDAR'}</button>
-            <button onClick={() => setEditingAthlete(false)} style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '6px', color: t.textMuted, padding: '6px 16px', fontSize: '11px', cursor: 'pointer', fontFamily: F }}>Cancelar</button>
-          </div>
-        </div>
-      ) : (
-        <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '10px', padding: '14px 18px', marginBottom: '14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-          <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
-            {[
-              { label: 'HCP', value: athlete.hcp || '—', color: '#378ADD' },
-              { label: 'WAGR', value: athlete.wagr || '—', color: t.text },
-              { label: lang==='pt'?'CLUBE':'CLUB', value: athlete.club || '—', color: t.text },
-              { label: lang==='pt'?'CAT.':'CAT.', value: athlete.category || '—', color: t.text },
-            ].map(item => (
-              <div key={item.label}>
-                <div style={{ fontSize: '8px', letterSpacing: '2px', color: t.textMuted, marginBottom: '3px', fontWeight: 600 }}>{item.label}</div>
-                <div style={{ fontSize: '15px', fontWeight: 900, color: item.color, letterSpacing: '-0.3px' }}>{item.value}</div>
+              <div key={k}>
+                <div style={{ fontSize:'8px',color:t.textMuted,marginBottom:'4px',letterSpacing:'1px',fontWeight:600 }}>{l.toUpperCase()}</div>
+                <input value={athleteForm[k]||''} onChange={e=>setAthleteForm(p=>({...p,[k]:e.target.value}))} style={inp}/>
               </div>
             ))}
           </div>
-          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
-            <button onClick={() => { setAthleteForm({...athlete}); setEditingAthlete(true) }} style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '6px', color: t.textMuted, padding: '5px 10px', fontSize: '10px', cursor: 'pointer', fontFamily: F, letterSpacing: '1px' }}>EDITAR</button>
-            <a href="https://www.wagr.com/playerprofile/francisca-salgado-43158" target="_blank" rel="noreferrer" style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '6px', color: t.textMuted, padding: '5px 10px', fontSize: '10px', cursor: 'pointer', fontFamily: F, textDecoration: 'none', letterSpacing: '1px' }}>WAGR ↗</a>
-            <a href="https://portal.fpg.pt/handicaps-course-rating/pesquisa-de-handicaps/" target="_blank" rel="noreferrer" style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '6px', color: t.textMuted, padding: '5px 10px', fontSize: '10px', cursor: 'pointer', fontFamily: F, textDecoration: 'none', letterSpacing: '1px' }}>FPG ↗</a>
+          <div style={{ display:'flex',gap:'8px' }}>
+            <button onClick={saveAthlete} disabled={athleteSaving} style={{ background:t.accent,border:'none',borderRadius:'8px',color:theme==='dark'?'#000':'#fff',padding:'8px 18px',fontSize:'12px',fontWeight:700,cursor:'pointer',fontFamily:F,opacity:athleteSaving?0.7:1 }}>{athleteSaving?'A guardar...':'Guardar'}</button>
+            <button onClick={()=>setEditingAthlete(false)} style={{ background:'transparent',border:`1px solid ${t.border}`,borderRadius:'8px',color:t.textMuted,padding:'8px 16px',fontSize:'12px',cursor:'pointer',fontFamily:F }}>Cancelar</button>
           </div>
         </div>
       )}
 
-      {/* Next comp banner */}
-      {nextComp && daysToNext !== null && (
-        <div style={{ background: t.surface, border: '1px solid #f59e0b33', borderRadius: '10px', padding: '14px 18px', marginBottom: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <div style={{ fontSize: '9px', letterSpacing: '3px', color: '#f59e0b', marginBottom: '3px', fontWeight: 600 }}>{lang==='pt'?'PRÓXIMA COMPETIÇÃO':'NEXT COMPETITION'}</div>
-            <div style={{ fontSize: '14px', fontWeight: 700, color: t.text }}>{nextComp.title}</div>
-            <div style={{ fontSize: '11px', color: t.textMuted, marginTop: '2px' }}>{formatDate(nextComp.start_date)}{nextComp.end_date && nextComp.end_date !== nextComp.start_date ? ` – ${formatDate(nextComp.end_date)}` : ''}</div>
+      {/* ── HERO CARD ── */}
+      {!editingAthlete && (
+        <div style={{ background:t.surface,border:`1px solid ${t.border}`,borderRadius:'16px',padding:'20px 22px',marginBottom:'14px',position:'relative',overflow:'hidden' }}>
+          <div style={{ position:'absolute',top:0,left:0,right:0,height:'3px',background:'linear-gradient(90deg,#378ADD,#52E8A0)' }}/>
+
+          {/* Top row: swing speed + athlete badge */}
+          <div style={{ display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'16px' }}>
+            <div>
+              <div style={{ fontSize:'8px',letterSpacing:'3px',color:t.textMuted,fontWeight:600,marginBottom:'8px' }}>
+                {lang==='pt'?'DRIVE VELOCITY — OBJECTIVO':'DRIVE VELOCITY — GOAL'}
+              </div>
+              <div style={{ fontSize:'58px',fontWeight:900,letterSpacing:'-3px',lineHeight:0.95,color:t.text }}>
+                {lastSwing ? lastSwing.toFixed(1) : '—'}
+                <span style={{ fontSize:'18px',color:'#378ADD',letterSpacing:0,fontWeight:700 }}> mph</span>
+              </div>
+              {delta !== null && (
+                <div style={{ fontSize:'12px',color:parseFloat(delta)>=0?'#52E8A0':'#f87171',fontWeight:700,marginTop:'8px',display:'flex',alignItems:'center',gap:'4px' }}>
+                  {parseFloat(delta)>=0?'▲':'▼'} {Math.abs(delta)} mph vs sessão anterior
+                  {lastDate && <span style={{ color:t.textMuted,fontWeight:400,fontSize:'10px' }}>· {formatDate(lastDate)}</span>}
+                </div>
+              )}
+            </div>
+            <div style={{ display:'flex',flexDirection:'column',alignItems:'flex-end',gap:'8px',flexShrink:0 }}>
+              <div style={{ background:'#378ADD15',border:'1px solid #378ADD33',borderRadius:'10px',padding:'8px 14px',textAlign:'center' }}>
+                <div style={{ fontSize:'22px',fontWeight:900,color:'#378ADD',lineHeight:1 }}>{athlete.hcp||'—'}</div>
+                <div style={{ fontSize:'8px',color:t.textMuted,letterSpacing:'1.5px',fontWeight:600,marginTop:'1px' }}>HCP</div>
+              </div>
+              <div style={{ textAlign:'right' }}>
+                <div style={{ fontSize:'11px',color:t.text,fontWeight:600 }}>{athlete.club}</div>
+                <div style={{ fontSize:'10px',color:t.textMuted }}>{athlete.category} · {athlete.fed} {athlete.fed_num}</div>
+              </div>
+              <div style={{ display:'flex',gap:'5px',flexWrap:'wrap',justifyContent:'flex-end' }}>
+                <button onClick={()=>{ setAthleteForm({...athlete}); setEditingAthlete(true) }}
+                  style={{ background:'transparent',border:`1px solid ${t.border}`,borderRadius:'6px',color:t.textMuted,padding:'3px 8px',fontSize:'9px',cursor:'pointer',fontFamily:F,letterSpacing:'1px' }}>
+                  EDITAR
+                </button>
+                <a href="https://www.wagr.com/playerprofile/francisca-salgado-43158" target="_blank" rel="noreferrer"
+                  style={{ background:'transparent',border:`1px solid ${t.border}`,borderRadius:'6px',color:t.textMuted,padding:'3px 8px',fontSize:'9px',cursor:'pointer',fontFamily:F,textDecoration:'none',letterSpacing:'1px' }}>
+                  WAGR ↗
+                </a>
+                <a href="https://portal.fpg.pt/handicaps-course-rating/pesquisa-de-handicaps/" target="_blank" rel="noreferrer"
+                  style={{ background:'transparent',border:`1px solid ${t.border}`,borderRadius:'6px',color:t.textMuted,padding:'3px 8px',fontSize:'9px',cursor:'pointer',fontFamily:F,textDecoration:'none',letterSpacing:'1px' }}>
+                  FPG ↗
+                </a>
+              </div>
+            </div>
           </div>
-          <div style={{ textAlign: 'center', flexShrink: 0 }}>
-            <div style={{ fontSize: '42px', fontWeight: 900, color: '#f59e0b', lineHeight: 1, letterSpacing: '-2px' }}>{daysToNext}</div>
-            <div style={{ fontSize: '9px', color: t.textMuted, letterSpacing: '2px' }}>DIAS</div>
+
+          {/* Progress bar */}
+          <div style={{ marginBottom:'14px' }}>
+            <div style={{ display:'flex',justifyContent:'space-between',marginBottom:'5px' }}>
+              <div style={{ fontSize:'9px',color:t.textMuted,letterSpacing:'2px' }}>
+                PROGRESSO PARA {swingTarget} MPH
+              </div>
+              <div style={{ fontSize:'12px',fontWeight:900,color:'#378ADD' }}>{pct}%</div>
+            </div>
+            <div style={{ height:'4px',background:t.border,borderRadius:'2px',overflow:'hidden' }}>
+              <div style={{ height:'100%',width:`${pct}%`,background:'linear-gradient(90deg,#378ADD,#52E8A0)',borderRadius:'2px' }}/>
+            </div>
+            <div style={{ display:'flex',justifyContent:'space-between',fontSize:'9px',marginTop:'4px' }}>
+              <span style={{ color:t.textMuted }}>80 mph</span>
+              {bestSwing && <span style={{ color:'#52E8A0' }}>● {bestSwing.toFixed(1)} {lang==='pt'?'recorde':'record'}</span>}
+              <span style={{ color:'#378ADD' }}>{swingTarget} mph</span>
+            </div>
+          </div>
+
+          {/* Sparkline */}
+          <Sparkline data={swingEntries} t={t} target={swingTarget} />
+
+          {/* Sessions + Next comp sub-row */}
+          <div className="h-hero-sub">
+            <div style={{ background:t.bg,borderRadius:'10px',padding:'10px 14px',display:'flex',alignItems:'center',gap:'12px' }}>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:'8px',letterSpacing:'2px',color:'#378ADD',marginBottom:'2px',fontWeight:600 }}>GOLFE</div>
+                <div style={{ fontSize:'26px',fontWeight:900,color:t.text,lineHeight:1,letterSpacing:'-1px' }}>{golfSessions}</div>
+                <div style={{ fontSize:'10px',color:t.textMuted }}>sessões · {period}</div>
+              </div>
+              <div style={{ flex:1,borderLeft:`1px solid ${t.border}`,paddingLeft:'12px' }}>
+                <div style={{ fontSize:'8px',letterSpacing:'2px',color:'#52E8A0',marginBottom:'2px',fontWeight:600 }}>GINÁSIO</div>
+                <div style={{ fontSize:'26px',fontWeight:900,color:t.text,lineHeight:1,letterSpacing:'-1px' }}>{gymSessions}</div>
+                <div style={{ fontSize:'10px',color:t.textMuted }}>sessões · {period}</div>
+              </div>
+            </div>
+            {nextComp && daysToNext !== null ? (
+              <div style={{ background:'#f59e0b0d',border:'1px solid #f59e0b33',borderRadius:'10px',padding:'10px 14px',display:'flex',alignItems:'center',gap:'12px' }}>
+                <div style={{ textAlign:'center',flexShrink:0 }}>
+                  <div style={{ fontSize:'28px',fontWeight:900,color:'#f59e0b',lineHeight:1,letterSpacing:'-1px' }}>{daysToNext}</div>
+                  <div style={{ fontSize:'8px',color:t.textMuted,letterSpacing:'1.5px',fontWeight:600 }}>DIAS</div>
+                </div>
+                <div style={{ minWidth:0 }}>
+                  <div style={{ fontSize:'8px',letterSpacing:'2px',color:'#f59e0b',fontWeight:700,marginBottom:'2px' }}>🏆 PRÓXIMA</div>
+                  <div style={{ fontSize:'11px',fontWeight:700,color:t.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{nextComp.title}</div>
+                  <div style={{ fontSize:'10px',color:t.textMuted }}>{formatDate(nextComp.start_date)}{nextComp.end_date&&nextComp.end_date!==nextComp.start_date?` – ${formatDate(nextComp.end_date)}`:''}</div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ background:t.bg,borderRadius:'10px',padding:'10px 14px' }}>
+                <div style={{ fontSize:'8px',letterSpacing:'2px',color:t.textMuted,marginBottom:'4px',fontWeight:600 }}>WAGR</div>
+                <div style={{ fontSize:'22px',fontWeight:900,color:t.text,lineHeight:1 }}>{athlete.wagr||'—'}</div>
+                <div style={{ fontSize:'10px',color:t.textMuted,marginTop:'2px' }}>ranking mundial</div>
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* Period filter */}
-      <div style={{ display: 'flex', gap: '6px', marginBottom: '14px', flexWrap: 'wrap', alignItems: 'center' }}>
-        <div style={{ fontSize: '9px', letterSpacing: '2px', color: t.textMuted, fontWeight: 600, marginRight: '4px' }}>PERÍODO</div>
+      {/* ── PERIOD FILTER ── */}
+      <div style={{ display:'flex',gap:'5px',marginBottom:'14px',flexWrap:'wrap',alignItems:'center' }}>
+        <div style={{ fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginRight:'4px' }}>PERÍODO</div>
         {PERIOD_OPTIONS.map(opt => (
-          <button key={opt.key} onClick={() => setPeriod(opt.key)}
-            style={{ padding: '4px 12px', borderRadius: '16px', border: `1px solid ${period===opt.key?'#378ADD':t.border}`,
-              background: period===opt.key?'#378ADD15':'transparent', color: period===opt.key?'#378ADD':t.textMuted,
-              cursor: 'pointer', fontSize: '11px', fontWeight: period===opt.key?700:400, fontFamily: F }}>
+          <button key={opt.key} onClick={()=>setPeriod(opt.key)}
+            style={{ padding:'4px 12px',borderRadius:'16px',border:`1px solid ${period===opt.key?'#378ADD':t.border}`,
+              background:period===opt.key?'#378ADD15':'transparent',color:period===opt.key?'#378ADD':t.textMuted,
+              cursor:'pointer',fontSize:'11px',fontWeight:period===opt.key?700:400,fontFamily:F }}>
             {opt.label}
           </button>
         ))}
       </div>
 
-      {/* Main grid */}
-      <div className="home-grid" style={{ marginBottom: '14px' }}>
-        {/* Big focus card */}
-        <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '22px' }}>
-          <div style={{ fontSize: '8px', letterSpacing: '4px', color: t.textMuted, marginBottom: '12px', fontWeight: 600 }}>{lang==='pt'?'DRIVE VELOCITY — OBJECTIVO PRINCIPAL':'DRIVE VELOCITY — MAIN GOAL'}</div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
-            <div>
-              <div style={{ fontSize: '60px', fontWeight: 900, color: t.text, lineHeight: 0.9, letterSpacing: '-3px' }}>
-                {lastSwing ? lastSwing.toFixed(1) : '—'}
-              </div>
-              <div style={{ fontSize: '10px', color: t.textMuted, marginTop: '8px', letterSpacing: '3px' }}>{lang==='pt'?'MPH ACTUAL':'MPH CURRENT'}</div>
+      {/* ── HOJE — treino do dia ── */}
+      {weekSessions.length > 0 && (
+        <div style={{ background:t.surface,border:`1px solid ${t.border}`,borderRadius:'12px',padding:'14px 18px',marginBottom:'14px' }}>
+          <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px' }}>
+            <div style={{ fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600 }}>
+              {lang==='pt'?'TREINO ESTA SEMANA':'TRAINING THIS WEEK'}
             </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: '10px', color: t.textMuted, letterSpacing: '3px', marginBottom: '4px' }}>{lang==='pt'?'OBJECTIVO':'TARGET'}</div>
-              <div style={{ fontSize: '40px', fontWeight: 900, color: '#378ADD', lineHeight: 1, letterSpacing: '-2px' }}>{swingTarget}</div>
-              <div style={{ fontSize: '11px', color: '#378ADD', marginTop: '2px' }}>
-                {lastSwing ? (lastSwing >= swingTarget ? (lang==='pt' ? 'superou objectivo' : 'target exceeded') : (lang==='pt' ? "faltam " + (swingTarget-lastSwing).toFixed(1) + " mph" : (swingTarget-lastSwing).toFixed(1) + " mph to go")) : (lang==='pt' ? 'sem dados' : 'no data')}
-              </div>
-            </div>
+            <button onClick={()=>onNavigate&&onNavigate('training')}
+              style={{ background:'transparent',border:'none',color:'#378ADD',fontSize:'11px',cursor:'pointer',fontFamily:F,padding:0 }}>
+              Ver plano →
+            </button>
           </div>
-          <div style={{ marginBottom: '16px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-              <div style={{ fontSize: '9px', color: t.textMuted, letterSpacing: '2px' }}>{lang==='pt'?'PROGRESSÃO':'PROGRESS'}</div>
-              <div style={{ fontSize: '13px', fontWeight: 900, color: '#378ADD' }}>{pct}%</div>
-            </div>
-            <div style={{ height: '3px', background: t.border, borderRadius: '2px', overflow: 'hidden', marginBottom: '6px' }}>
-              <div style={{ height: '100%', width: `${pct}%`, background: 'linear-gradient(90deg, #378ADD, #52E8A0)', borderRadius: '2px' }} />
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px' }}>
-              <span style={{ color: t.textMuted }}>80 mph</span>
-              {bestSwing && <span style={{ color: '#52E8A0' }}>● {bestSwing.toFixed(1)} {lang==='pt'?'recorde':'record'}</span>}
-              <span style={{ color: '#378ADD' }}>{swingTarget} mph</span>
-            </div>
-          </div>
-          <Sparkline data={swingEntries} t={t} target={swingTarget} />
-
-          {/* Golf KPI sub-row — clickable */}
-          {orderedKpis.filter(k=>['smash_factor','carry','stack_speed'].includes(k.id)).length > 0 && (
-            <div className="kpi-golf">
-              {orderedKpis.filter(k=>['smash_factor','carry','stack_speed'].includes(k.id)).map(k => {
-                const entry = lastMetrics[k.id]
-                const prevEntries = entries.filter(e => e.metric_id === k.id && e.value).sort((a, b) => (a.entry_date || '').localeCompare(b.entry_date || ''))
-                const d = prevEntries.length > 1 ? (parseFloat(prevEntries[prevEntries.length - 1].value) - parseFloat(prevEntries[prevEntries.length - 2].value)).toFixed(2) : null
-                return (
-                  <div key={k.id} onClick={() => openKpiModal(k)}
-                    style={{ cursor: 'pointer', transition: 'opacity 0.15s' }}
-                    onMouseEnter={e => e.currentTarget.style.opacity='0.8'}
-                    onMouseLeave={e => e.currentTarget.style.opacity='1'}>
-                    <div style={{ fontSize: '8px', letterSpacing: '2px', color: t.textMuted, marginBottom: '6px', fontWeight: 600 }}>{k.label} ↗</div>
-                    <div style={{ fontSize: '22px', fontWeight: 800, color: t.text, lineHeight: 1 }}>
-                      {entry ? entry.value : '—'}<span style={{ fontSize: '11px', color: t.textMuted, marginLeft: '2px' }}>{entry ? k.unit : ''}</span>
-                    </div>
-                    {d !== null && (
-                      <div style={{ fontSize: '10px', color: parseFloat(d) >= 0 ? '#52E8A0' : '#f87171', marginTop: '4px', fontWeight: 700 }}>
-                        {parseFloat(d) >= 0 ? '↑' : '↓'} {Math.abs(d)}{k.unit}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          )}
-
-          {delta !== null && (
-            <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: `1px solid ${t.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ fontSize: '12px', color: parseFloat(delta) >= 0 ? '#52E8A0' : '#f87171', fontWeight: 700 }}>
-                {parseFloat(delta) >= 0 ? '↑' : '↓'} {Math.abs(delta)} mph {lang==='pt'?'vs anterior':'vs previous'}
-              </div>
-              {lastDate && <div style={{ fontSize: '10px', color: t.textMuted, letterSpacing: '1px' }}>{formatDate(lastDate)}</div>}
-            </div>
-          )}
-        </div>
-
-        {/* Right column */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {/* Sessions golf + gym — period filtered */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-            <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '16px' }}>
-              <div style={{ fontSize: '8px', letterSpacing: '3px', color: '#378ADD', marginBottom: '8px', fontWeight: 600 }}>GOLFE</div>
-              <div style={{ fontSize: '38px', fontWeight: 900, color: t.text, lineHeight: 1, letterSpacing: '-2px' }}>{golfSessions}</div>
-              <div style={{ fontSize: '10px', color: t.textMuted, marginTop: '4px' }}>sessões</div>
-            </div>
-            <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '16px' }}>
-              <div style={{ fontSize: '8px', letterSpacing: '3px', color: '#52E8A0', marginBottom: '8px', fontWeight: 600 }}>GINÁSIO</div>
-              <div style={{ fontSize: '38px', fontWeight: 900, color: t.text, lineHeight: 1, letterSpacing: '-2px' }}>{gymSessions}</div>
-              <div style={{ fontSize: '10px', color: t.textMuted, marginTop: '4px' }}>sessões</div>
-            </div>
-          </div>
-
-          {/* Upcoming events */}
-          <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '18px', flex: 1 }}>
-            <div style={{ fontSize: '8px', letterSpacing: '3px', color: t.textMuted, marginBottom: '12px', fontWeight: 600 }}>{lang==='pt'?'EVENTOS':'EVENTS'}</div>
-            {upcomingEvents.length === 0 ? (
-              <div style={{ fontSize: '12px', color: t.textMuted, fontStyle: 'italic' }}>Sem eventos próximos</div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {upcomingEvents.map(ev => {
-                  const d = Math.ceil((new Date(ev.start_date) - new Date()) / 86400000)
-                  return (
-                    <div key={ev.id} style={{ borderLeft: `3px solid ${ev.color || '#378ADD'}`, paddingLeft: '10px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <div style={{ fontSize: '12px', fontWeight: 600, color: t.text, flex: 1 }}>{ev.title}</div>
-                        <div style={{ fontSize: '11px', color: '#378ADD', fontWeight: 700, marginLeft: '8px', whiteSpace: 'nowrap' }}>{d}d</div>
-                      </div>
-                      <div style={{ fontSize: '10px', color: t.textMuted, marginTop: '2px' }}>{formatDate(ev.start_date)}{ev.end_date && ev.end_date !== ev.start_date ? ` – ${formatDate(ev.end_date)}` : ''}</div>
-                    </div>
-                  )
-                })}
-                <button onClick={() => onNavigate && onNavigate('calendar')} style={{ background: 'transparent', border: 'none', color: '#378ADD', fontSize: '11px', cursor: 'pointer', fontFamily: F, textAlign: 'left', padding: 0, letterSpacing: '0.5px' }}>
-                  Ver calendário →
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Row 2: Treino semana + Stats competição + Últimos resultados */}
-      <div className="home-bottom-grid">
-        <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '10px', padding: '14px 16px' }}>
-          <div style={{ fontSize: '8px', letterSpacing: '2.5px', color: t.textMuted, marginBottom: '10px', fontWeight: 700 }}>{lang==='pt'?'TREINO ESTA SEMANA':'TRAINING THIS WEEK'}</div>
-          {weekSessions.length === 0 ? (
-            <div style={{ fontSize: '12px', color: t.textMuted, fontStyle: 'italic' }}>{lang==='pt'?'Sem plano para esta semana':'No plan for this week'}</div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0px' }}>
-              {weekSessions.slice(0, 5).map((s, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', borderBottom: `0.5px solid ${t.border}` }}>
-                  <div>
-                    <div style={{ fontSize: '12px', fontWeight: s.day === todayDayPT ? 700 : 500, color: s.day === todayDayPT ? '#378ADD' : t.text }}>{s.day}</div>
-                    <div style={{ fontSize: '10px', color: t.textMuted }}>{s.detail}</div>
-                  </div>
-                  <span style={{ fontSize: '9px', fontWeight: 700, padding: '2px 8px', borderRadius: '4px', background: s.type === 'Golf' ? '#e6f1fb' : '#e8fdf4', color: s.type === 'Golf' ? '#0c447c' : '#0a2a1a' }}>{s.type}</span>
-                </div>
-              ))}
-            </div>
-          )}
-          {todaySession && <div style={{ marginTop: '8px', fontSize: '10px', color: '#378ADD', fontWeight: 600 }}>Hoje: {todaySession.detail}</div>}
-          <button onClick={() => onNavigate && onNavigate('training')} style={{ background: 'transparent', border: 'none', color: '#378ADD', fontSize: '10px', cursor: 'pointer', fontFamily: F, padding: 0, marginTop: '8px' }}>
-            {lang==='pt'?'Ver plano →':'See plan →'}
-          </button>
-        </div>
-
-        <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '10px', padding: '14px 16px' }}>
-          <div style={{ fontSize: '8px', letterSpacing: '2.5px', color: t.textMuted, marginBottom: '10px', fontWeight: 700 }}>{lang==='pt'?'STATS COMPETIÇÃO':'COMPETITION STATS'}</div>
-          {compStats.length === 0 ? (
-            <div style={{ fontSize: '12px', color: t.textMuted, fontStyle: 'italic' }}>{lang==='pt'?'Sem competições registadas':'No competitions recorded'}</div>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-              {[
-                { label: lang==='pt'?'MÉDIA SCORE':'AVG SCORE', value: avgScore ? (parseFloat(avgScore) >= 0 ? `+${avgScore}` : avgScore) : '—' },
-                { label: lang==='pt'?'MELHOR POS.':'BEST POS.', value: bestPos ? `#${bestPos}` : '—' },
-                { label: 'TOP 10', value: `${top10}x` },
-                { label: lang==='pt'?'TORNEIOS':'EVENTS', value: compStats.length },
-              ].map((item, i) => (
-                <div key={i} style={{ background: t.bg, borderRadius: '8px', padding: '10px' }}>
-                  <div style={{ fontSize: '8px', color: t.textMuted, letterSpacing: '1px', marginBottom: '4px', fontWeight: 600 }}>{item.label}</div>
-                  <div style={{ fontSize: '20px', fontWeight: 800, color: t.text }}>{item.value}</div>
-                </div>
-              ))}
-            </div>
-          )}
-          <button onClick={() => onNavigate && onNavigate('competition')} style={{ background: 'transparent', border: 'none', color: '#378ADD', fontSize: '10px', cursor: 'pointer', fontFamily: F, padding: 0, marginTop: '10px' }}>
-            {lang==='pt'?'Ver stats →':'See stats →'}
-          </button>
-        </div>
-
-        <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '10px', padding: '14px 16px' }}>
-          <div style={{ fontSize: '8px', letterSpacing: '2.5px', color: t.textMuted, marginBottom: '10px', fontWeight: 700 }}>{lang==='pt'?'ÚLTIMOS RESULTADOS':'RECENT RESULTS'}</div>
-          {recentResults.length === 0 ? (
-            <div style={{ fontSize: '12px', color: t.textMuted, fontStyle: 'italic' }}>{lang==='pt'?'Sem resultados':'No results yet'}</div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0px' }}>
-              {recentResults.map((r, i) => {
-                const score = r.values?.score
-                const pos = r.values?.position
-                const scoreNum = parseFloat(score)
-                return (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 0', borderBottom: i < recentResults.length - 1 ? `0.5px solid ${t.border}` : 'none' }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: '11px', fontWeight: 600, color: t.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.event_name}</div>
-                      <div style={{ fontSize: '10px', color: t.textMuted }}>{formatDate(r.event_date)}</div>
-                    </div>
-                    <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '8px' }}>
-                      {score && <div style={{ fontSize: '12px', fontWeight: 700, color: t.text }}>{scoreNum >= 0 ? `+${score}` : score}</div>}
-                      {pos && <div style={{ fontSize: '10px', fontWeight: 600, color: '#378ADD' }}>#{pos}</div>}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-          <button onClick={() => onNavigate && onNavigate('competition')} style={{ background: 'transparent', border: 'none', color: '#378ADD', fontSize: '10px', cursor: 'pointer', fontFamily: F, padding: 0, marginTop: '8px' }}>
-            {lang==='pt'?'Ver todos →':'See all →'}
-          </button>
-        </div>
-      </div>
-
-      {/* Row 3: Calendário compacto */}
-      {upcomingEvents.length > 0 && (
-        <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '10px', padding: '14px 18px', marginBottom: '14px' }}>
-          <div style={{ fontSize: '8px', letterSpacing: '2.5px', color: t.textMuted, marginBottom: '10px', fontWeight: 700 }}>CALENDÁRIO</div>
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(upcomingEvents.length, 4)}, 1fr)`, gap: '8px' }}>
-            {upcomingEvents.map(ev => {
-              const d = Math.ceil((new Date(ev.start_date) - new Date()) / 86400000)
+          <div className="h-today-grid">
+            {weekSessions.slice(0,8).map((s,i) => {
+              const isToday = s.day === todayDayPT
+              const color = s.type==='Golf' ? '#378ADD' : '#52E8A0'
               return (
-                <div key={ev.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px', background: t.bg, borderRadius: '8px' }}>
-                  <div style={{ width: '3px', height: '36px', background: ev.color || '#378ADD', borderRadius: '2px', flexShrink: 0 }}></div>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: '11px', fontWeight: 700, color: t.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.title}</div>
-                    <div style={{ fontSize: '10px', color: t.textMuted }}>{formatDate(ev.start_date)}{ev.end_date && ev.end_date !== ev.start_date ? ` – ${formatDate(ev.end_date)}` : ''}</div>
-                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#378ADD' }}>{d}d</div>
+                <div key={i} style={{ background:isToday?color+'18':t.bg,border:`1px solid ${isToday?color+'55':t.border}`,borderRadius:'8px',padding:'8px 10px' }}>
+                  <div style={{ fontSize:'9px',letterSpacing:'1px',color:isToday?color:t.textMuted,fontWeight:700,marginBottom:'2px' }}>
+                    {s.day}{isToday&&' · HOJE'}
+                  </div>
+                  <div style={{ fontSize:'11px',fontWeight:isToday?700:500,color:isToday?t.text:t.textMuted,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>
+                    {s.detail}
+                  </div>
+                  <div style={{ marginTop:'4px',display:'inline-flex',padding:'1px 6px',borderRadius:'4px',fontSize:'8px',fontWeight:700,
+                    background:s.type==='Golf'?'#378ADD18':'#52E8A018',color }}>
+                    {s.type}
                   </div>
                 </div>
               )
@@ -629,25 +505,34 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
         </div>
       )}
 
-      {/* Gym KPIs — clickable, ordered */}
-      {orderedKpis.filter(k=>gymMetrics.includes(k.id)).length > 0 && (
-        <div className="kpi-row">
-          {orderedKpis.filter(k=>gymMetrics.includes(k.id)).map(k => {
+      {/* ── KPI GRID — todos os KPIs como cards ── */}
+      {orderedKpis.length > 0 && (
+        <div className="h-kpi">
+          {orderedKpis.map(k => {
             const entry = lastMetrics[k.id]
-            const prevEntries = entries.filter(e => e.metric_id === k.id && e.value).sort((a, b) => (a.entry_date || '').localeCompare(b.entry_date || ''))
-            const d = prevEntries.length > 1 ? (parseFloat(prevEntries[prevEntries.length - 1].value) - parseFloat(prevEntries[prevEntries.length - 2].value)).toFixed(1) : null
+            const prevEntries = entries.filter(e=>e.metric_id===k.id&&e.value).sort((a,b)=>(a.entry_date||'').localeCompare(b.entry_date||''))
+            const d = prevEntries.length>1 ? (parseFloat(prevEntries[prevEntries.length-1].value)-parseFloat(prevEntries[prevEntries.length-2].value)).toFixed(2) : null
+            const isGolf = golfMetrics.includes(k.id)
+            const accent = isGolf ? '#378ADD' : '#52E8A0'
             return (
-              <div key={k.id} onClick={() => openKpiModal(k)}
-                style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '10px', padding: '16px', cursor: 'pointer', transition: 'opacity 0.15s' }}
-                onMouseEnter={e => e.currentTarget.style.opacity='0.8'}
-                onMouseLeave={e => e.currentTarget.style.opacity='1'}>
-                <div style={{ fontSize: '8px', letterSpacing: '3px', color: '#52E8A0', marginBottom: '10px', fontWeight: 600 }}>{k.label} ↗</div>
-                <div style={{ fontSize: '30px', fontWeight: 900, color: t.text, lineHeight: 1, letterSpacing: '-1px' }}>
-                  {entry ? entry.value : '—'}<span style={{ fontSize: '12px', color: t.textMuted, letterSpacing: 0 }}>{entry ? k.unit : ''}</span>
+              <div key={k.id} onClick={()=>openKpiModal(k)}
+                style={{ background:t.surface,border:`1px solid ${t.border}`,borderLeft:`3px solid ${accent}`,borderRadius:'10px',padding:'14px 16px',cursor:'pointer',transition:'opacity 0.15s' }}
+                onMouseEnter={e=>e.currentTarget.style.opacity='0.8'}
+                onMouseLeave={e=>e.currentTarget.style.opacity='1'}>
+                <div style={{ fontSize:'8px',letterSpacing:'2px',color:accent,marginBottom:'8px',fontWeight:600 }}>
+                  {k.label} ↗
                 </div>
-                {d !== null && (
-                  <div style={{ fontSize: '10px', color: parseFloat(d) >= 0 ? '#52E8A0' : '#f87171', marginTop: '6px', fontWeight: 700 }}>
-                    {parseFloat(d) >= 0 ? '↑' : '↓'} {Math.abs(d)}{k.unit}
+                <div style={{ fontSize:'28px',fontWeight:900,color:t.text,lineHeight:1,letterSpacing:'-1px' }}>
+                  {entry?entry.value:'—'}<span style={{ fontSize:'11px',color:t.textMuted,letterSpacing:0,fontWeight:400 }}>{entry?` ${k.unit}`:''}</span>
+                </div>
+                {d!==null && (
+                  <div style={{ fontSize:'10px',color:parseFloat(d)>=0?'#52E8A0':'#f87171',marginTop:'6px',fontWeight:700 }}>
+                    {parseFloat(d)>=0?'↑':'↓'} {Math.abs(d)}{k.unit}
+                  </div>
+                )}
+                {!d && entry && (
+                  <div style={{ fontSize:'10px',color:t.textFaint||t.textMuted,marginTop:'6px' }}>
+                    {new Date(entry.entry_date+'T12:00:00').toLocaleDateString('pt-PT',{day:'2-digit',month:'short'})}
                   </div>
                 )}
               </div>
@@ -655,6 +540,121 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
           })}
         </div>
       )}
+
+      {/* ── BOTTOM GRID: competição + resultados + eventos ── */}
+      <div className="h-bottom">
+        {/* Competição */}
+        <div style={{ background:t.surface,border:`1px solid ${t.border}`,borderRadius:'12px',padding:'16px 18px' }}>
+          <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px' }}>
+            <div style={{ fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600 }}>
+              {lang==='pt'?'STATS COMPETIÇÃO':'COMPETITION STATS'}
+            </div>
+            <button onClick={()=>onNavigate&&onNavigate('competition')}
+              style={{ background:'transparent',border:'none',color:'#378ADD',fontSize:'11px',cursor:'pointer',fontFamily:F,padding:0 }}>
+              Ver stats →
+            </button>
+          </div>
+          {compStats.length===0 ? (
+            <div style={{ fontSize:'12px',color:t.textMuted,fontStyle:'italic' }}>
+              {lang==='pt'?'Sem competições registadas':'No competitions recorded'}
+            </div>
+          ) : (
+            <>
+              <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:'8px',marginBottom:'12px' }}>
+                {[
+                  { label:lang==='pt'?'MÉDIA SCORE':'AVG SCORE', value:avgScore?(parseFloat(avgScore)>=0?`+${avgScore}`:avgScore):'—', color:'#378ADD' },
+                  { label:lang==='pt'?'MELHOR POS.':'BEST POS.', value:bestPos?`#${bestPos}`:'—', color:'#52E8A0' },
+                  { label:'TOP 10', value:`${top10}×`, color:t.text },
+                  { label:lang==='pt'?'TORNEIOS':'EVENTS', value:compStats.length, color:t.text },
+                ].map((item,i) => (
+                  <div key={i} style={{ background:t.bg,borderRadius:'8px',padding:'10px 12px' }}>
+                    <div style={{ fontSize:'8px',color:t.textMuted,letterSpacing:'1px',marginBottom:'4px',fontWeight:600 }}>{item.label}</div>
+                    <div style={{ fontSize:'20px',fontWeight:800,color:item.color,letterSpacing:'-0.5px' }}>{item.value}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display:'flex',flexDirection:'column',gap:'1px' }}>
+                {recentResults.map((r,i) => {
+                  const score=r.values?.score; const pos=r.values?.position; const scoreNum=parseFloat(score)
+                  return (
+                    <div key={i} style={{ display:'flex',alignItems:'center',justifyContent:'space-between',padding:'7px 0',borderBottom:i<recentResults.length-1?`0.5px solid ${t.border}`:'none' }}>
+                      <div style={{ flex:1,minWidth:0 }}>
+                        <div style={{ fontSize:'11px',fontWeight:600,color:t.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{r.event_name}</div>
+                        <div style={{ fontSize:'10px',color:t.textMuted }}>{formatDate(r.event_date)}</div>
+                      </div>
+                      <div style={{ textAlign:'right',flexShrink:0,marginLeft:'8px' }}>
+                        {score&&<div style={{ fontSize:'12px',fontWeight:700,color:t.text }}>{scoreNum>=0?`+${score}`:score}</div>}
+                        {pos&&<div style={{ fontSize:'10px',fontWeight:600,color:'#378ADD' }}>#{pos}</div>}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Eventos + Swing sub-KPIs */}
+        <div style={{ display:'flex',flexDirection:'column',gap:'12px' }}>
+          {/* Upcoming events */}
+          <div style={{ background:t.surface,border:`1px solid ${t.border}`,borderRadius:'12px',padding:'16px 18px' }}>
+            <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px' }}>
+              <div style={{ fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600 }}>
+                {lang==='pt'?'PRÓXIMOS EVENTOS':'UPCOMING EVENTS'}
+              </div>
+              <button onClick={()=>onNavigate&&onNavigate('calendar')}
+                style={{ background:'transparent',border:'none',color:'#378ADD',fontSize:'11px',cursor:'pointer',fontFamily:F,padding:0 }}>
+                Calendário →
+              </button>
+            </div>
+            {upcomingEvents.length===0 ? (
+              <div style={{ fontSize:'12px',color:t.textMuted,fontStyle:'italic' }}>Sem eventos próximos</div>
+            ) : (
+              <div style={{ display:'flex',flexDirection:'column',gap:'8px' }}>
+                {upcomingEvents.slice(0,4).map(ev => {
+                  const d=Math.ceil((new Date(ev.start_date)-new Date())/86400000)
+                  return (
+                    <div key={ev.id} style={{ display:'flex',alignItems:'center',gap:'10px',padding:'7px 10px',background:t.bg,borderRadius:'8px' }}>
+                      <div style={{ width:'3px',height:'32px',background:ev.color||'#378ADD',borderRadius:'2px',flexShrink:0 }}/>
+                      <div style={{ flex:1,minWidth:0 }}>
+                        <div style={{ fontSize:'11px',fontWeight:600,color:t.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{ev.title}</div>
+                        <div style={{ fontSize:'10px',color:t.textMuted }}>{formatDate(ev.start_date)}{ev.end_date&&ev.end_date!==ev.start_date?` – ${formatDate(ev.end_date)}`:''}</div>
+                      </div>
+                      <div style={{ fontSize:'13px',fontWeight:700,color:d<=7?'#f59e0b':'#378ADD',flexShrink:0 }}>{d}d</div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Golf sub-KPIs quick view */}
+          {orderedKpis.filter(k=>['smash_factor','carry','stack_speed'].includes(k.id)).length>0 && (
+            <div style={{ background:t.surface,border:`1px solid ${t.border}`,borderRadius:'12px',padding:'14px 18px' }}>
+              <div style={{ fontSize:'9px',letterSpacing:'2px',color:'#378ADD',fontWeight:600,marginBottom:'10px' }}>GOLF KPIs</div>
+              <div style={{ display:'flex',flexDirection:'column',gap:'8px' }}>
+                {orderedKpis.filter(k=>['smash_factor','carry','stack_speed'].includes(k.id)).map(k => {
+                  const entry=lastMetrics[k.id]
+                  const prevE=entries.filter(e=>e.metric_id===k.id&&e.value).sort((a,b)=>(a.entry_date||'').localeCompare(b.entry_date||''))
+                  const d=prevE.length>1?(parseFloat(prevE[prevE.length-1].value)-parseFloat(prevE[prevE.length-2].value)).toFixed(2):null
+                  return (
+                    <div key={k.id} onClick={()=>openKpiModal(k)}
+                      style={{ display:'flex',alignItems:'center',justifyContent:'space-between',cursor:'pointer',padding:'2px 0' }}
+                      onMouseEnter={e=>e.currentTarget.style.opacity='0.7'}
+                      onMouseLeave={e=>e.currentTarget.style.opacity='1'}>
+                      <div style={{ fontSize:'11px',color:t.textMuted,fontWeight:600 }}>{k.label}</div>
+                      <div style={{ display:'flex',alignItems:'center',gap:'8px' }}>
+                        {d!==null&&<div style={{ fontSize:'10px',color:parseFloat(d)>=0?'#52E8A0':'#f87171',fontWeight:700 }}>{parseFloat(d)>=0?'↑':'↓'}{Math.abs(d)}</div>}
+                        <div style={{ fontSize:'14px',fontWeight:800,color:t.text }}>{entry?entry.value:'—'}<span style={{ fontSize:'10px',color:t.textMuted,fontWeight:400 }}>{entry?k.unit:''}</span></div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
