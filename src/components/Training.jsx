@@ -204,6 +204,9 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
   const [savingTemplate, setSavingTemplate] = useState(false)
   const [showSaveTemplate, setShowSaveTemplate] = useState(false)
   const [showLegend, setShowLegend] = useState(false)
+  const [phaseOverrides, setPhaseOverrides] = useState({})
+  const [editingPhaseWs, setEditingPhaseWs] = useState(null)
+  const [savingPhaseOverride, setSavingPhaseOverride] = useState(false)
 
   const email = (user?.email||'').toLowerCase()
   const DAYS_LONG  = lang==='pt' ? DAYS_PT : DAYS_EN
@@ -243,6 +246,16 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
   useEffect(() => { fetchTemplates() }, [fetchTemplates])
   useEffect(() => {
     supabase.from('events').select('id,title,category,start_date,end_date').then(({data})=>setEventsData(data||[]))
+  }, [])
+
+  useEffect(() => {
+    supabase.from('periodization_overrides').select('*').then(({ data, error }) => {
+      if (!error && data) {
+        const ov = {}
+        data.forEach(r => { ov[r.week_start] = r.phase })
+        setPhaseOverrides(ov)
+      }
+    })
   }, [])
 
   const focusDateRef = useRef(null)
@@ -643,16 +656,19 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
     { key:'progress', role:'', label:'Track Progress',
       icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>,
       bg:t.navActive||'#f5f5f5', color:t.textMuted },
+    { key:'periodizacao', role:'COACH', label:'Periodização',
+      icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/></svg>,
+      bg:'#fdf4ff', color:'#7e22ce' },
   ]
 
   // ── PERIODIZAÇÃO ────────────────────────────────────────────────────────────
   const PHASES = {
-    descarga:      { id:'descarga',      label:'DESCARGA',        color:'#9ca3af', bg:'#f3f4f6', foco:'Recuperação activa, volume baixo',              sessoes:'2–3' },
-    peak:          { id:'peak',          label:'PEAK',            color:'#ef4444', bg:'#fef2f2', foco:'Intensidade máxima, simulação de torneio',       sessoes:'3–4' },
-    manutencao:    { id:'manutencao',    label:'MANUTENÇÃO B2B',  color:'#f97316', bg:'#fff7ed', foco:'Manutenção técnica, sem nova carga',             sessoes:'3' },
-    afinacao:      { id:'afinacao',      label:'AFINAÇÃO',        color:'#eab308', bg:'#fefce8', foco:'Técnica fina, putting, simulação de campo',      sessoes:'3–4' },
-    desenvolvimento:{ id:'desenvolvimento',label:'DESENVOLVIMENTO',color:'#3b82f6', bg:'#eff6ff', foco:'Carga moderada-alta, skills e técnica',          sessoes:'4–5' },
-    acumulacao:    { id:'acumulacao',    label:'ACUMULAÇÃO',      color:'#22c55e', bg:'#f0fdf4', foco:'Volume alto, desenvolvimento físico e técnico',   sessoes:'5–6' },
+    acumulacao:    { id:'acumulacao',     label:'ACUMULAÇÃO',     color:'#22c55e', bg:'#f0fdf4', icon:'🏋️', fisico:'ALTA — força máxima, volume alto', tecnico:'ALTO — todas as categorias, novidades técnicas', putting:'Sessão dedicada 2×/sem', criterio:'Sem competição nas próximas 2 semanas', sessoes:'5–6' },
+    desenvolvimento:{ id:'desenvolvimento',label:'DESENVOLVIMENTO',color:'#3b82f6', bg:'#eff6ff', icon:'📈', fisico:'ALTA — carga moderada-alta, explosividade', tecnico:'MÉDIO-ALTO — aprofundar skills', putting:'A meio da semana (Qua/Qui)', criterio:'Competição em 2 semanas', sessoes:'4–5' },
+    afinacao:      { id:'afinacao',       label:'AFINAÇÃO',       color:'#eab308', bg:'#fefce8', icon:'🎯', fisico:'-40% volume, intensidade mantida', tecnico:'Score practice, sem técnica nova', putting:'Intensivo — 3×/sem mínimo', criterio:'Competição na próxima semana (gap ≥7d)', sessoes:'3–4' },
+    peak:          { id:'peak',           label:'PEAK',           color:'#ef4444', bg:'#fef2f2', icon:'🏆', fisico:'MÍNIMA — só activação, zero físico 48h antes', tecnico:'Rotina pré-comp, simulação torneio', putting:'Rotina de competição', criterio:'Semana de competição', sessoes:'3–4' },
+    manutencao:    { id:'manutencao',     label:'MANUTENÇÃO B2B', color:'#f97316', bg:'#fff7ed', icon:'🔄', fisico:'SEM FÍSICO PESADO — recuperação activa', tecnico:'Manutenção técnica, sem nova carga', putting:'Manutenção da rotina', criterio:'Competição seguinte em <7 dias (B2B)', sessoes:'3' },
+    descarga:      { id:'descarga',       label:'DESCARGA',       color:'#9ca3af', bg:'#f3f4f6', icon:'🔋', fisico:'-50% volume, mobilidade e recuperação', tecnico:'Técnica leve, zero novas aprendizagens', putting:'Manutenção mínima', criterio:'4ª semana do bloco ou após PEAK', sessoes:'2–3' },
   }
 
   const computeAllPhases = (weekStarts, evts) => {
@@ -723,6 +739,30 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
   const deleteTemplate = async (id) => {
     await supabase.from('training_plan_templates').delete().eq('id',id)
     fetchTemplates()
+  }
+
+  const navigateToWeek = (ws) => {
+    const currentWs = getWeekStart(0)
+    const diff = Math.round((new Date(ws+'T12:00:00') - new Date(currentWs+'T12:00:00')) / (7*86400000))
+    setWeekOffset(diff)
+    setSubTab('log')
+  }
+
+  const savePhaseOverride = async (ws, phaseId) => {
+    setSavingPhaseOverride(true)
+    await supabase.from('periodization_overrides').upsert(
+      { week_start:ws, phase:phaseId, created_by:email, created_at:new Date().toISOString() },
+      { onConflict:'week_start' }
+    )
+    setPhaseOverrides(prev => ({ ...prev, [ws]: phaseId }))
+    setEditingPhaseWs(null)
+    setSavingPhaseOverride(false)
+  }
+
+  const clearPhaseOverride = async (ws) => {
+    await supabase.from('periodization_overrides').delete().eq('week_start', ws)
+    setPhaseOverrides(prev => { const next = { ...prev }; delete next[ws]; return next })
+    setEditingPhaseWs(null)
   }
 
   // ── WIZARD ─────────────────────────────────────────────────────────────────
@@ -1148,7 +1188,8 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
       <style>{`
         .train-coach-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
         .train-stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
-        @media(max-width:700px){.train-coach-grid{grid-template-columns:repeat(2,1fr)}.train-stats-grid{grid-template-columns:repeat(2,1fr)}}
+        .train-perio-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+        @media(max-width:700px){.train-coach-grid{grid-template-columns:repeat(2,1fr)}.train-stats-grid{grid-template-columns:repeat(2,1fr)}.train-perio-grid{grid-template-columns:1fr}}
         @media(max-width:400px){.train-coach-grid{grid-template-columns:1fr 1fr}}
       `}</style>
 
@@ -1218,13 +1259,17 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
             {showLegend && (
               <div style={{marginTop:'12px',display:'flex',flexDirection:'column',gap:'8px'}}>
                 {Object.values(PHASES).map(ph=>(
-                  <div key={ph.id} style={{display:'flex',gap:'10px',alignItems:'flex-start'}}>
-                    <div style={{padding:'3px 8px',borderRadius:'4px',fontSize:'8px',fontWeight:700,letterSpacing:'1px',color:ph.color,background:ph.bg,flexShrink:0,minWidth:'110px',textAlign:'center'}}>
-                      {ph.label}
+                  <div key={ph.id} style={{display:'flex',gap:'10px',alignItems:'flex-start',padding:'8px 10px',borderRadius:'8px',background:ph.bg,border:`1px solid ${ph.color}33`}}>
+                    <div style={{display:'flex',flexDirection:'column',gap:'3px',alignItems:'center',flexShrink:0,minWidth:'90px',textAlign:'center'}}>
+                      <div style={{fontSize:'16px'}}>{ph.icon}</div>
+                      <div style={{padding:'2px 6px',borderRadius:'4px',fontSize:'8px',fontWeight:700,letterSpacing:'1px',color:ph.color,background:`${ph.color}22`}}>{ph.label}</div>
+                      <div style={{fontSize:'9px',color:ph.color,fontWeight:600}}>{ph.sessoes} sess./sem</div>
                     </div>
-                    <div>
-                      <div style={{fontSize:'11px',color:t.text,fontWeight:600,marginBottom:'1px'}}>{ph.foco}</div>
-                      <div style={{fontSize:'10px',color:t.textMuted}}>{ph.sessoes} sessões/sem. recomendadas</div>
+                    <div style={{display:'flex',flexDirection:'column',gap:'3px'}}>
+                      <div style={{fontSize:'10px',color:t.text}}><span style={{fontWeight:700,color:ph.color}}>Físico: </span>{ph.fisico}</div>
+                      <div style={{fontSize:'10px',color:t.text}}><span style={{fontWeight:700,color:ph.color}}>Técnico: </span>{ph.tecnico}</div>
+                      <div style={{fontSize:'10px',color:t.text}}><span style={{fontWeight:700,color:ph.color}}>Putting: </span>{ph.putting}</div>
+                      <div style={{fontSize:'9px',color:t.textMuted,fontStyle:'italic'}}>Critério: {ph.criterio}</div>
                     </div>
                   </div>
                 ))}
@@ -1780,6 +1825,244 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
                 Sem dados para o período e filtro seleccionados.
               </div>
             )}
+          </div>
+        )
+      })()}
+
+      {/* ── PERIODIZAÇÃO ── */}
+      {subTab==='periodizacao' && (() => {
+        const isCoach = email===COACH_GOLF||email===COACH_GYM||email===ADMIN
+        // Build 24-week window: 4 past + current + 19 future
+        const today = new Date()
+        const todayStr = today.toISOString().split('T')[0]
+        const currentWsDate = new Date(todayStr+'T12:00:00')
+        const dow = currentWsDate.getDay()
+        currentWsDate.setDate(currentWsDate.getDate() - (dow===0?6:dow-1))
+        const currentWs = currentWsDate.toISOString().split('T')[0]
+        const addWeeks = (ws, n) => { const d=new Date(ws+'T12:00:00'); d.setDate(d.getDate()+n*7); return d.toISOString().split('T')[0] }
+        const allWeeks = Array.from({length:24}, (_,i) => addWeeks(currentWs, i-4))
+        const {phases: autoPhases, alerts: autoAlerts} = computeAllPhases(allWeeks, eventsData)
+
+        // Apply overrides
+        const resolvedPhases = {}
+        allWeeks.forEach(ws => { resolvedPhases[ws] = phaseOverrides[ws] || autoPhases[ws] || 'acumulacao' })
+
+        // Group into mesociclos of 4 weeks
+        const mesociclos = []
+        for (let i=0; i<allWeeks.length; i+=4) {
+          mesociclos.push(allWeeks.slice(i, i+4))
+        }
+
+        // Get competitions per week
+        const isCompEvent = (e) => (e.category||'').toLowerCase().includes('competi') || (e.title||'').toLowerCase().includes('torneio')
+        const comps = eventsData.filter(isCompEvent)
+        const getWeekComps = (ws) => {
+          const wsMs = new Date(ws+'T12:00:00').getTime()
+          const weMs = wsMs + 6*86400000
+          return comps.filter(c => {
+            const cs = new Date(c.start_date+'T12:00:00').getTime()
+            const ce = c.end_date ? new Date(c.end_date+'T12:00:00').getTime() : cs
+            return cs<=weMs && ce>=wsMs
+          })
+        }
+
+        // Global alerts across all weeks
+        const globalAlerts = []
+        const weekAlerts = autoAlerts
+        let b2bFound=false, noDescarga4=false, noPause5=false
+        allWeeks.forEach(ws => {
+          const wa = weekAlerts[ws]||[]
+          if(wa.some(a=>a.text.includes('B2B'))) b2bFound=true
+          if(wa.some(a=>a.text.includes('4+'))) noDescarga4=true
+          if(wa.some(a=>a.text.includes('5+'))) noPause5=true
+        })
+        if(b2bFound) globalAlerts.push({icon:'🔴', text:'Competições B2B detectadas no período'})
+        if(noDescarga4) globalAlerts.push({icon:'⚠️', text:'Semana de descarga em falta (4+ semanas consecutivas)'})
+        if(noPause5) globalAlerts.push({icon:'⚠️', text:'Sem pausa há 5+ semanas — risco de overtraining'})
+
+        return (
+          <div>
+            {/* Global alerts */}
+            {globalAlerts.length>0 && (
+              <div style={{marginBottom:'16px',display:'flex',flexDirection:'column',gap:'6px'}}>
+                {globalAlerts.map((a,i)=>(
+                  <div key={i} style={{display:'flex',alignItems:'center',gap:'8px',padding:'9px 14px',borderRadius:'8px',background:a.icon==='🔴'?'#fef2f2':'#fffbeb',border:`1px solid ${a.icon==='🔴'?'#fca5a5':'#fcd34d'}`,fontSize:'12px',fontWeight:600,color:a.icon==='🔴'?'#b91c1c':'#92400e'}}>
+                    <span>{a.icon}</span><span>{a.text}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Legenda collapsible */}
+            <div style={{...card,marginBottom:'16px',padding:'14px 16px'}}>
+              <button onClick={()=>setShowLegend(p=>!p)} style={{width:'100%',display:'flex',justifyContent:'space-between',alignItems:'center',background:'transparent',border:'none',cursor:'pointer',fontFamily:F,padding:0}}>
+                <div style={{fontSize:'9px',letterSpacing:'2px',color:'#7e22ce',fontWeight:700}}>LEGENDA DE FASES</div>
+                <div style={{fontSize:'12px',color:t.textMuted}}>{showLegend?'▲':'▼'}</div>
+              </button>
+              {showLegend && (
+                <div style={{marginTop:'12px',display:'flex',flexDirection:'column',gap:'8px'}}>
+                  {Object.values(PHASES).map(ph=>(
+                    <div key={ph.id} style={{display:'flex',gap:'10px',alignItems:'flex-start',padding:'10px',borderRadius:'8px',background:ph.bg,border:`1px solid ${ph.color}33`}}>
+                      <div style={{display:'flex',flexDirection:'column',gap:'3px',alignItems:'center',flexShrink:0,minWidth:'96px',textAlign:'center'}}>
+                        <div style={{fontSize:'18px'}}>{ph.icon}</div>
+                        <div style={{padding:'3px 8px',borderRadius:'4px',fontSize:'8px',fontWeight:700,letterSpacing:'1px',color:'#fff',background:ph.color}}>{ph.label}</div>
+                        <div style={{fontSize:'9px',color:ph.color,fontWeight:600,marginTop:'1px'}}>{ph.sessoes} sess./sem</div>
+                      </div>
+                      <div style={{display:'flex',flexDirection:'column',gap:'3px',flex:1}}>
+                        <div style={{fontSize:'10px',color:t.text}}><span style={{fontWeight:700,color:ph.color}}>Físico: </span>{ph.fisico}</div>
+                        <div style={{fontSize:'10px',color:t.text}}><span style={{fontWeight:700,color:ph.color}}>Técnico: </span>{ph.tecnico}</div>
+                        <div style={{fontSize:'10px',color:t.text}}><span style={{fontWeight:700,color:ph.color}}>Putting: </span>{ph.putting}</div>
+                        <div style={{fontSize:'9px',color:t.textMuted,fontStyle:'italic',marginTop:'2px'}}>Critério: {ph.criterio}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Mesociclos */}
+            {mesociclos.map((block, mIdx) => {
+              const blockLabel = `Mesociclo ${mIdx+1}`
+              const blockStart = block[0]
+              const blockEnd = block[block.length-1]
+              const blockHasCurrent = block.includes(currentWs)
+              const blockStartDate = new Date(blockStart+'T12:00:00').toLocaleDateString('pt-PT',{day:'2-digit',month:'short'})
+              const blockEndDate = new Date(blockEnd+'T12:00:00')
+              blockEndDate.setDate(blockEndDate.getDate()+6)
+              const blockEndStr = blockEndDate.toLocaleDateString('pt-PT',{day:'2-digit',month:'short'})
+
+              return (
+                <div key={mIdx} style={{marginBottom:'20px'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'10px'}}>
+                    <div style={{fontSize:'9px',letterSpacing:'2px',fontWeight:700,color:blockHasCurrent?'#7e22ce':t.textMuted}}>{blockLabel.toUpperCase()}</div>
+                    <div style={{fontSize:'10px',color:t.textMuted}}>{blockStartDate} – {blockEndStr}</div>
+                    {blockHasCurrent && <div style={{padding:'2px 8px',borderRadius:'10px',background:'#f3e8ff',color:'#7e22ce',fontSize:'9px',fontWeight:700}}>ACTUAL</div>}
+                  </div>
+
+                  <div className="train-perio-grid">
+                    {block.map(ws => {
+                      const phId = resolvedPhases[ws]
+                      const ph = PHASES[phId] || PHASES.acumulacao
+                      const isManual = !!phaseOverrides[ws]
+                      const isCurrent = ws===currentWs
+                      const isPast = ws<currentWs
+                      const weekComps = getWeekComps(ws)
+                      const weekAl = autoAlerts[ws]||[]
+                      const isEditing = editingPhaseWs===ws
+
+                      const wsDate = new Date(ws+'T12:00:00')
+                      const weDate = new Date(ws+'T12:00:00'); weDate.setDate(weDate.getDate()+6)
+                      const wsLabel = wsDate.toLocaleDateString('pt-PT',{day:'2-digit',month:'short'})
+                      const weLabel = weDate.toLocaleDateString('pt-PT',{day:'2-digit',month:'short'})
+
+                      // Days until week start
+                      const daysToWs = Math.round((new Date(ws+'T12:00:00').getTime()-new Date(todayStr+'T12:00:00').getTime())/86400000)
+
+                      return (
+                        <div key={ws} style={{
+                          background: isPast ? t.surface : ph.bg,
+                          border: `1px solid ${isCurrent?ph.color:isPast?t.border:ph.color+'55'}`,
+                          borderRadius:'10px',
+                          padding:'12px',
+                          opacity: isPast?0.7:1,
+                          position:'relative',
+                        }}>
+                          {/* Week header */}
+                          <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'8px'}}>
+                            <div>
+                              <div style={{fontSize:'9px',color:t.textMuted,fontWeight:600,letterSpacing:'1px'}}>{wsLabel} – {weLabel}</div>
+                              {isCurrent && <div style={{fontSize:'8px',color:ph.color,fontWeight:700,marginTop:'1px'}}>SEMANA ACTUAL</div>}
+                              {!isCurrent && !isPast && daysToWs>0 && <div style={{fontSize:'8px',color:t.textMuted}}>em {daysToWs}d</div>}
+                              {isPast && <div style={{fontSize:'8px',color:t.textMuted}}>passado</div>}
+                            </div>
+                            <button onClick={()=>navigateToWeek(ws)}
+                              style={{background:'transparent',border:`1px solid ${ph.color}66`,borderRadius:'6px',color:ph.color,padding:'3px 8px',cursor:'pointer',fontSize:'10px',fontFamily:F,fontWeight:600}}>
+                              Ver →
+                            </button>
+                          </div>
+
+                          {/* Phase badge */}
+                          <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'8px'}}>
+                            <div style={{fontSize:'16px'}}>{ph.icon}</div>
+                            <div style={{flex:1}}>
+                              <div style={{display:'inline-flex',alignItems:'center',gap:'4px'}}>
+                                <div style={{padding:'3px 8px',borderRadius:'4px',fontSize:'9px',fontWeight:700,letterSpacing:'1px',color:'#fff',background:ph.color}}>{ph.label}</div>
+                                {isManual && <div style={{padding:'2px 5px',borderRadius:'4px',fontSize:'8px',fontWeight:700,color:'#92400e',background:'#fef3c7',border:'1px solid #fcd34d'}}>MANUAL</div>}
+                              </div>
+                            </div>
+                            {isCoach && (
+                              <button onClick={()=>setEditingPhaseWs(isEditing?null:ws)}
+                                style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'6px',color:t.textMuted,padding:'3px 6px',cursor:'pointer',fontSize:'9px',fontFamily:F}}>
+                                ✏️
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Phase override dropdown */}
+                          {isEditing && isCoach && (
+                            <>
+                              <div onClick={()=>setEditingPhaseWs(null)} style={{position:'fixed',inset:0,zIndex:10}} />
+                              <div style={{position:'relative',zIndex:11,marginBottom:'8px',background:t.bg,border:`1px solid ${t.border}`,borderRadius:'8px',padding:'8px',display:'flex',flexDirection:'column',gap:'4px'}}>
+                                <div style={{fontSize:'9px',letterSpacing:'1px',color:t.textMuted,fontWeight:600,marginBottom:'4px'}}>SELECCIONAR FASE</div>
+                                {Object.values(PHASES).map(opt=>(
+                                  <button key={opt.id} disabled={savingPhaseOverride}
+                                    onClick={()=>savePhaseOverride(ws,opt.id)}
+                                    style={{display:'flex',alignItems:'center',gap:'6px',padding:'5px 8px',borderRadius:'6px',
+                                      border:`1px solid ${phId===opt.id?opt.color:t.border}`,
+                                      background:phId===opt.id?opt.color+'22':'transparent',
+                                      cursor:'pointer',fontFamily:F,textAlign:'left',width:'100%'}}>
+                                    <span style={{fontSize:'13px'}}>{opt.icon}</span>
+                                    <span style={{fontSize:'10px',fontWeight:600,color:opt.color}}>{opt.label}</span>
+                                    {phId===opt.id && <span style={{marginLeft:'auto',fontSize:'9px',color:opt.color}}>✓</span>}
+                                  </button>
+                                ))}
+                                {isManual && (
+                                  <button disabled={savingPhaseOverride} onClick={()=>clearPhaseOverride(ws)}
+                                    style={{marginTop:'4px',padding:'5px 8px',borderRadius:'6px',border:`1px solid #ef4444`,background:'transparent',cursor:'pointer',fontFamily:F,fontSize:'10px',color:'#ef4444',fontWeight:600}}>
+                                    ↺ Repor automático
+                                  </button>
+                                )}
+                              </div>
+                            </>
+                          )}
+
+                          {/* Foco fields */}
+                          <div style={{display:'flex',flexDirection:'column',gap:'3px',marginBottom:'8px'}}>
+                            <div style={{fontSize:'9px',color:t.text,lineHeight:1.4}}><span style={{fontWeight:700,color:ph.color}}>Físico: </span>{ph.fisico}</div>
+                            <div style={{fontSize:'9px',color:t.text,lineHeight:1.4}}><span style={{fontWeight:700,color:ph.color}}>Técnico: </span>{ph.tecnico}</div>
+                            <div style={{fontSize:'9px',color:t.text,lineHeight:1.4}}><span style={{fontWeight:700,color:ph.color}}>Putting: </span>{ph.putting}</div>
+                          </div>
+
+                          {/* Competitions */}
+                          {weekComps.length>0 && (
+                            <div style={{display:'flex',flexDirection:'column',gap:'3px',marginBottom:'6px'}}>
+                              {weekComps.map((c,ci)=>(
+                                <div key={ci} style={{display:'flex',alignItems:'center',gap:'4px',padding:'3px 8px',borderRadius:'5px',background:'#fef9c3',border:'1px solid #fde047'}}>
+                                  <span style={{fontSize:'10px'}}>🏌️</span>
+                                  <span style={{fontSize:'9px',fontWeight:700,color:'#713f12'}}>{c.title||c.event_name}</span>
+                                  <span style={{fontSize:'8px',color:'#92400e',marginLeft:'auto'}}>{c.start_date}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Week-level alerts */}
+                          {weekAl.length>0 && (
+                            <div style={{display:'flex',flexDirection:'column',gap:'2px'}}>
+                              {weekAl.map((a,ai)=>(
+                                <div key={ai} style={{fontSize:'9px',color:a.icon==='🔴'?'#b91c1c':'#92400e',fontWeight:600,display:'flex',alignItems:'center',gap:'3px'}}>
+                                  <span>{a.icon}</span><span>{a.text}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         )
       })()}
