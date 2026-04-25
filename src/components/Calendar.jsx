@@ -163,7 +163,9 @@ export default function Calendar({ theme, t, user, lang = 'en' }) {
         .cal-cell:hover{background:${t.surface};}
         .cal-cell.today-cell{background:${t.accentBg};}
         .annual-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+        .cal-year-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
         @media(max-width:700px){.annual-grid{grid-template-columns:repeat(2,1fr)}.cal-cell{min-height:44px}}
+        @media(max-width:600px){.cal-year-stats{grid-template-columns:repeat(2,1fr)}}
       `}</style>
 
       {/* Delete Event Confirm Modal */}
@@ -378,7 +380,7 @@ export default function Calendar({ theme, t, user, lang = 'en' }) {
           {/* Annual stats */}
           <div style={{ marginTop: '16px' }}>
             <div style={{ fontSize: '9px', letterSpacing: '3px', color: t.textMuted, marginBottom: '10px', fontWeight: 600 }}>SEASON OVERVIEW</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '10px', marginBottom: '14px' }}>
+            <div className="cal-year-stats">
               <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
                 <div style={{ fontSize: '9px', letterSpacing: '2px', color: t.textMuted, marginBottom: '6px', fontWeight: 600 }}>CONFIRMED</div>
                 <div style={{ fontSize: '24px', fontWeight: 800, color: t.accentLight }}>{confirmed}</div>

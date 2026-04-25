@@ -243,6 +243,10 @@ export default function Performance({ theme, t, user, lang = 'en', initialTab = 
 
   return (
     <div style={{ fontFamily: F, color: t.text }}>
+      <style>{`
+        .perf-ctx-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+        @media(max-width:480px){.perf-ctx-grid{grid-template-columns:1fr}}
+      `}</style>
 
       {/* Delete modal */}
       {deleteConfirm && (
@@ -285,7 +289,7 @@ export default function Performance({ theme, t, user, lang = 'en', initialTab = 
           {/* Training context banner */}
           <div style={{ ...card, padding: '14px 18px' }}>
             <div style={{ fontSize: '9px', letterSpacing: '2px', color: t.textMuted, fontWeight: 600, marginBottom: '10px' }}>CONTEXTO DE TREINO</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '12px' }}>
+            <div className="perf-ctx-grid">
               <div>
                 <div style={{ fontSize: '9px', letterSpacing: '1px', color: t.textMuted, marginBottom: '3px', fontWeight: 600 }}>PRÓXIMO TREINO</div>
                 {nextTraining !== null ? (

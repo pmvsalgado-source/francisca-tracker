@@ -90,6 +90,11 @@ export default function Backoffice({ theme, t, user }) {
 
   return (
     <div style={{ fontFamily: F, color: t.text }}>
+      <style>{`
+        .bo-sections{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:20px}
+        @media(max-width:600px){.bo-sections{grid-template-columns:repeat(2,1fr)}}
+        @media(max-width:360px){.bo-sections{grid-template-columns:1fr 1fr}}
+      `}</style>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
         <div>
@@ -105,7 +110,7 @@ export default function Backoffice({ theme, t, user }) {
       </div>
 
       {/* Summary cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: '10px', marginBottom: '20px' }}>
+      <div className="bo-sections">
         {sections.map(s => (
           <div key={s.id} onClick={() => setSection(s.id)}
             style={{ ...card, cursor: 'pointer', border: `1px solid ${section === s.id ? t.accent : t.border}`, background: section === s.id ? t.accentBg : t.surface }}>

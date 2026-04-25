@@ -222,6 +222,10 @@ export default function CompStats({ theme, t, user }) {
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div style={{ fontFamily: F, color: t.text }}>
+      <style>{`
+        .comp-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px}
+        @media(max-width:600px){.comp-cards{grid-template-columns:repeat(2,1fr)}}
+      `}</style>
 
       {/* Detail Modal */}
       {detailStat && (
@@ -527,7 +531,7 @@ export default function CompStats({ theme, t, user }) {
 
       {/* Summary Cards */}
       {stats.length > 0 && summaryCards.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '20px' }}>
+        <div className="comp-cards">
           {summaryCards.map(c => {
             const { value, unit, color } = computeCard(c)
             return (

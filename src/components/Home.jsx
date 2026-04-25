@@ -272,7 +272,10 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
         .home-grid{display:grid;grid-template-columns:1fr 280px;gap:14px}
         .kpi-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
         .kpi-golf{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px;padding-top:12px;border-top:0.5px solid ${t.border}}
-        @media(max-width:800px){.home-grid{grid-template-columns:1fr}.kpi-row{grid-template-columns:repeat(2,1fr)}.kpi-golf{grid-template-columns:repeat(2,1fr)}}
+        .home-3col{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+        .home-bottom-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:14px}
+        @media(max-width:800px){.home-grid{grid-template-columns:1fr}.kpi-row{grid-template-columns:repeat(2,1fr)}.kpi-golf{grid-template-columns:repeat(2,1fr)}.home-bottom-grid{grid-template-columns:1fr}}
+        @media(max-width:480px){.kpi-row{grid-template-columns:1fr 1fr}.kpi-golf{grid-template-columns:1fr 1fr}.home-3col{grid-template-columns:1fr 1fr}.home-bottom-grid{grid-template-columns:1fr}}
       `}</style>
 
       {/* KPI deep-dive modal */}
@@ -298,7 +301,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
             )}
 
             {/* Stats */}
-            <div style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'8px',marginBottom:'16px' }}>
+            <div className="home-3col" style={{ marginBottom:'16px' }}>
               {[
                 { l:'MELHOR', v: kpiModal.allEntries.length ? Math.max(...kpiModal.allEntries.map(e=>parseFloat(e.value))).toFixed(2) : '—' },
                 { l:'MÍNIMO', v: kpiModal.allEntries.length ? Math.min(...kpiModal.allEntries.map(e=>parseFloat(e.value))).toFixed(2) : '—' },
@@ -345,7 +348,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
       {/* Athlete bar */}
       {editingAthlete ? (
         <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '10px', padding: '16px', marginBottom: '14px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '8px', marginBottom: '12px' }}>
+          <div className="home-3col" style={{ marginBottom: '12px' }}>
             {[['hcp','Handicap'],['wagr','WAGR'],['club',lang==='pt'?'Clube':'Club'],['category',lang==='pt'?'Categoria':'Category'],['fed',lang==='pt'?'Federação':'Federation'],['fed_num',lang==='pt'?'Nº Federado':'Fed. No.']].map(([k,l]) => (
               <div key={k}><div style={{ fontSize: '8px', color: t.textMuted, marginBottom: '3px', letterSpacing: '1px' }}>{l.toUpperCase()}</div>
               <input value={athleteForm[k] || ''} onChange={e => setAthleteForm(p => ({...p,[k]:e.target.value}))} style={inp} /></div>
@@ -525,7 +528,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
       </div>
 
       {/* Row 2: Treino semana + Stats competição + Últimos resultados */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '12px', marginBottom: '14px' }}>
+      <div className="home-bottom-grid">
         <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '10px', padding: '14px 16px' }}>
           <div style={{ fontSize: '8px', letterSpacing: '2.5px', color: t.textMuted, marginBottom: '10px', fontWeight: 700 }}>{lang==='pt'?'TREINO ESTA SEMANA':'TRAINING THIS WEEK'}</div>
           {weekSessions.length === 0 ? (

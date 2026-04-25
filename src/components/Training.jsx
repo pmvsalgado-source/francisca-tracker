@@ -910,6 +910,12 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
   // ── MAIN RENDER ────────────────────────────────────────────────────────────
   return (
     <div style={{fontFamily:F,color:t.text}}>
+      <style>{`
+        .train-coach-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+        .train-stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+        @media(max-width:600px){.train-coach-grid{grid-template-columns:1fr 1fr}.train-stats-grid{grid-template-columns:repeat(2,1fr)}}
+        @media(max-width:400px){.train-coach-grid{grid-template-columns:1fr}}
+      `}</style>
 
       {/* Free session modal */}
       {showFreeSession && (
@@ -994,7 +1000,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
           {/* Golf coach panel */}
           <div style={{...card,marginBottom:'12px',borderLeft:`4px solid ${noGolfNext3?'#ef4444':golfColor}`}}>
             <div style={{fontSize:'9px',letterSpacing:'2px',color:golfColor,fontWeight:600,marginBottom:'10px'}}>COACH GOLF</div>
-            <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'12px',marginBottom:noGolfNext3?'10px':'0'}}>
+            <div className="train-coach-grid" style={{marginBottom:noGolfNext3?'10px':'0'}}>
               <div>
                 <div style={{fontSize:'10px',color:t.textMuted,marginBottom:'2px'}}>Próx. 2 semanas</div>
                 <div style={{fontSize:'22px',fontWeight:900,color:golfColor,lineHeight:1}}>{upcomingCountGolf}</div>
@@ -1036,7 +1042,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
           {/* Gym coach panel */}
           <div style={{...card,marginBottom:'20px',borderLeft:`4px solid ${noGymNext3?'#ef4444':gymColor}`}}>
             <div style={{fontSize:'9px',letterSpacing:'2px',color:gymColor,fontWeight:600,marginBottom:'10px'}}>COACH GYM</div>
-            <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'12px',marginBottom:noGymNext3?'10px':'0'}}>
+            <div className="train-coach-grid" style={{marginBottom:noGymNext3?'10px':'0'}}>
               <div>
                 <div style={{fontSize:'10px',color:t.textMuted,marginBottom:'2px'}}>Próx. 2 semanas</div>
                 <div style={{fontSize:'22px',fontWeight:900,color:gymColor,lineHeight:1}}>{upcomingCountGym}</div>
@@ -1317,7 +1323,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
             </div>
 
             {/* Summary cards */}
-            <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'10px',marginBottom:'14px'}}>
+            <div className="train-stats-grid">
               {[
                 {l:'SESSÕES',    v:allSessions.length,                                    c:t.text},
                 {l:'GOLF',      v:allSessions.filter(s=>s.plan_type==='golf').length,    c:golfColor},

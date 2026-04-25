@@ -515,6 +515,7 @@ export default function Dashboard({ user }) {
         .menu-item:hover { background: ${t.navActive}; color: ${t.text}; }
         .menu-item.danger { color: ${t.danger}; }
         @media(max-width:720px) { .g2 { grid-template-columns: 1fr; } .pad { padding: 12px 16px; } }
+        @media(max-width:480px) { .nav-tab { padding: 10px 10px; font-size: 10px; letter-spacing: 0.5px; } }
       `}</style>
 
       {/* Language modal */}
