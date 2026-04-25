@@ -147,8 +147,23 @@ const DAYS_EN       = ['Monday','Tuesday','Wednesday','Thursday','Friday','Satur
 const DAYS_SHORT_PT = ['SEG','TER','QUA','QUI','SEX','SÁB','DOM']
 const DAYS_SHORT_EN = ['MON','TUE','WED','THU','FRI','SAT','SUN']
 
-// item progress helper (backwards-compat)
 const itemProgress = (item) => item.progress ?? (item.done ? 100 : 0)
+
+// Estimated minutes per golf exercise item
+const estimateMins = (item) => {
+  const qty = parseInt(item.qty) || 0
+  if (item.cat === 'Putt') return qty * 0.5
+  if (item.cat === 'Jogo Curto') return qty * 0.85
+  if (item.cat === 'Bunker') return qty * 1.0
+  if (item.cat === 'Campo') return qty * 13
+  return qty * 1.0 // Driving Range
+}
+const fmtMins = (m) => {
+  const r = Math.round(m)
+  if (r === 0) return ''
+  if (r < 60) return `~${r} min`
+  return `~${Math.floor(r/60)}h${r%60>0?` ${r%60}min`:''}`
+}
 
 export default function Training({ theme, t, user, lang = 'en', events = [] }) {
   const [subTab, setSubTab] = useState('plan')
@@ -163,26 +178,27 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
   const [wizardType, setWizardType] = useState('golf')
   const [wizardStartDate, setWizardStartDate] = useState('')
   const [wizardEndDate, setWizardEndDate] = useState('')
-  const [wizardActiveDays, setWizardActiveDays] = useState([0,1,2,3,4]) // weekday indices Mon-Fri
-  const [wizardDayPlans, setWizardDayPlans] = useState({}) // { dateStr: Item[] }
-  const [wizardSelectedChips, setWizardSelectedChips] = useState([]) // selected dateStrings in step 2
+  const [wizardActiveDays, setWizardActiveDays] = useState([0,1,2,3,4])
+  const [wizardDayPlans, setWizardDayPlans] = useState({})
+  const [wizardSelectedChips, setWizardSelectedChips] = useState([])
   const [wizardOpenCat, setWizardOpenCat] = useState(null)
   const [wizardNote, setWizardNote] = useState('')
   const [wizardCustom, setWizardCustom] = useState({ name:'', cat:'', desc:'' })
   const [wizardUserLib, setWizardUserLib] = useState([])
+  const [wizardError, setWizardError] = useState('')
   const [saving, setSaving] = useState(false)
 
-  // Tooltip
   const [tooltipId, setTooltipId] = useState(null)
-
-  // Athlete log state
   const [showFreeSession, setShowFreeSession] = useState(false)
   const [freeSession, setFreeSession] = useState({ date:new Date().toISOString().split('T')[0], notes:'', score:'', holes:'' })
   const [savingFree, setSavingFree] = useState(false)
   const [athleteNote, setAthleteNote] = useState('')
 
-  const email = (user?.email||'').toLowerCase()
+  // Track Progress filters
+  const [progressType, setProgressType] = useState('all')
+  const [progressPeriod, setProgressPeriod] = useState('all')
 
+  const email = (user?.email||'').toLowerCase()
   const DAYS_LONG  = lang==='pt' ? DAYS_PT : DAYS_EN
   const DAYS_SHORT = lang==='pt' ? DAYS_SHORT_PT : DAYS_SHORT_EN
 
@@ -224,6 +240,9 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
     return (events||[]).some(e => dateStr >= e.start_date && dateStr <= (e.end_date || e.start_date))
   }
 
+  const dateHasComp = (dateStr) =>
+    (events||[]).some(e => dateStr >= e.start_date && dateStr <= (e.end_date || e.start_date))
+
   const savePlan = async (newDays, type, ws=weekStart) => {
     setSaving(true)
     const existing = plans.find(p=>p.week_start===ws && p.plan_type===type)
@@ -234,7 +253,6 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
     fetchPlans()
   }
 
-  // ── Dates in wizard range that match active weekdays ──
   const datesInRange = (() => {
     if (!wizardStartDate || !wizardEndDate) return []
     const start = new Date(wizardStartDate+'T12:00:00')
@@ -244,14 +262,11 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
     for (let d=new Date(start); d<=end; d.setDate(d.getDate()+1)) {
       const dow = d.getDay()
       const dayIdx = dow===0?6:dow-1
-      if (wizardActiveDays.includes(dayIdx)) {
-        dates.push(d.toISOString().split('T')[0])
-      }
+      if (wizardActiveDays.includes(dayIdx)) dates.push(d.toISOString().split('T')[0])
     }
     return dates
   })()
 
-  // ── Wizard helpers ──
   const toggleChip = (dateStr) => {
     setWizardSelectedChips(prev =>
       prev.includes(dateStr) ? prev.filter(d=>d!==dateStr) : [...prev, dateStr]
@@ -293,7 +308,6 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
     setWizardDayPlans(newPlans)
   }
 
-  // isDrillSelected: true if ALL selected chips have this drill
   const isDrillSelected = (exId) =>
     wizardSelectedChips.length > 0 &&
     wizardSelectedChips.every(ds => (wizardDayPlans[ds]||[]).some(i=>i.id===exId))
@@ -337,8 +351,23 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
   }
 
   const saveWizard = async () => {
+    // Validation: every day must have a session, rest, or competition
+    const missing = datesInRange.filter(ds => {
+      if (dateHasComp(ds)) return false
+      return (wizardDayPlans[ds] || []).length === 0
+    })
+    if (missing.length > 0) {
+      setWizardError(
+        `${missing.length} dia${missing.length>1?'s':''} sem sessão definida: ` +
+        missing.map(ds => {
+          const d = new Date(ds+'T12:00:00')
+          return `${DAYS_SHORT_PT[d.getDay()===0?6:d.getDay()-1]} ${d.getDate()}/${d.getMonth()+1}`
+        }).join(', ')
+      )
+      return
+    }
+    setWizardError('')
     setSaving(true)
-    // Group datesInRange by week
     const weekMap = {}
     datesInRange.forEach(dateStr => {
       const d = new Date(dateStr+'T12:00:00')
@@ -374,7 +403,6 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
     fetchPlans()
   }
 
-  // 3-state progress
   const setItemProgress = async (si, ii, type, progress) => {
     const plan = type==='golf' ? golfPlan : gymPlan
     const newDays = JSON.parse(JSON.stringify(plan?.days||[]))
@@ -406,6 +434,92 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
   const baseLib = wizardType==='golf' ? GOLF_LIBRARY : GYM_LIBRARY
   const allLib  = [...baseLib, ...wizardUserLib.filter(e=>cats.includes(e.cat))]
 
+  // ── Coach panel data split by type ──
+  const upcomingGolf = (() => {
+    const results = []
+    for (let offset=0; offset<=21 && results.length<4; offset++) {
+      const d = new Date(); d.setDate(d.getDate()+offset)
+      const dow = d.getDay(); const dayIdx = dow===0?6:dow-1
+      const monday = new Date(d); monday.setDate(d.getDate()-(dow===0?6:dow-1)); monday.setHours(12,0,0,0)
+      const ws = monday.toISOString().split('T')[0]
+      const wp = plans.find(p=>p.week_start===ws && p.plan_type==='golf')
+      const gS = (wp?.days||[])[dayIdx]?.sessions?.filter(s=>!s.isRest)||[]
+      if (gS.length) results.push({offset,dayIdx,date:new Date(d)})
+    }
+    return results
+  })()
+
+  const upcomingGym = (() => {
+    const results = []
+    for (let offset=0; offset<=21 && results.length<4; offset++) {
+      const d = new Date(); d.setDate(d.getDate()+offset)
+      const dow = d.getDay(); const dayIdx = dow===0?6:dow-1
+      const monday = new Date(d); monday.setDate(d.getDate()-(dow===0?6:dow-1)); monday.setHours(12,0,0,0)
+      const ws = monday.toISOString().split('T')[0]
+      const wg = plans.find(p=>p.week_start===ws && p.plan_type==='gym')
+      const gyS = (wg?.days||[])[dayIdx]?.sessions?.filter(s=>!s.isRest)||[]
+      if (gyS.length) results.push({offset,dayIdx,date:new Date(d)})
+    }
+    return results
+  })()
+
+  const upcomingCountGolf = (() => {
+    let count=0
+    for (let offset=0; offset<=13; offset++) {
+      const d = new Date(); d.setDate(d.getDate()+offset)
+      const dow = d.getDay(); const dayIdx = dow===0?6:dow-1
+      const monday = new Date(d); monday.setDate(d.getDate()-(dow===0?6:dow-1)); monday.setHours(12,0,0,0)
+      const ws = monday.toISOString().split('T')[0]
+      const wp = plans.find(p=>p.week_start===ws && p.plan_type==='golf')
+      if ((wp?.days||[])[dayIdx]?.sessions?.some(s=>!s.isRest)) count++
+    }
+    return count
+  })()
+
+  const upcomingCountGym = (() => {
+    let count=0
+    for (let offset=0; offset<=13; offset++) {
+      const d = new Date(); d.setDate(d.getDate()+offset)
+      const dow = d.getDay(); const dayIdx = dow===0?6:dow-1
+      const monday = new Date(d); monday.setDate(d.getDate()-(dow===0?6:dow-1)); monday.setHours(12,0,0,0)
+      const ws = monday.toISOString().split('T')[0]
+      const wg = plans.find(p=>p.week_start===ws && p.plan_type==='gym')
+      if ((wg?.days||[])[dayIdx]?.sessions?.some(s=>!s.isRest)) count++
+    }
+    return count
+  })()
+
+  const planUntilGolf = (() => {
+    let latest = null
+    plans.filter(p=>p.plan_type==='golf').forEach(p => {
+      ;(p.days||[]).forEach((day,di) => {
+        if ((day?.sessions||[]).some(s=>!s.isRest)) {
+          const d = new Date(p.week_start+'T12:00:00'); d.setDate(d.getDate()+di)
+          const ds = d.toISOString().split('T')[0]
+          if (!latest || ds > latest) latest = ds
+        }
+      })
+    })
+    return latest
+  })()
+
+  const planUntilGym = (() => {
+    let latest = null
+    plans.filter(p=>p.plan_type==='gym').forEach(p => {
+      ;(p.days||[]).forEach((day,di) => {
+        if ((day?.sessions||[]).some(s=>!s.isRest)) {
+          const d = new Date(p.week_start+'T12:00:00'); d.setDate(d.getDate()+di)
+          const ds = d.toISOString().split('T')[0]
+          if (!latest || ds > latest) latest = ds
+        }
+      })
+    })
+    return latest
+  })()
+
+  const noGolfNext3 = upcomingGolf.length===0 || upcomingGolf[0]?.offset > 3
+  const noGymNext3  = upcomingGym.length===0  || upcomingGym[0]?.offset  > 3
+
   const combinedDays = Array(7).fill(null).map((_,i) => {
     const g  = (golfPlan?.days||[])[i]||{sessions:[]}
     const gy = (gymPlan?.days||[])[i]||{sessions:[]}
@@ -419,55 +533,6 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
     return { totalItems, pct: totalItems>0 ? Math.round(totalProg/totalItems) : 0 }
   })()
 
-  // Coach panel data
-  const upcomingSessions = (() => {
-    const results = []
-    for (let offset=0; offset<=21 && results.length<4; offset++) {
-      const d = new Date(); d.setDate(d.getDate()+offset)
-      const dow = d.getDay(); const dayIdx = dow===0?6:dow-1
-      const monday = new Date(d); monday.setDate(d.getDate()-(dow===0?6:dow-1)); monday.setHours(12,0,0,0)
-      const ws = monday.toISOString().split('T')[0]
-      const wp = plans.find(p=>p.week_start===ws && p.plan_type==='golf')
-      const wg = plans.find(p=>p.week_start===ws && p.plan_type==='gym')
-      const gS  = (wp?.days||[])[dayIdx]?.sessions?.filter(s=>!s.isRest)||[]
-      const gyS = (wg?.days||[])[dayIdx]?.sessions?.filter(s=>!s.isRest)||[]
-      if (gS.length||gyS.length) results.push({offset,dayIdx,date:new Date(d),golfSessions:gS,gymSessions:gyS})
-    }
-    return results
-  })()
-
-  const planUntilDate = (() => {
-    let latest = null
-    plans.forEach(p => {
-      ;(p.days||[]).forEach((day,di) => {
-        if ((day?.sessions||[]).some(s=>!s.isRest)) {
-          const d = new Date(p.week_start+'T12:00:00'); d.setDate(d.getDate()+di)
-          const ds = d.toISOString().split('T')[0]
-          if (!latest || ds > latest) latest = ds
-        }
-      })
-    })
-    return latest
-  })()
-
-  const upcomingCount = (() => {
-    let count=0
-    for (let offset=0; offset<=13; offset++) {
-      const d = new Date(); d.setDate(d.getDate()+offset)
-      const dow = d.getDay(); const dayIdx = dow===0?6:dow-1
-      const monday = new Date(d); monday.setDate(d.getDate()-(dow===0?6:dow-1)); monday.setHours(12,0,0,0)
-      const ws = monday.toISOString().split('T')[0]
-      const wp = plans.find(p=>p.week_start===ws && p.plan_type==='golf')
-      const wg = plans.find(p=>p.week_start===ws && p.plan_type==='gym')
-      if ((wp?.days||[])[dayIdx]?.sessions?.some(s=>!s.isRest) ||
-          (wg?.days||[])[dayIdx]?.sessions?.some(s=>!s.isRest)) count++
-    }
-    return count
-  })()
-
-  const noTrainingNext3 = upcomingSessions.length===0 || upcomingSessions[0]?.offset > 3
-
-  // styles
   const inp   = {background:t.bg,border:`1px solid ${t.border}`,borderRadius:'6px',color:t.text,padding:'7px 10px',fontSize:'13px',fontFamily:F,outline:'none',width:'100%',boxSizing:'border-box'}
   const smInp = {...inp,padding:'5px 8px',fontSize:'12px',width:'auto'}
   const card  = {background:t.surface,border:`1px solid ${t.border}`,borderRadius:'12px',padding:'16px 20px'}
@@ -475,13 +540,13 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
 
   const subLabels = [
     { key:'plan', role:'COACH', label:'Set the Plan',
-      icon:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+      icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
       bg:'#E6F1FB', color:'#185FA5' },
     { key:'log', role:'ATHLETE', label:'Record What You Did',
-      icon:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>,
+      icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>,
       bg:'#EAF3DE', color:'#27500A' },
     { key:'progress', role:'', label:'Track Progress',
-      icon:<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>,
+      icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>,
       bg:t.navActive||'#f5f5f5', color:t.textMuted },
   ]
 
@@ -491,8 +556,8 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
     const isRestDay    = primaryItems[0]?.isRest === true
     const chipHasData  = (ds) => (wizardDayPlans[ds]||[]).length > 0
     const totalBalls   = primaryItems.filter(i=>!i.isRest).reduce((a,i)=>a+(parseInt(i.qty)||0),0)
+    const totalMins    = primaryItems.filter(i=>!i.isRest).reduce((a,i)=>a+estimateMins(i),0)
 
-    // Group datesInRange by week for the chip display
     const chipsByWeek = (() => {
       const weeks = {}
       datesInRange.forEach(ds => {
@@ -510,7 +575,6 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
 
     return (
       <div style={{fontFamily:F,color:t.text}}>
-        {/* Header */}
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'24px'}}>
           <div>
             <div style={{fontSize:'9px',letterSpacing:'2px',color:typeColor,fontWeight:600,marginBottom:'3px'}}>
@@ -518,13 +582,12 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
             </div>
             <div style={{fontSize:'20px',fontWeight:800,color:t.text}}>Criar Plano</div>
           </div>
-          <button onClick={()=>{setWizard(false);setWizardStep(1);setWizardDayPlans({});setWizardSelectedChips([])}}
+          <button onClick={()=>{setWizard(false);setWizardStep(1);setWizardDayPlans({});setWizardSelectedChips([]);setWizardError('')}}
             style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'8px',color:t.textMuted,padding:'8px 16px',cursor:'pointer',fontSize:'13px',fontFamily:F}}>
             Cancelar
           </button>
         </div>
 
-        {/* Step indicator */}
         <div style={{display:'flex',alignItems:'center',marginBottom:'24px'}}>
           {[1,2].map((s,i)=>(
             <div key={s} style={{display:'flex',alignItems:'center',flex:i===0?'0 0 auto':1}}>
@@ -548,7 +611,8 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
           <div style={card}>
             <div style={{fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginBottom:'18px'}}>PERÍODO DO PLANO</div>
 
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'14px',marginBottom:'20px'}}>
+            {/* Dates stacked vertically */}
+            <div style={{display:'flex',flexDirection:'column',gap:'12px',marginBottom:'20px'}}>
               <div>
                 <div style={{fontSize:'10px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginBottom:'6px'}}>DATA DE INÍCIO</div>
                 <input type='date' value={wizardStartDate} onChange={e=>setWizardStartDate(e.target.value)} style={inp}/>
@@ -559,7 +623,6 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
               </div>
             </div>
 
-            {/* Active weekdays */}
             <div style={{marginBottom:'20px'}}>
               <div style={{fontSize:'10px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginBottom:'10px'}}>DIAS DE TREINO</div>
               <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
@@ -597,7 +660,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
             </div>
 
             <button disabled={datesInRange.length===0}
-              onClick={()=>{ setWizardSelectedChips([]); setWizardStep(2) }}
+              onClick={()=>{ setWizardSelectedChips([...datesInRange]); setWizardStep(2) }}
               style={{background:datesInRange.length===0?t.border:typeColor,border:'none',borderRadius:'8px',
                 color:datesInRange.length===0?t.textMuted:'#fff',padding:'12px 24px',fontSize:'14px',
                 fontWeight:700,cursor:datesInRange.length===0?'not-allowed':'pointer',fontFamily:F,width:'100%'}}>
@@ -609,7 +672,6 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
         {/* ── STEP 2 ── */}
         {wizardStep===2 && (
           <div>
-            {/* Day chips grouped by week */}
             <div style={{...card,marginBottom:'16px',padding:'14px 16px'}}>
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'10px'}}>
                 <div style={{fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600}}>
@@ -629,26 +691,49 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
                       const dow = d.getDay(); const dayIdx = dow===0?6:dow-1
                       const selected = wizardSelectedChips.includes(ds)
                       const hasData  = chipHasData(ds)
+                      const isComp   = dateHasComp(ds)
                       return (
                         <button key={ds} onClick={()=>toggleChip(ds)}
                           style={{padding:'5px 10px',borderRadius:'8px',fontFamily:F,fontSize:'11px',fontWeight:selected?700:400,cursor:'pointer',
-                            border:`1px solid ${selected?typeColor:hasData?typeColor+'55':t.border}`,
-                            background:selected?typeColor:hasData?typeColor+'11':'transparent',
-                            color:selected?'#fff':hasData?typeColor:t.textMuted}}>
+                            border:`1px solid ${isComp?'#BA7517':selected?typeColor:hasData?typeColor+'55':t.border}`,
+                            background:isComp?'#FFF3CD':selected?typeColor:hasData?typeColor+'11':'transparent',
+                            color:isComp?'#854F0B':selected?'#fff':hasData?typeColor:t.textMuted,
+                            position:'relative'}}>
                           {DAYS_SHORT_PT[dayIdx]} {d.getDate()}
-                          {hasData&&!selected&&<span style={{marginLeft:'3px'}}>✓</span>}
+                          {isComp && <span style={{marginLeft:'3px',fontSize:'9px'}}>🏆</span>}
+                          {!isComp && hasData && <span style={{marginLeft:'3px'}}>✓</span>}
+                          {!isComp && !hasData && selected && <span style={{marginLeft:'3px',opacity:0.7}}>✓</span>}
                         </button>
                       )
                     })}
                   </div>
                 </div>
               ))}
-              {wizardSelectedChips.length>1 && (
-                <div style={{fontSize:'11px',color:typeColor,marginTop:'4px',fontWeight:600}}>
-                  {wizardSelectedChips.length} dias seleccionados — os exercícios aplicam-se a todos
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:'6px',flexWrap:'wrap',gap:'6px'}}>
+                {wizardSelectedChips.length>1 ? (
+                  <div style={{fontSize:'11px',color:typeColor,fontWeight:600}}>
+                    {wizardSelectedChips.length} dias seleccionados
+                  </div>
+                ) : <div/>}
+                <div style={{display:'flex',gap:'6px'}}>
+                  <button onClick={()=>setWizardSelectedChips([...datesInRange])}
+                    style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'6px',color:t.textMuted,padding:'3px 8px',cursor:'pointer',fontSize:'10px',fontFamily:F}}>
+                    Todos
+                  </button>
+                  <button onClick={()=>setWizardSelectedChips([])}
+                    style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'6px',color:t.textMuted,padding:'3px 8px',cursor:'pointer',fontSize:'10px',fontFamily:F}}>
+                    Nenhum
+                  </button>
                 </div>
-              )}
+              </div>
             </div>
+
+            {/* Competition day legend */}
+            {datesInRange.some(ds=>dateHasComp(ds)) && (
+              <div style={{fontSize:'11px',color:'#854F0B',marginBottom:'10px',display:'flex',alignItems:'center',gap:'5px'}}>
+                <span>🏆</span> Dias com competição marcada — não é necessário registar treino.
+              </div>
+            )}
 
             {wizardSelectedChips.length===0 ? (
               <div style={{...card,textAlign:'center',padding:'40px',color:t.textMuted,fontSize:'13px'}}>
@@ -658,7 +743,6 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
                 {/* Left: library */}
                 <div>
-                  {/* Descanso */}
                   <div style={{...card,marginBottom:'10px',padding:'11px 14px'}}>
                     {isRestDay ? (
                       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
@@ -676,7 +760,6 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
                     )}
                   </div>
 
-                  {/* Categories */}
                   {!isRestDay && cats.map(cat=>{
                     const catItems = allLib.filter(e=>e.cat===cat)
                     const open = wizardOpenCat===cat
@@ -723,7 +806,6 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
                     )
                   })}
 
-                  {/* Custom */}
                   {!isRestDay && (
                     <div style={{...card,marginTop:'8px'}}>
                       <div style={{fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginBottom:'10px'}}>EXERCÍCIO PERSONALIZADO</div>
@@ -753,7 +835,12 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
                             : `${wizardSelectedChips.length} dias`}
                         </div>
                         {wizardType==='golf' && primaryItems.filter(i=>!i.isRest).length>0 && (
-                          <div style={{fontSize:'11px',color:t.textMuted}}>{totalBalls} bolas</div>
+                          <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
+                            <div style={{fontSize:'11px',color:t.textMuted}}>{totalBalls} bolas</div>
+                            {totalMins>0 && (
+                              <div style={{fontSize:'11px',color:typeColor,fontWeight:600}}>{fmtMins(totalMins)}</div>
+                            )}
+                          </div>
                         )}
                       </div>
                       {primaryItems.filter(i=>!i.isRest).length>0 && (
@@ -784,6 +871,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
                           <div style={{display:'flex',alignItems:'center',gap:'6px'}}>
                             <input type='number' value={item.qty||''} onChange={e=>updateItem(item.id,'qty',e.target.value)} placeholder='50' style={{...smInp,width:'80px'}}/>
                             <span style={{fontSize:'11px',color:t.textMuted}}>bolas</span>
+                            {estimateMins(item)>0 && <span style={{fontSize:'10px',color:typeColor}}>{fmtMins(estimateMins(item))}</span>}
                           </div>
                         ) : (
                           <div style={{display:'flex',gap:'5px',flexWrap:'wrap'}}>
@@ -796,6 +884,13 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
                     ))}
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* Validation error */}
+            {wizardError && (
+              <div style={{background:'#fef2f2',border:'1px solid #fecaca',borderRadius:'8px',padding:'10px 14px',marginTop:'12px',fontSize:'12px',color:'#991b1b',fontWeight:600}}>
+                ⚠ {wizardError}
               </div>
             )}
 
@@ -846,24 +941,24 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
         </div>
       )}
 
-      {/* ── ORIGINAL 3 TABS ── */}
-      <div style={{display:'flex',gap:'6px',marginBottom:'24px',flexWrap:'wrap'}}>
+      {/* ── 3 TABS — bigger ── */}
+      <div style={{display:'flex',gap:'8px',marginBottom:'24px',flexWrap:'wrap'}}>
         {subLabels.map(({key,role,label,icon,bg,color})=>{
           const active = subTab===key
           return (
             <button key={key} onClick={()=>setSubTab(key)}
-              style={{display:'flex',alignItems:'center',gap:'10px',padding:'10px 16px',borderRadius:'10px',
+              style={{display:'flex',alignItems:'center',gap:'12px',padding:'14px 20px',borderRadius:'12px',
                 border:`1px solid ${active?color:t.border}`,background:active?bg:'transparent',
-                cursor:'pointer',fontFamily:F,flex:'1 1 auto',minWidth:'150px',textAlign:'left'}}>
-              <div style={{width:'30px',height:'30px',borderRadius:'50%',
+                cursor:'pointer',fontFamily:F,flex:'1 1 auto',minWidth:'160px',textAlign:'left'}}>
+              <div style={{width:'38px',height:'38px',borderRadius:'50%',
                 background:active?color+'22':t.bg||'#f5f5f5',
                 display:'flex',alignItems:'center',justifyContent:'center',
                 color:active?color:t.textMuted,flexShrink:0}}>
                 {icon}
               </div>
               <div>
-                {role && <div style={{fontSize:'9px',letterSpacing:'1px',color:active?color:t.textMuted,fontWeight:600,marginBottom:'1px'}}>{role}</div>}
-                <div style={{fontSize:'12px',fontWeight:active?700:400,color:active?(color==='#185FA5'?golfDark:color===gymDark?gymDark:t.text):t.textMuted}}>{label}</div>
+                {role && <div style={{fontSize:'9px',letterSpacing:'1px',color:active?color:t.textMuted,fontWeight:600,marginBottom:'2px'}}>{role}</div>}
+                <div style={{fontSize:'13px',fontWeight:active?700:400,color:active?(color==='#185FA5'?golfDark:color===gymDark?gymDark:t.text):t.textMuted}}>{label}</div>
               </div>
             </button>
           )
@@ -873,147 +968,112 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
       {/* ── SET THE PLAN ── */}
       {subTab==='plan' && (
         <div>
-          {/* Create plan buttons */}
+          {/* Create plan buttons — smaller coach cards */}
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px',marginBottom:'20px'}}>
-            <div style={{background:'#eaf4ff',border:`2px solid ${golfColor}`,borderRadius:'14px',padding:'20px',cursor:'pointer'}}
-              onClick={()=>{setWizardType('golf');setWizard(true);setWizardStep(1);setWizardStartDate('');setWizardEndDate('');setWizardActiveDays([0,1,2,3,4]);setWizardDayPlans({});setWizardSelectedChips([]);setWizardNote('');setWizardUserLib([])}}>
-              <div style={{fontSize:'9px',letterSpacing:'2px',color:golfColor,fontWeight:700,marginBottom:'4px'}}>COACH GOLF</div>
-              <div style={{fontSize:'16px',fontWeight:800,color:golfDark}}>Golf Plan</div>
-              <div style={{fontSize:'12px',color:'#185FA5',marginTop:'6px',lineHeight:1.4}}>Drills, séries de bolas e plano de golfe</div>
-              <div style={{marginTop:'12px',display:'inline-flex',alignItems:'center',gap:'5px',background:golfColor,color:'#fff',padding:'6px 14px',borderRadius:'7px',fontSize:'11px',fontWeight:700}}>
+            <div style={{background:'#eaf4ff',border:`2px solid ${golfColor}`,borderRadius:'12px',padding:'14px 16px',cursor:'pointer'}}
+              onClick={()=>{setWizardType('golf');setWizard(true);setWizardStep(1);setWizardStartDate('');setWizardEndDate('');setWizardActiveDays([0,1,2,3,4]);setWizardDayPlans({});setWizardSelectedChips([]);setWizardNote('');setWizardUserLib([]);setWizardError('')}}>
+              <div style={{fontSize:'9px',letterSpacing:'2px',color:golfColor,fontWeight:700,marginBottom:'2px'}}>COACH GOLF</div>
+              <div style={{fontSize:'14px',fontWeight:800,color:golfDark}}>Golf Plan</div>
+              <div style={{fontSize:'11px',color:'#185FA5',marginTop:'4px',lineHeight:1.4}}>Drills · bolas · campo</div>
+              <div style={{marginTop:'10px',display:'inline-flex',alignItems:'center',gap:'4px',background:golfColor,color:'#fff',padding:'5px 12px',borderRadius:'6px',fontSize:'11px',fontWeight:700}}>
                 + Criar
               </div>
             </div>
-            <div style={{background:'#eafff0',border:`2px solid ${gymColor}`,borderRadius:'14px',padding:'20px',cursor:'pointer'}}
-              onClick={()=>{setWizardType('gym');setWizard(true);setWizardStep(1);setWizardStartDate('');setWizardEndDate('');setWizardActiveDays([0,1,2,3,4]);setWizardDayPlans({});setWizardSelectedChips([]);setWizardNote('');setWizardUserLib([])}}>
-              <div style={{fontSize:'9px',letterSpacing:'2px',color:gymColor,fontWeight:700,marginBottom:'4px'}}>COACH GYM</div>
-              <div style={{fontSize:'16px',fontWeight:800,color:gymDark}}>Gym Plan</div>
-              <div style={{fontSize:'12px',color:'#27500A',marginTop:'6px',lineHeight:1.4}}>Exercícios, séries, reps e carga</div>
-              <div style={{marginTop:'12px',display:'inline-flex',alignItems:'center',gap:'5px',background:gymColor,color:'#fff',padding:'6px 14px',borderRadius:'7px',fontSize:'11px',fontWeight:700}}>
+            <div style={{background:'#eafff0',border:`2px solid ${gymColor}`,borderRadius:'12px',padding:'14px 16px',cursor:'pointer'}}
+              onClick={()=>{setWizardType('gym');setWizard(true);setWizardStep(1);setWizardStartDate('');setWizardEndDate('');setWizardActiveDays([0,1,2,3,4]);setWizardDayPlans({});setWizardSelectedChips([]);setWizardNote('');setWizardUserLib([]);setWizardError('')}}>
+              <div style={{fontSize:'9px',letterSpacing:'2px',color:gymColor,fontWeight:700,marginBottom:'2px'}}>COACH GYM</div>
+              <div style={{fontSize:'14px',fontWeight:800,color:gymDark}}>Gym Plan</div>
+              <div style={{fontSize:'11px',color:'#27500A',marginTop:'4px',lineHeight:1.4}}>Séries · reps · carga</div>
+              <div style={{marginTop:'10px',display:'inline-flex',alignItems:'center',gap:'4px',background:gymColor,color:'#fff',padding:'5px 12px',borderRadius:'6px',fontSize:'11px',fontWeight:700}}>
                 + Criar
               </div>
             </div>
           </div>
 
-          {/* ── COACH SUPPORT PANEL ── */}
-          <div style={{...card,marginBottom:'16px',borderLeft:`4px solid ${noTrainingNext3?'#ef4444':golfColor}`}}>
-            <div style={{fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginBottom:'12px'}}>PAINEL DO COACH</div>
-            <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'12px',marginBottom:noTrainingNext3?'12px':'0'}}>
+          {/* ── COACH PANELS split by type ── */}
+          {/* Golf coach panel */}
+          <div style={{...card,marginBottom:'12px',borderLeft:`4px solid ${noGolfNext3?'#ef4444':golfColor}`}}>
+            <div style={{fontSize:'9px',letterSpacing:'2px',color:golfColor,fontWeight:600,marginBottom:'10px'}}>COACH GOLF</div>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'12px',marginBottom:noGolfNext3?'10px':'0'}}>
               <div>
-                <div style={{fontSize:'10px',color:t.textMuted,marginBottom:'3px'}}>Treinos (próx. 2 sem.)</div>
-                <div style={{fontSize:'24px',fontWeight:900,color:golfColor,lineHeight:1}}>{upcomingCount}</div>
-                <div style={{fontSize:'10px',color:t.textMuted,marginTop:'1px'}}>dias planeados</div>
+                <div style={{fontSize:'10px',color:t.textMuted,marginBottom:'2px'}}>Próx. 2 semanas</div>
+                <div style={{fontSize:'22px',fontWeight:900,color:golfColor,lineHeight:1}}>{upcomingCountGolf}</div>
+                <div style={{fontSize:'10px',color:t.textMuted}}>dias planeados</div>
               </div>
               <div>
-                <div style={{fontSize:'10px',color:t.textMuted,marginBottom:'3px'}}>Plano até</div>
-                {planUntilDate ? (
-                  <>
-                    <div style={{fontSize:'16px',fontWeight:800,color:t.text,lineHeight:1}}>
-                      {new Date(planUntilDate+'T12:00:00').toLocaleDateString('pt-PT',{day:'2-digit',month:'short'})}
-                    </div>
-                    <div style={{fontSize:'10px',color:t.textMuted,marginTop:'1px'}}>
-                      {new Date(planUntilDate+'T12:00:00').getFullYear()}
-                    </div>
-                  </>
+                <div style={{fontSize:'10px',color:t.textMuted,marginBottom:'2px'}}>Plano até</div>
+                {planUntilGolf ? (
+                  <div style={{fontSize:'15px',fontWeight:800,color:t.text,lineHeight:1.2}}>
+                    {new Date(planUntilGolf+'T12:00:00').toLocaleDateString('pt-PT',{day:'2-digit',month:'short',year:'numeric'})}
+                  </div>
                 ) : (
                   <div style={{fontSize:'13px',color:t.textMuted}}>Sem plano</div>
                 )}
               </div>
               <div>
-                <div style={{fontSize:'10px',color:t.textMuted,marginBottom:'3px'}}>Próximo treino</div>
-                {upcomingSessions[0] ? (
-                  <>
-                    <div style={{fontSize:'16px',fontWeight:800,color:upcomingSessions[0].offset===0?gymColor:t.text,lineHeight:1}}>
-                      {upcomingSessions[0].offset===0?'Hoje':upcomingSessions[0].offset===1?'Amanhã':`+${upcomingSessions[0].offset}d`}
-                    </div>
-                    <div style={{fontSize:'10px',color:t.textMuted,marginTop:'1px'}}>
-                      {DAYS_PT[upcomingSessions[0].dayIdx]}
-                    </div>
-                  </>
+                <div style={{fontSize:'10px',color:t.textMuted,marginBottom:'2px'}}>Próximo treino</div>
+                {upcomingGolf[0] ? (
+                  <div style={{fontSize:'15px',fontWeight:800,color:upcomingGolf[0].offset===0?gymColor:t.text,lineHeight:1.2}}>
+                    {upcomingGolf[0].offset===0?'Hoje':upcomingGolf[0].offset===1?'Amanhã':`+${upcomingGolf[0].offset}d`}
+                  </div>
                 ) : (
                   <div style={{fontSize:'13px',color:'#ef4444',fontWeight:700}}>Nenhum</div>
                 )}
               </div>
             </div>
-            {noTrainingNext3 && (
-              <div style={{background:'#fef2f2',border:'1px solid #fecaca',borderRadius:'8px',padding:'10px 14px',display:'flex',alignItems:'center',gap:'10px'}}>
-                <div style={{fontSize:'16px',flexShrink:0}}>🔴</div>
-                <div style={{fontSize:'12px',color:'#991b1b',fontWeight:600}}>
-                  {upcomingSessions.length===0
-                    ? 'Sem treinos planeados — cria um plano de golf ou ginásio.'
-                    : `Sem treino nos próximos 3 dias. Próxima sessão em ${upcomingSessions[0].offset} dias.`}
+            {noGolfNext3 && (
+              <div style={{background:'#fef2f2',border:'1px solid #fecaca',borderRadius:'8px',padding:'8px 12px',display:'flex',alignItems:'center',gap:'8px'}}>
+                <div style={{fontSize:'14px',flexShrink:0}}>🔴</div>
+                <div style={{fontSize:'11px',color:'#991b1b',fontWeight:600}}>
+                  {upcomingGolf.length===0
+                    ? 'Sem treinos de golf planeados — cria um plano.'
+                    : `Sem golf nos próximos 3 dias. Próximo em ${upcomingGolf[0].offset} dias.`}
                 </div>
               </div>
             )}
           </div>
 
-          {/* Week nav */}
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px',flexWrap:'wrap',gap:'8px'}}>
-            <div style={{fontSize:'13px',fontWeight:700,color:t.text}}>Esta Semana</div>
-            <div style={{display:'flex',gap:'5px',alignItems:'center'}}>
-              <button onClick={()=>setWeekOffset(w=>w-1)} style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'6px',color:t.textMuted,padding:'5px 9px',cursor:'pointer',fontFamily:F}}>‹</button>
-              <div style={{fontSize:'12px',fontWeight:600,color:t.text,minWidth:'130px',textAlign:'center'}}>{formatWeek(weekStart)}</div>
-              <button onClick={()=>setWeekOffset(w=>w+1)} style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'6px',color:t.textMuted,padding:'5px 9px',cursor:'pointer',fontFamily:F}}>›</button>
-              <button onClick={()=>setWeekOffset(0)} style={{background:isCurrentWeek?'#eaf4ff':'transparent',border:`1px solid ${isCurrentWeek?golfColor:t.border}`,borderRadius:'6px',color:isCurrentWeek?golfColor:t.textMuted,padding:'5px 9px',cursor:'pointer',fontFamily:F,fontSize:'10px'}}>
-                HOJE
-              </button>
-            </div>
-          </div>
-
-          {/* Day grid */}
-          <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:'5px',marginBottom:'16px'}}>
-            {DAYS_SHORT.map((d,i)=>{
-              const gSess   = (golfPlan?.days||[])[i]?.sessions||[]
-              const gymSess = (gymPlan?.days||[])[i]?.sessions||[]
-              const hasComp = dayHasComp(i)
-              const isSelected = selectedDay===i
-              const isToday = i===todayIdx && isCurrentWeek
-              return (
-                <div key={i} onClick={()=>setSelectedDay(i)}
-                  style={{background:isSelected?'#eaf4ff':t.surface,border:`1px solid ${isSelected?golfColor:hasComp?'#BA7517':t.border}`,borderRadius:'8px',padding:'9px 4px',textAlign:'center',cursor:'pointer'}}>
-                  <div style={{fontSize:'9px',letterSpacing:'1px',color:isSelected?golfColor:isToday?t.text:t.textMuted,marginBottom:'5px',fontWeight:600}}>{d}</div>
-                  {hasComp && <div style={{fontSize:'8px',color:'#854F0B',fontWeight:700}}>comp</div>}
-                  {!hasComp && !gSess.length && !gymSess.length && <div style={{fontSize:'9px',color:t.border}}>—</div>}
-                  {gSess.some(s=>s.isRest) && <div style={{fontSize:'8px',color:'#f59e0b',fontWeight:700}}>rest</div>}
-                  {!gSess.some(s=>s.isRest) && gSess.length>0 && <div style={{fontSize:'8px',color:golfColor,fontWeight:700}}>G×{gSess.length}</div>}
-                  {gymSess.some(s=>s.isRest) && <div style={{fontSize:'8px',color:'#f59e0b',fontWeight:700}}>rest</div>}
-                  {!gymSess.some(s=>s.isRest) && gymSess.length>0 && <div style={{fontSize:'8px',color:gymColor,fontWeight:700}}>GY×{gymSess.length}</div>}
-                </div>
-              )
-            })}
-          </div>
-
-          {/* Selected day detail */}
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px'}}>
-            <div style={{fontSize:'15px',fontWeight:800,color:t.text}}>{DAYS_LONG[selectedDay]}</div>
-            {selectedDay===todayIdx && isCurrentWeek && <div style={{fontSize:'9px',color:golfColor,letterSpacing:'2px',fontWeight:600}}>HOJE</div>}
-          </div>
-
-          {[['golf',golfColor],['gym',gymColor]].map(([type,color])=>(
-            ((type==='golf'?golfPlan:gymPlan)?.days?.[selectedDay]?.sessions||[]).map((session,si)=>(
-              <div key={`${type}${si}`} style={{...card,borderLeft:`3px solid ${session.isRest?'#f59e0b':color}`,marginBottom:'10px'}}>
-                <div style={{fontSize:'8px',letterSpacing:'3px',color:session.isRest?'#f59e0b':color,marginBottom:'8px',fontWeight:600}}>
-                  {type.toUpperCase()}{session.isRest?' · DESCANSO':' · '+(session.cat||'').toUpperCase()}
-                </div>
-                {session.isRest && <div style={{fontSize:'13px',color:'#f59e0b'}}>Dia de Descanso</div>}
-                {session.notes && !session.isRest && <div style={{fontSize:'12px',color:t.textMuted,marginBottom:'8px'}}>{session.notes}</div>}
-                {(session.items||[]).map((item,ii)=>(
-                  <div key={ii} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'7px 0',borderBottom:ii<session.items.length-1?`1px solid ${t.border}`:'none'}}>
-                    <div style={{fontSize:'13px',fontWeight:600,color:t.text}}>{item.name}</div>
-                    <div style={{fontSize:'12px',color:t.textMuted}}>
-                      {type==='golf'?`${item.qty||'—'} bolas`:`${item.sets||'—'}×${item.reps||'—'}${item.load?' @ '+item.load+'kg':''}`}
-                    </div>
-                  </div>
-                ))}
+          {/* Gym coach panel */}
+          <div style={{...card,marginBottom:'20px',borderLeft:`4px solid ${noGymNext3?'#ef4444':gymColor}`}}>
+            <div style={{fontSize:'9px',letterSpacing:'2px',color:gymColor,fontWeight:600,marginBottom:'10px'}}>COACH GYM</div>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'12px',marginBottom:noGymNext3?'10px':'0'}}>
+              <div>
+                <div style={{fontSize:'10px',color:t.textMuted,marginBottom:'2px'}}>Próx. 2 semanas</div>
+                <div style={{fontSize:'22px',fontWeight:900,color:gymColor,lineHeight:1}}>{upcomingCountGym}</div>
+                <div style={{fontSize:'10px',color:t.textMuted}}>dias planeados</div>
               </div>
-            ))
-          ))}
-
-          {!((golfPlan?.days||[])[selectedDay]?.sessions||[]).length &&
-           !((gymPlan?.days||[])[selectedDay]?.sessions||[]).length &&
-           !dayHasComp(selectedDay) && (
-            <div style={{...card,textAlign:'center',padding:'32px',color:t.textMuted,fontSize:'13px'}}>Sem sessões planeadas.</div>
-          )}
+              <div>
+                <div style={{fontSize:'10px',color:t.textMuted,marginBottom:'2px'}}>Plano até</div>
+                {planUntilGym ? (
+                  <div style={{fontSize:'15px',fontWeight:800,color:t.text,lineHeight:1.2}}>
+                    {new Date(planUntilGym+'T12:00:00').toLocaleDateString('pt-PT',{day:'2-digit',month:'short',year:'numeric'})}
+                  </div>
+                ) : (
+                  <div style={{fontSize:'13px',color:t.textMuted}}>Sem plano</div>
+                )}
+              </div>
+              <div>
+                <div style={{fontSize:'10px',color:t.textMuted,marginBottom:'2px'}}>Próximo treino</div>
+                {upcomingGym[0] ? (
+                  <div style={{fontSize:'15px',fontWeight:800,color:upcomingGym[0].offset===0?gymColor:t.text,lineHeight:1.2}}>
+                    {upcomingGym[0].offset===0?'Hoje':upcomingGym[0].offset===1?'Amanhã':`+${upcomingGym[0].offset}d`}
+                  </div>
+                ) : (
+                  <div style={{fontSize:'13px',color:'#ef4444',fontWeight:700}}>Nenhum</div>
+                )}
+              </div>
+            </div>
+            {noGymNext3 && (
+              <div style={{background:'#fef2f2',border:'1px solid #fecaca',borderRadius:'8px',padding:'8px 12px',display:'flex',alignItems:'center',gap:'8px'}}>
+                <div style={{fontSize:'14px',flexShrink:0}}>🔴</div>
+                <div style={{fontSize:'11px',color:'#991b1b',fontWeight:600}}>
+                  {upcomingGym.length===0
+                    ? 'Sem treinos de ginásio planeados — cria um plano.'
+                    : `Sem ginásio nos próximos 3 dias. Próximo em ${upcomingGym[0].offset} dias.`}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -1045,7 +1105,6 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
             </div>
           </div>
 
-          {/* Day grid */}
           <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:'5px',marginBottom:'16px'}}>
             {DAYS_SHORT.map((d,i)=>{
               const dayD = combinedDays[i]||{sessions:[]}
@@ -1105,35 +1164,35 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
                       {sessItems.map((item,ii)=>{
                         const prog = itemProgress(item)
                         return (
-                          <div key={ii} style={{background:t.bg,border:`1px solid ${prog===100?gymColor+'44':prog===50?'#f59e0b44':t.border}`,borderRadius:'8px',padding:'10px 12px'}}>
-                            <div style={{display:'flex',alignItems:'flex-start',gap:'10px',marginBottom:'8px'}}>
+                          <div key={ii} style={{background:t.bg,border:`1px solid ${prog===100?gymColor+'44':prog===50?'#f59e0b44':t.border}`,borderRadius:'8px',padding:'8px 10px'}}>
+                            <div style={{display:'flex',alignItems:'flex-start',gap:'10px',marginBottom:'6px'}}>
                               <div style={{flex:1}}>
-                                <div style={{fontSize:'13px',fontWeight:600,color:t.text}}>{item.name}</div>
-                                <div style={{fontSize:'10px',color:t.textMuted,marginTop:'2px'}}>
+                                <div style={{fontSize:'12px',fontWeight:600,color:t.text}}>{item.name}</div>
+                                <div style={{fontSize:'10px',color:t.textMuted,marginTop:'1px'}}>
                                   {type==='golf'?`${item.qty||'—'} bolas`:`${item.sets||'—'}×${item.reps||'—'}${item.load?' @ '+item.load+'kg':''}`}
                                 </div>
                               </div>
                             </div>
-                            {/* 3-state progress */}
-                            <div style={{display:'flex',gap:'4px'}}>
+                            {/* 3-state progress — compact */}
+                            <div style={{display:'flex',gap:'3px'}}>
                               {[
-                                {v:0,  label:'Não fiz',   color:'#6b7280'},
-                                {v:50, label:'50%',       color:'#f59e0b'},
-                                {v:100,label:'Fiz',       color:gymColor},
+                                {v:0,  label:'Não fiz', color:'#6b7280'},
+                                {v:50, label:'50%',     color:'#f59e0b'},
+                                {v:100,label:'Fiz',     color:gymColor},
                               ].map(({v,label,color:btnColor})=>{
                                 const active = prog===v
                                 return (
                                   <button key={v} onClick={()=>setItemProgress(realSi,ii,type,v)}
-                                    style={{flex:1,padding:'5px 4px',borderRadius:'6px',border:`1px solid ${active?btnColor:t.border}`,
+                                    style={{flex:1,padding:'3px 2px',borderRadius:'5px',border:`1px solid ${active?btnColor:t.border}`,
                                       background:active?btnColor+'22':'transparent',color:active?btnColor:t.textMuted,
-                                      fontSize:'10px',fontWeight:active?700:400,cursor:'pointer',fontFamily:F,transition:'all 0.15s'}}>
+                                      fontSize:'9px',fontWeight:active?700:400,cursor:'pointer',fontFamily:F}}>
                                     {label}
                                   </button>
                                 )
                               })}
                             </div>
                             {!item.done && type==='gym' && prog<100 && (
-                              <div style={{display:'flex',gap:'6px',marginTop:'8px'}}>
+                              <div style={{display:'flex',gap:'6px',marginTop:'6px'}}>
                                 <input placeholder={`Sets (${item.sets||3})`} value={item.sets_actual||''} onChange={async e=>{const d=JSON.parse(JSON.stringify(gymPlan?.days||[]));const it=d[selectedDay]?.sessions?.[realSi]?.items?.[ii];if(it){it.sets_actual=e.target.value;await savePlan(d,'gym')}}} style={{...smInp,width:'100px'}}/>
                                 <input placeholder={`Reps (${item.reps||10})`} value={item.reps_actual||''} onChange={async e=>{const d=JSON.parse(JSON.stringify(gymPlan?.days||[]));const it=d[selectedDay]?.sessions?.[realSi]?.items?.[ii];if(it){it.reps_actual=e.target.value;await savePlan(d,'gym')}}} style={{...smInp,width:'100px'}}/>
                                 <input placeholder={`kg (${item.load||'—'})`} value={item.load_actual||''} onChange={async e=>{const d=JSON.parse(JSON.stringify(gymPlan?.days||[]));const it=d[selectedDay]?.sessions?.[realSi]?.items?.[ii];if(it){it.load_actual=e.target.value;await savePlan(d,'gym')}}} style={{...smInp,width:'90px'}}/>
@@ -1164,16 +1223,36 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
 
       {/* ── TRACK PROGRESS ── */}
       {subTab==='progress' && (() => {
-        const allSessions = plans.flatMap(p=>(p.days||[]).flatMap((d,di)=>(d?.sessions||[]).filter(s=>!s.isRest).map(s=>({...s,plan_type:p.plan_type,week_start:p.week_start,dayIdx:di}))))
+        // Period filter → earliest date to include
+        const periodStart = (() => {
+          const now = new Date()
+          if (progressPeriod==='week')    { const d=new Date(now); d.setDate(d.getDate()-7);      return d.toISOString().split('T')[0] }
+          if (progressPeriod==='month')   { const d=new Date(now); d.setMonth(d.getMonth()-1);    return d.toISOString().split('T')[0] }
+          if (progressPeriod==='3months') { const d=new Date(now); d.setMonth(d.getMonth()-3);    return d.toISOString().split('T')[0] }
+          if (progressPeriod==='year')    { const d=new Date(now); d.setFullYear(d.getFullYear()-1); return d.toISOString().split('T')[0] }
+          return null
+        })()
+
+        const filteredPlans = plans.filter(p => {
+          if (progressType!=='all' && p.plan_type!==progressType) return false
+          if (periodStart && p.week_start < periodStart) return false
+          return true
+        })
+
+        const allSessions = filteredPlans.flatMap(p=>(p.days||[]).flatMap((d,di)=>(d?.sessions||[]).filter(s=>!s.isRest).map(s=>({...s,plan_type:p.plan_type,week_start:p.week_start,dayIdx:di}))))
         const catCounts = {}
         allSessions.forEach(s=>{ if(s.cat) catCounts[s.cat]=(catCounts[s.cat]||0)+1 })
         const gTotal   = GOLF_CATS.reduce((a,c)=>a+(catCounts[c]||0),0)
         const gymTotal = GYM_CATS.reduce((a,c)=>a+(catCounts[c]||0),0)
 
-        // Weekly completion rate (last 12 weeks)
-        const weekStats = Array(12).fill(0).map((_,i)=>{
-          const ws = getWeekStart(-(11-i))
-          const weekPlans = plans.filter(p=>p.week_start===ws)
+        const allItems = allSessions.flatMap(s=>s.items||[])
+        const overallComp = allItems.length>0 ? Math.round(allItems.reduce((a,i)=>a+itemProgress(i),0)/allItems.length) : 0
+
+        // Weekly bar chart (last 12 weeks, filtered)
+        const nWeeks = progressPeriod==='week' ? 4 : progressPeriod==='month' ? 4 : 12
+        const weekStats = Array(nWeeks).fill(0).map((_,i)=>{
+          const ws = getWeekStart(-(nWeeks-1-i))
+          const weekPlans = filteredPlans.filter(p=>p.week_start===ws)
           let totalItems=0, totalProg=0
           weekPlans.forEach(p=>{
             (p.days||[]).forEach(d=>{
@@ -1185,9 +1264,10 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
           const sessions = weekPlans.reduce((a,p)=>(p.days||[]).reduce((b,d)=>b+(d?.sessions?.filter(s=>!s.isRest).length||0),a),0)
           return { ws, sessions, completion: totalItems>0 ? Math.round(totalProg/totalItems) : null }
         })
+        const maxWeekSess = Math.max(...weekStats.map(w=>w.sessions), 1)
 
-        // Session history
-        const sessionHistory = plans.flatMap(p=>
+        // Session history (filtered, up to 30)
+        const sessionHistory = filteredPlans.flatMap(p=>
           (p.days||[]).flatMap((d,di)=>
             (d?.sessions||[]).filter(s=>!s.isRest).map(s=>{
               const date = new Date(p.week_start+'T12:00:00'); date.setDate(date.getDate()+di)
@@ -1197,90 +1277,152 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
               return { date, dateStr:date.toISOString().split('T')[0], plan_type:p.plan_type, cat:s.cat, itemsCount:items.length, completion:comp }
             })
           )
-        ).sort((a,b)=>b.dateStr.localeCompare(a.dateStr)).slice(0,12)
+        ).sort((a,b)=>b.dateStr.localeCompare(a.dateStr)).slice(0,30)
 
-        // Overall completion
-        const allItems = allSessions.flatMap(s=>s.items||[])
-        const overallComp = allItems.length>0 ? Math.round(allItems.reduce((a,i)=>a+itemProgress(i),0)/allItems.length) : 0
-        const maxWeekSess = Math.max(...weekStats.map(w=>w.sessions), 1)
+        // Completion trend: % of sessions with ≥80% completion
+        const sessionsWithComp = allSessions.filter(s=>(s.items||[]).length>0)
+        const highCompSessions = sessionsWithComp.filter(s=>{
+          const items = s.items||[]
+          const avg = items.reduce((a,i)=>a+itemProgress(i),0)/items.length
+          return avg>=80
+        })
+        const highCompPct = sessionsWithComp.length>0 ? Math.round(highCompPct/sessionsWithComp.length*100) : 0
+
+        const filterBtn = (val, current, setter, label) => (
+          <button key={val} onClick={()=>setter(val)}
+            style={{padding:'4px 10px',borderRadius:'16px',border:`1px solid ${current===val?golfColor:t.border}`,
+              background:current===val?golfColor+'15':'transparent',color:current===val?golfColor:t.textMuted,
+              cursor:'pointer',fontSize:'11px',fontWeight:current===val?700:400,fontFamily:F}}>
+            {label}
+          </button>
+        )
 
         return (
           <div>
+            {/* Filters */}
+            <div style={{display:'flex',gap:'8px',marginBottom:'16px',flexWrap:'wrap',alignItems:'center'}}>
+              <div style={{display:'flex',gap:'4px'}}>
+                {filterBtn('all',progressType,setProgressType,'Todos')}
+                {filterBtn('golf',progressType,setProgressType,'Golf')}
+                {filterBtn('gym',progressType,setProgressType,'Ginásio')}
+              </div>
+              <div style={{width:'1px',height:'20px',background:t.border}}/>
+              <div style={{display:'flex',gap:'4px',flexWrap:'wrap'}}>
+                {filterBtn('week',progressPeriod,setProgressPeriod,'Semana')}
+                {filterBtn('month',progressPeriod,setProgressPeriod,'Mês')}
+                {filterBtn('3months',progressPeriod,setProgressPeriod,'3 Meses')}
+                {filterBtn('year',progressPeriod,setProgressPeriod,'Ano')}
+                {filterBtn('all',progressPeriod,setProgressPeriod,'Tudo')}
+              </div>
+            </div>
+
             {/* Summary cards */}
             <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'10px',marginBottom:'14px'}}>
               {[
-                {l:'TOTAL',      v:allSessions.length,                                     c:t.text},
-                {l:'GOLF',       v:allSessions.filter(s=>s.plan_type==='golf').length,     c:golfColor},
-                {l:'GYM',        v:allSessions.filter(s=>s.plan_type==='gym').length,      c:gymColor},
-                {l:'CONCLUSÃO',  v:`${overallComp}%`,                                      c:overallComp>=80?gymColor:overallComp>=50?'#f59e0b':'#ef4444'},
+                {l:'SESSÕES',    v:allSessions.length,                                    c:t.text},
+                {l:'GOLF',      v:allSessions.filter(s=>s.plan_type==='golf').length,    c:golfColor},
+                {l:'GYM',       v:allSessions.filter(s=>s.plan_type==='gym').length,     c:gymColor},
+                {l:'CONCLUSÃO', v:`${overallComp}%`,                                     c:overallComp>=80?gymColor:overallComp>=50?'#f59e0b':'#ef4444'},
               ].map(item=>(
                 <div key={item.l} style={card}>
                   <div style={{fontSize:'8px',letterSpacing:'2px',color:t.textMuted,marginBottom:'8px',fontWeight:600}}>{item.l}</div>
-                  <div style={{fontSize:'26px',fontWeight:900,color:item.c,lineHeight:1,letterSpacing:'-1px'}}>{item.v}</div>
+                  <div style={{fontSize:'24px',fontWeight:900,color:item.c,lineHeight:1,letterSpacing:'-1px'}}>{item.v}</div>
                 </div>
               ))}
             </div>
 
-            {/* Volume + Completion chart */}
+            {/* Weekly chart */}
             <div style={{...card,marginBottom:'14px'}}>
-              <div style={{fontSize:'8px',letterSpacing:'3px',color:t.textMuted,marginBottom:'12px',fontWeight:600}}>ÚLTIMAS 12 SEMANAS — SESSÕES & CONCLUSÃO</div>
-              <div style={{display:'flex',alignItems:'flex-end',gap:'4px',height:'80px',marginBottom:'6px'}}>
-                {weekStats.map((w,i)=>{
-                  const barH = Math.max(w.sessions/maxWeekSess*72,w.sessions>0?6:2)
-                  const compColor = w.completion===null?t.border:w.completion>=80?gymColor:w.completion>=50?'#f59e0b':'#ef4444'
-                  return (
-                    <div key={i} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:'3px'}}>
-                      {w.sessions>0&&<div style={{fontSize:'8px',color:t.textMuted,lineHeight:1}}>{w.sessions}</div>}
-                      <div style={{width:'100%',height:`${barH}px`,background:compColor,borderRadius:'3px 3px 0 0',position:'relative'}}>
-                        {w.completion!==null&&w.sessions>0&&(
-                          <div style={{position:'absolute',bottom:'100%',left:'50%',transform:'translateX(-50%)',fontSize:'7px',color:compColor,fontWeight:700,whiteSpace:'nowrap',marginBottom:'1px'}}>
-                            {w.completion}%
+              <div style={{fontSize:'8px',letterSpacing:'3px',color:t.textMuted,marginBottom:'12px',fontWeight:600}}>
+                {nWeeks===4?'ÚLTIMAS 4 SEMANAS':'ÚLTIMAS 12 SEMANAS'} — SESSÕES & CONCLUSÃO
+              </div>
+              {weekStats.every(w=>w.sessions===0) ? (
+                <div style={{textAlign:'center',padding:'20px',color:t.textMuted,fontSize:'12px'}}>Sem dados para o período seleccionado.</div>
+              ) : (
+                <>
+                  <div style={{display:'flex',alignItems:'flex-end',gap:'4px',height:'80px',marginBottom:'6px'}}>
+                    {weekStats.map((w,i)=>{
+                      const barH = Math.max(w.sessions/maxWeekSess*72,w.sessions>0?6:2)
+                      const compColor = w.completion===null?t.border:w.completion>=80?gymColor:w.completion>=50?'#f59e0b':'#ef4444'
+                      return (
+                        <div key={i} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:'3px'}}>
+                          {w.sessions>0&&<div style={{fontSize:'8px',color:t.textMuted,lineHeight:1}}>{w.sessions}</div>}
+                          <div style={{width:'100%',height:`${barH}px`,background:compColor,borderRadius:'3px 3px 0 0',position:'relative'}}>
+                            {w.completion!==null&&w.sessions>0&&(
+                              <div style={{position:'absolute',bottom:'100%',left:'50%',transform:'translateX(-50%)',fontSize:'7px',color:compColor,fontWeight:700,whiteSpace:'nowrap',marginBottom:'1px'}}>
+                                {w.completion}%
+                              </div>
+                            )}
                           </div>
-                        )}
+                          <div style={{fontSize:'7px',color:t.textMuted,whiteSpace:'nowrap'}}>
+                            {new Date(w.ws+'T12:00:00').toLocaleDateString('pt-PT',{day:'2-digit',month:'numeric'})}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <div style={{display:'flex',gap:'12px',justifyContent:'center'}}>
+                    {[{c:gymColor,l:'≥80%'},{c:'#f59e0b',l:'50-79%'},{c:'#ef4444',l:'<50%'},{c:t.border,l:'Sem dados'}].map(({c,l})=>(
+                      <div key={l} style={{display:'flex',alignItems:'center',gap:'4px'}}>
+                        <div style={{width:'8px',height:'8px',borderRadius:'2px',background:c}}/>
+                        <span style={{fontSize:'9px',color:t.textMuted}}>{l}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Category breakdown */}
+            {(progressType==='all' || progressType==='golf') && gTotal>0 && (
+              <div style={{...card,marginBottom:'14px'}}>
+                <div style={{fontSize:'8px',letterSpacing:'3px',color:golfColor,marginBottom:'12px',fontWeight:600}}>GOLFE — DISTRIBUIÇÃO POR CATEGORIA</div>
+                {GOLF_CATS.map(cat=>{
+                  const count=catCounts[cat]||0
+                  const pct=gTotal>0?Math.round((count/gTotal)*100):0
+                  return (
+                    <div key={cat} style={{marginBottom:'8px'}}>
+                      <div style={{display:'flex',justifyContent:'space-between',marginBottom:'3px'}}>
+                        <div style={{fontSize:'11px',color:t.textMuted}}>{cat}</div>
+                        <div style={{fontSize:'11px',color:golfColor,fontWeight:700}}>{count} sess.</div>
+                      </div>
+                      <div style={{height:'3px',background:t.border,borderRadius:'2px',overflow:'hidden'}}>
+                        <div style={{height:'100%',width:`${pct}%`,background:golfColor,borderRadius:'2px'}}/>
                       </div>
                     </div>
                   )
                 })}
               </div>
-              <div style={{display:'flex',gap:'12px',justifyContent:'center'}}>
-                {[{c:gymColor,l:'≥80%'},{c:'#f59e0b',l:'50-79%'},{c:'#ef4444',l:'<50%'},{c:t.border,l:'Sem dados'}].map(({c,l})=>(
-                  <div key={l} style={{display:'flex',alignItems:'center',gap:'4px'}}>
-                    <div style={{width:'8px',height:'8px',borderRadius:'2px',background:c}}/>
-                    <span style={{fontSize:'9px',color:t.textMuted}}>{l}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+            )}
 
-            {/* Category breakdown */}
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px',marginBottom:'14px'}}>
-              {[['GOLFE',GOLF_CATS,gTotal,golfColor],['GINÁSIO',GYM_CATS,gymTotal,gymColor]].map(([title,catList,total,color])=>(
-                <div key={title} style={card}>
-                  <div style={{fontSize:'8px',letterSpacing:'3px',color,marginBottom:'12px',fontWeight:600}}>{title}</div>
-                  {catList.map(cat=>{
-                    const count=catCounts[cat]||0
-                    const pct=total>0?Math.round((count/total)*100):0
-                    return (
-                      <div key={cat} style={{marginBottom:'8px'}}>
-                        <div style={{display:'flex',justifyContent:'space-between',marginBottom:'3px'}}>
-                          <div style={{fontSize:'11px',color:t.textMuted}}>{cat}</div>
-                          <div style={{fontSize:'11px',color,fontWeight:700}}>{count}</div>
-                        </div>
-                        <div style={{height:'3px',background:t.border,borderRadius:'2px',overflow:'hidden'}}>
-                          <div style={{height:'100%',width:`${pct}%`,background:color,borderRadius:'2px'}}/>
-                        </div>
+            {(progressType==='all' || progressType==='gym') && gymTotal>0 && (
+              <div style={{...card,marginBottom:'14px'}}>
+                <div style={{fontSize:'8px',letterSpacing:'3px',color:gymColor,marginBottom:'12px',fontWeight:600}}>GINÁSIO — DISTRIBUIÇÃO POR CATEGORIA</div>
+                {GYM_CATS.map(cat=>{
+                  const count=catCounts[cat]||0
+                  const pct=gymTotal>0?Math.round((count/gymTotal)*100):0
+                  return (
+                    <div key={cat} style={{marginBottom:'8px'}}>
+                      <div style={{display:'flex',justifyContent:'space-between',marginBottom:'3px'}}>
+                        <div style={{fontSize:'11px',color:t.textMuted}}>{cat}</div>
+                        <div style={{fontSize:'11px',color:gymColor,fontWeight:700}}>{count} sess.</div>
                       </div>
-                    )
-                  })}
-                </div>
-              ))}
-            </div>
+                      <div style={{height:'3px',background:t.border,borderRadius:'2px',overflow:'hidden'}}>
+                        <div style={{height:'100%',width:`${pct}%`,background:gymColor,borderRadius:'2px'}}/>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
 
             {/* Session history */}
             {sessionHistory.length>0 && (
               <div style={card}>
-                <div style={{fontSize:'8px',letterSpacing:'3px',color:t.textMuted,marginBottom:'12px',fontWeight:600}}>HISTÓRICO DE SESSÕES</div>
-                <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
+                <div style={{fontSize:'8px',letterSpacing:'3px',color:t.textMuted,marginBottom:'12px',fontWeight:600}}>
+                  HISTÓRICO DE SESSÕES ({sessionHistory.length})
+                </div>
+                <div style={{display:'flex',flexDirection:'column',gap:'5px'}}>
                   {sessionHistory.map((s,i)=>{
                     const color = s.plan_type==='golf'?golfColor:gymColor
                     const compColor = s.completion===null?t.textMuted:s.completion===100?gymColor:s.completion>=50?'#f59e0b':'#ef4444'
@@ -1298,12 +1440,12 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
                         </div>
                         {s.itemsCount>0&&(
                           <div style={{textAlign:'right',flexShrink:0}}>
-                            <div style={{fontSize:'14px',fontWeight:900,color:compColor,lineHeight:1}}>{s.completion}%</div>
+                            <div style={{fontSize:'13px',fontWeight:900,color:compColor,lineHeight:1}}>{s.completion}%</div>
                             <div style={{fontSize:'9px',color:t.textMuted}}>{s.itemsCount} ex.</div>
                           </div>
                         )}
                         {s.completion!==null&&(
-                          <div style={{width:'32px',height:'32px',borderRadius:'50%',border:`2px solid ${compColor}`,
+                          <div style={{width:'28px',height:'28px',borderRadius:'50%',border:`2px solid ${compColor}`,
                             display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,
                             background:s.completion===100?compColor+'22':'transparent'}}>
                             <div style={{fontSize:'9px',fontWeight:700,color:compColor}}>
@@ -1315,6 +1457,12 @@ export default function Training({ theme, t, user, lang = 'en', events = [] }) {
                     )
                   })}
                 </div>
+              </div>
+            )}
+
+            {allSessions.length===0 && (
+              <div style={{...card,textAlign:'center',padding:'40px',color:t.textMuted,fontSize:'13px'}}>
+                Sem dados para o período e filtro seleccionados.
               </div>
             )}
           </div>
