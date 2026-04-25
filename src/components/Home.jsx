@@ -338,6 +338,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   const [kpiOrder, setKpiOrder] = useState(['smash_factor','carry','stack_speed','deadlift','medball','thoracic'])
   const [statPrefs, setStatPrefs] = useState(null)
   const [statPanelOpen, setStatPanelOpen] = useState(false)
+  const [compConfig, setCompConfig] = useState([])
 
   const ATHLETE_DEFAULTS = { hcp: '1.1', wagr: '—', prev_hcp: null, prev_wagr: null, club: 'Vale de Janelas', category: 'Sub-18', fed: 'FPG', fed_num: '43832' }
   const [athlete, setAthlete] = useState(ATHLETE_DEFAULTS)
@@ -350,8 +351,9 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
     supabase.from('events').select('*').order('start_date').then(({ data }) => setEvents(data || []))
     supabase.from('training_plans').select('*').order('week_start', { ascending: false }).then(({ data }) => setTrainingPlans(data || []))
     supabase.from('competition_stats').select('*').order('event_date', { ascending: false }).then(({ data }) => setCompStats(data || []))
+    supabase.from('comp_config').select('*').order('sort_order', { ascending: true }).then(({ data }) => { if (data?.length) setCompConfig(data) })
     if (user?.id) {
-      supabase.from('profiles').select('hcp,wagr,prev_hcp,prev_wagr,athlete_club,category,fed,fed_num,home_kpi_order').eq('id', user.id).single()
+      supabase.from('profiles').select('hcp,wagr,prev_hcp,prev_wagr,athlete_club,category,fed,fed_num,home_kpi_order,home_stat_prefs').eq('id', user.id).single()
         .then(({ data }) => {
           if (data) {
             const a = {
@@ -704,7 +706,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   const card = { background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '16px 18px' }
   const fmtScore = v => { const n = parseFloat(v); return isNaN(n) ? '—' : n >= 0 ? `+${v}` : String(v) }
 
-  const ALL_STATS = [
+  const ALL_STATS_DEFAULT = [
     { k:'torneios',   l:'TORNEIOS',    v: String(stats2026.length || '—'),                     c: t.text },
     { k:'ult_score',  l:'ÚLT. SCORE',  v: s26LastScore != null ? String(s26LastScore) : '—',   c: t.text },
     { k:'avg_score',  l:'MÉDIA SCORE', v: s26AvgScore != null ? s26AvgScore : '—',             c: t.text },
@@ -715,6 +717,20 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
     { k:'gir',        l:'GIR',         v: s26AvgGir != null ? `${s26AvgGir}%` : '—',           c: t.text },
     { k:'putts',      l:'PUTTS/RND',   v: s26AvgPutts != null ? s26AvgPutts : '—',             c: t.text },
   ]
+  const ALL_STATS = compConfig.length > 0
+    ? compConfig.map(cfg => {
+        const fk = cfg.key || cfg.field_key || cfg.field || ''
+        if (!fk || fk === 'count') return { k:'torneios', l:(cfg.label||'TORNEIOS').toUpperCase(), v:String(stats2026.length||'—'), c:t.text }
+        if (fk === 'position') {
+          const poses = stats2026.map(s=>parseFloat(s.values?.position)).filter(v=>!isNaN(v))
+          return { k:fk, l:(cfg.label||'POSIÇÃO').toUpperCase(), v:poses.length?`#${Math.min(...poses)}`:'—', c:'#378ADD' }
+        }
+        const vals = stats2026.map(s=>parseFloat(s.values?.[fk])).filter(v=>!isNaN(v))
+        const avg = vals.length?(vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1):'—'
+        const suffix = cfg.unit==='%'?'%':cfg.unit?` ${cfg.unit}`:''
+        return { k:fk, l:(cfg.label||fk).toUpperCase(), v:avg!=='—'?`${avg}${suffix}`:avg, c:t.text }
+      })
+    : ALL_STATS_DEFAULT
   const DEFAULT_STAT_KEYS = ALL_STATS.map(s => s.k)
   const activeStatKeys = statPrefs || DEFAULT_STAT_KEYS
   const activeStats = ALL_STATS.filter(s => activeStatKeys.includes(s.k))
@@ -724,7 +740,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
       <style>{`
         .hm-grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
         .hm-grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
-        .hm-main{display:grid;grid-template-columns:1fr 260px;gap:10px}
+        .hm-main{display:grid;grid-template-columns:1fr 300px;gap:10px}
         .hm-left{display:flex;flex-direction:column;gap:10px}
         .hm-right{display:flex;flex-direction:column;gap:10px}
         .hm-stats{display:flex;flex-direction:row;flex-wrap:nowrap;overflow-x:auto;align-items:stretch}
@@ -833,7 +849,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
           <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:600 }}>ÉPOCA 2026</div>
           <div style={{ position:'relative' }}>
             <button onClick={() => setStatPanelOpen(v => !v)}
-              style={{ background:'transparent', border:`1px solid ${t.border}`, borderRadius:'4px', color:t.textMuted, padding:'2px 7px', fontSize:'9px', cursor:'pointer', fontFamily:F, lineHeight:'1.4' }}>
+              style={{ background:t.bg, border:`1px solid ${t.border}`, borderRadius:'4px', color:t.textMuted, padding:'2px 8px', fontSize:'9px', cursor:'pointer', fontFamily:F, lineHeight:'1.4' }}>
               ⚙ Configurar
             </button>
             {statPanelOpen && (
@@ -889,16 +905,17 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
             <div className="hm-grid2">
               <div>
                 <div style={{ fontSize:'9px', color:t.textMuted, marginBottom:'8px' }}>Distribuição · 4 semanas</div>
-                <div style={{ display:'flex', alignItems:'center', gap:'12px' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
                   <DonutChart segments={trainingDonut} total={trainingDonutTotal} t={t} />
-                  <div style={{ display:'flex', flexDirection:'column', gap:'4px', flex:1 }}>
+                  <div style={{ display:'flex', flexDirection:'column', gap:'3px', flex:1, minWidth:0 }}>
                     {trainingDonut.length === 0 ? (
                       <div style={{ fontSize:'10px', color:t.textMuted, fontStyle:'italic' }}>Sem dados</div>
                     ) : trainingDonut.map(seg => (
-                      <div key={seg.label} style={{ display:'flex', alignItems:'center', gap:'6px' }}>
-                        <div style={{ width:'7px', height:'7px', borderRadius:'50%', background:seg.color, flexShrink:0 }}/>
-                        <div style={{ fontSize:'10px', color:t.textMuted, flex:1 }}>{seg.label}</div>
-                        <div style={{ fontSize:'10px', fontWeight:700, color:t.text }}>{trainingDonutTotal>0?Math.round(seg.value/trainingDonutTotal*100):0}%</div>
+                      <div key={seg.label} style={{ display:'flex', alignItems:'center', gap:'5px' }}>
+                        <div style={{ width:'6px', height:'6px', borderRadius:'50%', background:seg.color, flexShrink:0 }}/>
+                        <div style={{ fontSize:'10px', color:t.textMuted, whiteSpace:'nowrap' }}>
+                          {seg.label} <span style={{ fontWeight:700, color:t.text }}>{trainingDonutTotal>0?Math.round(seg.value/trainingDonutTotal*100):0}%</span>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -955,7 +972,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
                         <div style={{ fontSize:'7px', color:t.textMuted, letterSpacing:'0.5px', fontWeight:600 }}>DIAS</div>
                       </div>
                       <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontSize:'11px', fontWeight:600, color:t.text, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{ev.title}</div>
+                        <div style={{ fontSize:'10px', fontWeight:600, color:t.text, lineHeight:'1.3' }}>{ev.title}</div>
                         <div style={{ fontSize:'9px', color:t.textMuted }}>{formatDate(ev.start_date)}{ev.end_date&&ev.end_date!==ev.start_date?` – ${formatDate(ev.end_date)}`:''}</div>
                       </div>
                     </div>
@@ -975,7 +992,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
                 { label:'Golf Coach', date: nextGolfCoachDate, color:'#378ADD' },
                 { label:'Gym Coach',  date: nextGymCoachDate,  color:'#52E8A0' },
               ].map(({ label, date, color }) => (
-                <div key={label} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'6px 10px', background:t.bg, borderRadius:'7px' }}>
+                <div key={label} onClick={() => onNavigate('training')} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'6px 10px', background:t.bg, borderRadius:'7px', cursor:'pointer' }}>
                   <div style={{ fontSize:'11px', color:t.textMuted }}>{label}</div>
                   <div style={{ fontSize:'11px', fontWeight:700, color: date && date < todayStr ? '#f87171' : color }}>
                     {date ? formatDate(date) : '—'}
@@ -995,7 +1012,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
                   const overdue = !end || end < todayStr
                   const overdueDays = overdue && end ? Math.ceil((new Date(todayStr) - new Date(end+'T12:00:00')) / 86400000) : 0
                   return (
-                    <div key={label} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'6px 10px', background: overdue ? '#f8717108' : t.bg, border: `1px solid ${overdue ? '#f8717133' : t.border}`, borderRadius:'7px' }}>
+                    <div key={label} onClick={() => onNavigate('training')} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'6px 10px', background: overdue ? '#f8717108' : t.bg, border: `1px solid ${overdue ? '#f8717133' : t.border}`, borderRadius:'7px', cursor:'pointer' }}>
                       <div style={{ fontSize:'11px', color:t.textMuted }}>{label}</div>
                       {isOk
                         ? <div style={{ fontSize:'11px', fontWeight:700, color:'#52E8A0' }}>OK · {formatDate(end)}</div>
@@ -1013,7 +1030,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
                 const overdueKpis = activeKpis.filter(k => k.isOverdue)
                 const okKpis = activeKpis.filter(k => !k.isOverdue)
                 return (
-                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'6px 10px', background: overdueKpis.length > 0 ? '#f8717108' : t.bg, border: `1px solid ${overdueKpis.length > 0 ? '#f8717133' : t.border}`, borderRadius:'7px' }}>
+                  <div onClick={() => onNavigate('performance')} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'6px 10px', background: overdueKpis.length > 0 ? '#f8717108' : t.bg, border: `1px solid ${overdueKpis.length > 0 ? '#f8717133' : t.border}`, borderRadius:'7px', cursor:'pointer' }}>
                     <div style={{ fontSize:'11px', color:t.textMuted }}>KPIs de performance</div>
                     {overdueKpis.length > 0
                       ? <div style={{ fontSize:'11px', fontWeight:700, color:'#f87171', display:'flex', alignItems:'center', gap:'4px' }}><span>⚠</span>{overdueKpis.length} em atraso</div>
