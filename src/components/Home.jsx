@@ -181,7 +181,7 @@ function DonutChart({ segments, total, t }) {
     ctx.fillText(total, cx, cy)
     ctx.textBaseline = 'alphabetic'
   }, [segments, total, t])
-  return <canvas ref={canvasRef} style={{ width: '100px', height: '100px', display: 'block', flexShrink: 0 }} />
+  return <canvas ref={canvasRef} style={{ width: '110px', height: '110px', display: 'block', flexShrink: 0 }} />
 }
 
 function KpiLineChart({ entries, t, F, cardStyle }) {
@@ -607,8 +607,11 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   const avgPutts = fcPutts.length ? (fcPutts.reduce((a,b)=>a+b,0)/fcPutts.length).toFixed(1) : null
   const lastScore = filteredCompStats.length > 0 ? filteredCompStats[0].values?.score : null
 
-  // Best result ever
-  const scoresAll = compStats.filter(s => s.values?.score !== undefined && s.values?.score !== null && s.values?.score !== '')
+  // Best result ever — filter by valid numeric score, then find minimum
+  const scoresAll = compStats.filter(s => {
+    const sc = s.values?.score
+    return sc !== undefined && sc !== null && String(sc).trim() !== '' && !isNaN(parseFloat(sc))
+  })
   const bestResult = scoresAll.length > 0
     ? scoresAll.reduce((best, s) => parseFloat(s.values.score) < parseFloat(best.values.score) ? s : best)
     : null
@@ -635,18 +638,18 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   const s26LastScore = stats2026[0]?.values?.score
   const s26BestScore = s26scores.length ? Math.min(...s26scores) : null
 
-  // Training category donut (last 4 weeks from training_plans)
-  const trainingDonut = (() => {
-    const fwaStr = (() => { const d = new Date(); d.setDate(d.getDate()-28); return d.toISOString().split('T')[0] })()
-    const recent = trainingPlans.filter(p => p.week_end >= fwaStr)
+  // Two separate donuts: Golf categories + Gym exercises (last 4 weeks)
+  const GOLF_COLORS = ['#6366f1','#06b6d4','#10b981','#f59e0b','#f43f5e','#8b5cf6']
+  const GYM_COLORS  = ['#3b82f6','#ec4899','#14b8a6','#f97316','#a855f7','#eab308']
+  const fwaStr4w = (() => { const d = new Date(); d.setDate(d.getDate()-28); return d.toISOString().split('T')[0] })()
+
+  const golfDonut = (() => {
     const counts = {}
-    recent.forEach(plan => {
+    trainingPlans.filter(p => p.week_end >= fwaStr4w && p.plan_type !== 'gym').forEach(plan => {
       if (!plan.days || !Array.isArray(plan.days)) return
       plan.days.forEach(dayData => {
-        if (!dayData?.sessions) return
-        dayData.sessions.forEach(session => {
+        dayData?.sessions?.forEach(session => {
           if (session.isRest) return
-          if (plan.plan_type === 'gym') { counts['Ginásio'] = (counts['Ginásio']||0)+1; return }
           ;(session.items||[]).forEach(item => {
             const c = item.cat || 'Outro'
             counts[c] = (counts[c]||0)+1
@@ -654,13 +657,34 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
         })
       })
     })
-    const CAT_COLORS = { 'Driving Range':'#378ADD','Putt':'#52E8A0','Jogo Curto':'#f59e0b','Ginásio':'#a855f7','Bunker':'#f97316','Campo':'#ef4444' }
-    const segs = Object.entries(counts).filter(([,v])=>v>0)
-      .map(([l,v])=>({ label:l==='Putt'?'Putting':l, value:v, color:CAT_COLORS[l]||'#6b7280' }))
-      .sort((a,b)=>b.value-a.value)
-    return segs.length ? segs : donutSegments
+    return Object.entries(counts).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1])
+      .map(([l,v],i) => ({ label:l==='Putt'?'Putting':l, value:v, color:GOLF_COLORS[i%GOLF_COLORS.length] }))
   })()
-  const trainingDonutTotal = trainingDonut.reduce((s,g)=>s+g.value, 0) || donutTotal
+
+  const gymDonut = (() => {
+    const counts = {}
+    trainingPlans.filter(p => p.week_end >= fwaStr4w && p.plan_type === 'gym').forEach(plan => {
+      if (!plan.days || !Array.isArray(plan.days)) return
+      plan.days.forEach(dayData => {
+        dayData?.sessions?.forEach(session => {
+          if (session.isRest) return
+          ;(session.items||[]).forEach(item => {
+            const c = item.cat || item.name || 'Exercício'
+            counts[c] = (counts[c]||0)+1
+          })
+          if (!(session.items||[]).length) {
+            const c = session.cat || session.name || 'Ginásio'
+            counts[c] = (counts[c]||0)+1
+          }
+        })
+      })
+    })
+    return Object.entries(counts).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1])
+      .map(([l,v],i) => ({ label:l, value:v, color:GYM_COLORS[i%GYM_COLORS.length] }))
+  })()
+
+  const golfDonutTotal = golfDonut.reduce((s,g)=>s+g.value, 0)
+  const gymDonutTotal  = gymDonut.reduce((s,g)=>s+g.value, 0)
 
   // Next coach sessions separated by type
   const nextGolfCoachDate = (() => {
@@ -706,31 +730,17 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   const card = { background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '16px 18px' }
   const fmtScore = v => { const n = parseFloat(v); return isNaN(n) ? '—' : n >= 0 ? `+${v}` : String(v) }
 
-  // Derive available stat fields from competition_stats.values keys
-  const FIELD_META = {
-    score:    { l:'SCORE',       c: t.text },
-    position: { l:'POSIÇÃO',     c: '#378ADD' },
-    fairways: { l:'FAIRWAYS',    c: t.text },
-    gir:      { l:'GIR',         c: t.text },
-    putts:    { l:'PUTTS/RND',   c: t.text },
-    par:      { l:'PAR',         c: t.textMuted },
-    birdies:  { l:'BIRDIES',     c: '#52E8A0' },
-    bogeys:   { l:'BOGEYS',      c: '#f87171' },
-    eagles:   { l:'EAGLES',      c: '#f59e0b' },
-  }
-  const dynamicFields = [...new Set(compStats.flatMap(s => s.values && typeof s.values === 'object' ? Object.keys(s.values) : []))]
+  // Fixed 9 stats + dynamic extras discoverable via ⚙
   const ALL_STATS = [
-    { k:'torneios', l:'TORNEIOS', v:String(stats2026.length||'—'), c:t.text },
-    ...dynamicFields.map(fk => {
-      const meta = FIELD_META[fk] || { l:fk.toUpperCase(), c:t.text }
-      const vals = stats2026.map(s => parseFloat(s.values?.[fk])).filter(v => !isNaN(v))
-      let v = '—'
-      if (vals.length) {
-        if (fk === 'position') v = `#${Math.min(...vals)}`
-        else v = (vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1)
-      }
-      return { k:fk, l:meta.l, v, c:meta.c }
-    }),
+    { k:'torneios',   l:'TORNEIOS',    v: String(stats2026.length || '—'),                                      c: t.text },
+    { k:'ult_score',  l:'ÚLT. SCORE',  v: s26LastScore != null ? String(s26LastScore) : '—',                    c: t.text },
+    { k:'avg_score',  l:'MÉDIA SCORE', v: s26AvgScore  != null ? s26AvgScore : '—',                             c: t.text },
+    { k:'best_score', l:'MELHOR',      v: s26BestScore != null ? String(s26BestScore) : '—',                    c: '#10b981' },
+    { k:'best_pos',   l:'MELHOR POS.', v: s26BestPos   != null ? `#${s26BestPos}` : '—',                        c: '#6366f1' },
+    { k:'top10',      l:'TOP 10',      v: s26Top10 > 0 ? `${s26Top10}×` : '0×',                                c: s26Top10 > 0 ? '#f59e0b' : t.textMuted },
+    { k:'fairways',   l:'FAIRWAYS',    v: s26AvgFw    != null ? `${s26AvgFw}%` : '—',                           c: t.text },
+    { k:'gir',        l:'GIR',         v: s26AvgGir   != null ? `${s26AvgGir}%` : '—',                          c: t.text },
+    { k:'putts',      l:'PUTTS/RND',   v: s26AvgPutts != null ? s26AvgPutts : '—',                             c: t.text },
   ]
   const DEFAULT_STAT_KEYS = ALL_STATS.map(s => s.k)
   const activeStatKeys = statPrefs || DEFAULT_STAT_KEYS
@@ -880,9 +890,9 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
           </div>
           <div className="hm-stats">
             {activeStats.map((item, i, arr) => (
-              <div key={item.k} style={{ flex:1, padding:'0 8px', borderRight: i < arr.length - 1 ? `1px solid ${t.border}` : 'none', minWidth:'52px', textAlign:'center' }}>
-                <div style={{ fontSize:'15px', fontWeight:800, color:item.c, lineHeight:1, whiteSpace:'nowrap' }}>{item.v}</div>
-                <div style={{ fontSize:'7px', color:t.textMuted, marginTop:'3px', letterSpacing:'0.5px', textTransform:'uppercase' }}>{item.l}</div>
+              <div key={item.k} style={{ flex:1, padding:'0 10px', borderRight: i < arr.length - 1 ? `1px solid ${t.border}` : 'none', minWidth:'60px', textAlign:'center' }}>
+                <div style={{ fontSize:'22px', fontWeight:900, color:item.c, lineHeight:1, whiteSpace:'nowrap' }}>{item.v}</div>
+                <div style={{ fontSize:'9px', color:t.textMuted, marginTop:'4px', letterSpacing:'0.5px', textTransform:'uppercase' }}>{item.l}</div>
               </div>
             ))}
           </div>
@@ -918,31 +928,55 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
       <div className="hm-main">
         <div className="hm-left">
 
-          {/* Treino — Distribuição + Carga */}
+          {/* Treino — 2 donuts + barra carga */}
           <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '12px 16px' }}>
             <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:600, marginBottom:'10px' }}>TREINO — DISTRIBUIÇÃO E CARGA</div>
-            <div className="hm-grid2">
-              <div>
-                <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
-                  <DonutChart segments={trainingDonut} total={trainingDonutTotal} t={t} />
-                  <div style={{ display:'flex', flexDirection:'column', gap:'3px', flex:1, minWidth:0 }}>
-                    {trainingDonut.length === 0 ? (
-                      <div style={{ fontSize:'10px', color:t.textMuted, fontStyle:'italic' }}>Sem dados</div>
-                    ) : trainingDonut.map(seg => (
-                      <div key={seg.label} style={{ display:'flex', alignItems:'center', gap:'5px' }}>
+            <div style={{ display:'flex', gap:'16px', alignItems:'flex-start' }}>
+
+              {/* Golf donut */}
+              <div style={{ minWidth:'110px' }}>
+                <div style={{ fontSize:'8px', letterSpacing:'1px', color:'#6366f1', fontWeight:600, marginBottom:'6px' }}>GOLF</div>
+                <DonutChart segments={golfDonut} total={golfDonutTotal} t={t} />
+                <div style={{ display:'flex', flexDirection:'column', gap:'3px', marginTop:'6px' }}>
+                  {golfDonut.length === 0
+                    ? <div style={{ fontSize:'9px', color:t.textMuted, fontStyle:'italic' }}>Sem dados</div>
+                    : golfDonut.map(seg => (
+                      <div key={seg.label} style={{ display:'flex', alignItems:'center', gap:'4px' }}>
                         <div style={{ width:'6px', height:'6px', borderRadius:'50%', background:seg.color, flexShrink:0 }}/>
-                        <div style={{ fontSize:'10px', color:t.textMuted, whiteSpace:'nowrap' }}>
-                          {seg.label} <span style={{ fontWeight:700, color:t.text }}>{trainingDonutTotal>0?Math.round(seg.value/trainingDonutTotal*100):0}%</span>
+                        <div style={{ fontSize:'9px', color:t.textMuted, whiteSpace:'nowrap' }}>
+                          {seg.label} <span style={{ fontWeight:700, color:t.text }}>{golfDonutTotal>0?Math.round(seg.value/golfDonutTotal*100):0}%</span>
                         </div>
                       </div>
-                    ))}
-                  </div>
+                    ))
+                  }
                 </div>
               </div>
-              <div>
+
+              {/* Gym donut */}
+              <div style={{ minWidth:'110px' }}>
+                <div style={{ fontSize:'8px', letterSpacing:'1px', color:'#3b82f6', fontWeight:600, marginBottom:'6px' }}>GYM</div>
+                <DonutChart segments={gymDonut} total={gymDonutTotal} t={t} />
+                <div style={{ display:'flex', flexDirection:'column', gap:'3px', marginTop:'6px' }}>
+                  {gymDonut.length === 0
+                    ? <div style={{ fontSize:'9px', color:t.textMuted, fontStyle:'italic' }}>Sem dados</div>
+                    : gymDonut.map(seg => (
+                      <div key={seg.label} style={{ display:'flex', alignItems:'center', gap:'4px' }}>
+                        <div style={{ width:'6px', height:'6px', borderRadius:'50%', background:seg.color, flexShrink:0 }}/>
+                        <div style={{ fontSize:'9px', color:t.textMuted, whiteSpace:'nowrap' }}>
+                          {seg.label} <span style={{ fontWeight:700, color:t.text }}>{gymDonutTotal>0?Math.round(seg.value/gymDonutTotal*100):0}%</span>
+                        </div>
+                      </div>
+                    ))
+                  }
+                </div>
+              </div>
+
+              {/* Barra carga semanal */}
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:'8px', letterSpacing:'1px', color:t.textMuted, fontWeight:600, marginBottom:'6px' }}>CARGA SEMANAL</div>
                 <WeeklyBarChart weeks={weeklyLoad} t={t} />
                 <div style={{ display:'flex', gap:'8px', marginTop:'4px', flexWrap:'wrap' }}>
-                  {[{c:'#52E8A0',l:'Actual'},{c:'#378ADD',l:'≥80%'},{c:'#f59e0b88',l:'50-79%'},{c:'#f8717188',l:'<50%'}].map(({c,l})=>(
+                  {[{c:'#52E8A0',l:'Actual'},{c:'#378ADD',l:'≥80%'},{c:'#f59e0b',l:'50–79%'},{c:'#f87171',l:'<50%'}].map(({c,l})=>(
                     <div key={l} style={{ display:'flex', alignItems:'center', gap:'3px' }}>
                       <div style={{ width:'7px', height:'7px', borderRadius:'2px', background:c }}/>
                       <span style={{ fontSize:'8px', color:t.textMuted }}>{l}</span>
@@ -950,6 +984,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
                   ))}
                 </div>
               </div>
+
             </div>
           </div>
 
