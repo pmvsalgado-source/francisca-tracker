@@ -177,7 +177,7 @@ export default function Backoffice({ theme, t, user }) {
                   <tr key={g.id}>
                     <td style={{ ...td, fontWeight: 600 }}>{g.metric_label}</td>
                     <td style={td}>{g.start_value}{g.unit}</td>
-                    <td style={{ ...td, color: '#52E8A0', fontWeight: 700 }}>{g.target_value}{g.unit}</td>
+                    <td style={{ ...td, color: t.accent, fontWeight: 700 }}>{g.target_value}{g.unit}</td>
                     <td style={td}>{g.start_date}</td>
                     <td style={td}>{g.end_date}</td>
                     <td style={{ ...td, color: t.textMuted }}>{g.created_by || '—'}</td>

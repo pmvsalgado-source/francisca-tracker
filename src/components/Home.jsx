@@ -352,7 +352,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
             ))}
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
-            <button onClick={saveAthlete} disabled={athleteSaving} style={{ background: '#378ADD', border: 'none', borderRadius: '6px', color: '#fff', padding: '6px 16px', fontSize: '11px', fontWeight: 700, cursor: 'pointer', fontFamily: F, letterSpacing: '1px', opacity: athleteSaving ? 0.7 : 1 }}>{athleteSaving ? 'A GUARDAR...' : 'GUARDAR'}</button>
+            <button onClick={saveAthlete} disabled={athleteSaving} style={{ background: t.accent, border: 'none', borderRadius: '6px', color: theme === 'dark' ? '#000' : '#fff', padding: '6px 16px', fontSize: '11px', fontWeight: 700, cursor: 'pointer', fontFamily: F, letterSpacing: '1px', opacity: athleteSaving ? 0.7 : 1 }}>{athleteSaving ? 'A GUARDAR...' : 'GUARDAR'}</button>
             <button onClick={() => setEditingAthlete(false)} style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '6px', color: t.textMuted, padding: '6px 16px', fontSize: '11px', cursor: 'pointer', fontFamily: F }}>Cancelar</button>
           </div>
         </div>

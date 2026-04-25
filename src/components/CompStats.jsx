@@ -270,7 +270,7 @@ export default function CompStats({ theme, t, user }) {
               </button>
               {detailStat.website && (
                 <button onClick={() => window.open(detailStat.website, '_blank')}
-                  style={{ flex: 1, background: t.accent, border: 'none', borderRadius: '8px', color: '#fff', padding: '9px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: F }}>
+                  style={{ flex: 1, background: t.accent, border: 'none', borderRadius: '8px', color: theme === 'dark' ? '#000' : '#fff', padding: '9px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: F }}>
                   Ver Site ↗
                 </button>
               )}
@@ -325,7 +325,7 @@ export default function CompStats({ theme, t, user }) {
                             <input type="checkbox" checked={!!editingField.lower_better} onChange={e => setEditingField(p => ({ ...p, lower_better: e.target.checked }))} />
                             ↓ better
                           </label>
-                          <button onClick={saveFieldEdit} style={{ background: t.accent, border: 'none', borderRadius: '4px', color: t.text, padding: '5px 10px', cursor: 'pointer', fontSize: '11px', fontFamily: F }}>Save</button>
+                          <button onClick={saveFieldEdit} style={{ background: t.accent, border: 'none', borderRadius: '4px', color: theme === 'dark' ? '#000' : '#fff', padding: '5px 10px', cursor: 'pointer', fontSize: '11px', fontFamily: F }}>Save</button>
                           <button onClick={() => setEditingField(null)} style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '4px', color: t.textMuted, padding: '5px 8px', cursor: 'pointer', fontSize: '11px', fontFamily: F }}>✕</button>
                         </div>
                       ) : (
@@ -354,7 +354,7 @@ export default function CompStats({ theme, t, user }) {
                       <input type="checkbox" checked={newField.lower_better} onChange={e => setNewField(p => ({ ...p, lower_better: e.target.checked }))} />
                       ↓ better
                     </label>
-                    <button onClick={addField} style={{ background: t.accent, border: 'none', borderRadius: '6px', color: t.text, padding: '7px 14px', cursor: 'pointer', fontSize: '12px', fontWeight: 700, fontFamily: F, whiteSpace: 'nowrap' }}>+ Add</button>
+                    <button onClick={addField} style={{ background: t.accent, border: 'none', borderRadius: '6px', color: theme === 'dark' ? '#000' : '#fff', padding: '7px 14px', cursor: 'pointer', fontSize: '12px', fontWeight: 700, fontFamily: F, whiteSpace: 'nowrap' }}>+ Add</button>
                   </div>
                 </div>
               </div>
@@ -427,7 +427,7 @@ export default function CompStats({ theme, t, user }) {
                         placeholder="ex: MELHOR SCORE" style={inp}
                         onKeyDown={e => e.key === 'Enter' && addCard()} />
                     </div>
-                    <button onClick={addCard} style={{ background: t.accent, border: 'none', borderRadius: '6px', color: t.text, padding: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 700, fontFamily: F }}>+ Add Card</button>
+                    <button onClick={addCard} style={{ background: t.accent, border: 'none', borderRadius: '6px', color: theme === 'dark' ? '#000' : '#fff', padding: '8px', cursor: 'pointer', fontSize: '12px', fontWeight: 700, fontFamily: F }}>+ Add Card</button>
                   </div>
                 </div>
               </div>
@@ -498,7 +498,7 @@ export default function CompStats({ theme, t, user }) {
               <div style={{ display: 'flex', gap: '10px' }}>
                 <button onClick={() => setShowModal(false)} style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '6px', color: t.textMuted, padding: '8px 16px', cursor: 'pointer', fontSize: '12px', fontFamily: F }}>Cancel</button>
                 <button onClick={saveStat} disabled={saving || !form.event_name}
-                  style={{ background: !form.event_name ? t.navActive : t.accent, border: 'none', borderRadius: '6px', color: t.text, padding: '8px 20px', cursor: 'pointer', fontSize: '13px', fontWeight: 700, fontFamily: F }}>
+                  style={{ background: !form.event_name ? t.navActive : t.accent, border: 'none', borderRadius: '6px', color: !form.event_name ? t.textMuted : (theme === 'dark' ? '#000' : '#fff'), padding: '8px 20px', cursor: 'pointer', fontSize: '13px', fontWeight: 700, fontFamily: F }}>
                   {saving ? 'Saving...' : 'Save Stats'}
                 </button>
               </div>
@@ -549,7 +549,7 @@ export default function CompStats({ theme, t, user }) {
         <div style={{ ...card, textAlign: 'center', padding: '48px' }}>
           <div style={{ fontSize: '14px', color: t.textMuted, marginBottom: '16px' }}>No competition stats yet.</div>
           <button onClick={openNew}
-            style={{ background: t.accent, border: 'none', borderRadius: '8px', color: t.text, padding: '10px 24px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', fontFamily: F }}>
+            style={{ background: t.accent, border: 'none', borderRadius: '8px', color: theme === 'dark' ? '#000' : '#fff', padding: '10px 24px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', fontFamily: F }}>
             Add First Competition
           </button>
         </div>

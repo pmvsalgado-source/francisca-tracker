@@ -158,10 +158,10 @@ export default function Calendar({ theme, t, user, lang = 'en' }) {
   return (
     <div style={{ fontFamily: F, color: t.text }}>
       <style>{`
-        .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);background:#fff;border-radius:0 0 10px 10px;overflow:hidden;}
-        .cal-cell{background:#fff;padding:6px;min-height:62px;cursor:pointer;transition:background 0.1s;border-right:0.5px solid #e8f0ff;border-bottom:0.5px solid #e8f0ff;}
-        .cal-cell:hover{background:#f5f8ff;}
-        .cal-cell.today-cell{background:#eef4ff;}
+        .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);background:${t.surface};border-radius:0 0 10px 10px;overflow:hidden;}
+        .cal-cell{background:${t.bg};padding:6px;min-height:62px;cursor:pointer;transition:background 0.1s;border-right:0.5px solid ${t.border};border-bottom:0.5px solid ${t.border};}
+        .cal-cell:hover{background:${t.surface};}
+        .cal-cell.today-cell{background:${t.accentBg};}
         .annual-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
         @media(max-width:700px){.annual-grid{grid-template-columns:repeat(2,1fr)}.cal-cell{min-height:44px}}
       `}</style>
@@ -306,9 +306,9 @@ export default function Calendar({ theme, t, user, lang = 'en' }) {
       </div>
 
       {/* Legend */}
-      <div style={{ display: 'flex', gap: '14px', padding: '8px 18px', background: '#f0f4ff', borderBottom: '0.5px solid #e0e8ff', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: '14px', padding: '8px 18px', background: t.surface, borderBottom: `0.5px solid ${t.border}`, flexWrap: 'wrap' }}>
         {categories.map(c => (
-          <div key={c.name} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '9px', color: '#4a6ab5', fontWeight: 500 }}>
+          <div key={c.name} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '9px', color: t.textMuted, fontWeight: 500 }}>
             <div style={{ width: '12px', height: '3px', borderRadius: '2px', background: c.color }}></div>
             {c.name}
           </div>
@@ -320,7 +320,7 @@ export default function Calendar({ theme, t, user, lang = 'en' }) {
         <div>
           <div className="cal-grid">
             {WEEKDAYS.map(d => (
-              <div key={d} style={{ background: '#f0f4ff', padding: '8px', textAlign: 'center', fontSize: '10px', fontWeight: 700, letterSpacing: '1px', color: '#1a2744', borderRight: '0.5px solid #e0e8ff', borderBottom: '0.5px solid #e0e8ff' }}>{d}</div>
+              <div key={d} style={{ background: t.bg, padding: '8px', textAlign: 'center', fontSize: '10px', fontWeight: 700, letterSpacing: '1px', color: t.textMuted, borderRight: `0.5px solid ${t.border}`, borderBottom: `0.5px solid ${t.border}` }}>{d}</div>
             ))}
             {getDaysInMonth(year, month).map((day, i) => {
               const dayEvents = getEventsForDay(day.date)
@@ -328,15 +328,15 @@ export default function Calendar({ theme, t, user, lang = 'en' }) {
               const isToday = dateStr === today
               return (
                 <div key={i} className={`cal-cell${isToday ? ' today-cell' : ''}`} onClick={() => openNew(dateStr)}
-                  style={{ background: isToday ? '#eef4ff' : day.current ? '#fff' : '#fafbff', borderRight: '0.5px solid #e8f0ff', borderBottom: '0.5px solid #e8f0ff' }}>
-                  <div style={{ fontSize: '12px', color: day.current ? (isToday ? '#378ADD' : '#0f1e3d') : '#b0bcd8', fontWeight: isToday ? 800 : 600, marginBottom: '4px' }}>{day.date.getDate()}</div>
+                  style={{ background: isToday ? t.accentBg : day.current ? t.surface : t.bg, borderRight: `0.5px solid ${t.border}`, borderBottom: `0.5px solid ${t.border}` }}>
+                  <div style={{ fontSize: '12px', color: day.current ? (isToday ? t.accent : t.text) : t.textFaint, fontWeight: isToday ? 800 : 600, marginBottom: '4px' }}>{day.date.getDate()}</div>
                   {dayEvents.slice(0, 2).map((ev, ei) => (
                     <div key={ev.id || ei} onClick={e => { e.stopPropagation(); if (!ev._isTrain) openEdit(ev) }}
                       style={{ background: ev._isTrain ? ev._color + '33' : (ev.color || getCatColor(ev.category)), borderRadius: '4px', padding: '3px 6px', fontSize: '10px', fontWeight: 700, color: ev._isTrain ? ev._color : '#fff', marginBottom: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: ev._isTrain ? 'default' : 'pointer', border: ev._isTrain ? `1px solid ${ev._color}44` : 'none' }}>
                       {ev._isTrain ? (ev.type === 'golf' ? '⛳' : '💪') + ' ' : ''}{ev.title || ev.session_name || ev.name || ev.cat}
                     </div>
                   ))}
-                  {dayEvents.length > 2 && <div style={{ fontSize: '9px', color: '#8aaed4', fontWeight: 600 }}>+{dayEvents.length - 2}</div>}
+                  {dayEvents.length > 2 && <div style={{ fontSize: '9px', color: t.textMuted, fontWeight: 600 }}>+{dayEvents.length - 2}</div>}
                 </div>
               )
             })}

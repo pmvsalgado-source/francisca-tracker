@@ -177,7 +177,7 @@ export default function Chat({ theme, t, user, profile, lang = 'en' }) {
                           style={{ width: '240px', minHeight: '60px', background: t.bg, border: `1px solid ${t.accent}`, borderRadius: '12px', color: t.text, padding: '8px 12px', fontSize: '13px', fontFamily: F, outline: 'none', resize: 'none' }} />
                         <div style={{ display: 'flex', gap: '6px' }}>
                           <button onClick={() => setEditingId(null)} style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '8px', color: t.textMuted, padding: '5px 12px', cursor: 'pointer', fontSize: '11px', fontFamily: F }}>{s.cancel}</button>
-                          <button onClick={saveEdit} style={{ background: t.accent, border: 'none', borderRadius: '8px', color: '#fff', padding: '5px 12px', cursor: 'pointer', fontSize: '11px', fontFamily: F, fontWeight: 600 }}>{s.save}</button>
+                          <button onClick={saveEdit} style={{ background: t.accent, border: 'none', borderRadius: '8px', color: theme === 'dark' ? '#000' : '#fff', padding: '5px 12px', cursor: 'pointer', fontSize: '11px', fontFamily: F, fontWeight: 600 }}>{s.save}</button>
                         </div>
                       </div>
                     ) : (

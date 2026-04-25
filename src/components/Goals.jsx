@@ -92,15 +92,15 @@ function GoalChart({ entries, goal, theme, t }) {
     ctx.beginPath()
     ctx.moveTo(xOfRatio(0), yOf(startVal))
     ctx.lineTo(xOfRatio(1), yOf(targetVal))
-    ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 1.5
+    ctx.strokeStyle = theme === 'dark' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'; ctx.lineWidth = 1.5
     ctx.setLineDash([5, 4]); ctx.stroke(); ctx.setLineDash([])
 
     // Milestone pins on expected line
     milestones.forEach(m => {
       const x = xOfRatio(m.ratio), y = yOf(m.value)
       ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2)
-      ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.fill()
-      ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = '9px Inter,system-ui'; ctx.textAlign = 'center'
+      ctx.fillStyle = theme === 'dark' ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)'; ctx.fill()
+      ctx.fillStyle = theme === 'dark' ? 'rgba(255,255,255,0.5)' : t.textMuted; ctx.font = '9px Inter,system-ui'; ctx.textAlign = 'center'
       ctx.fillText(m.value.toFixed(1) + (goal.unit || ''), x, y - 8)
     })
 
@@ -159,13 +159,13 @@ function GoalChart({ entries, goal, theme, t }) {
       ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2)
       ctx.fillStyle = isAhead ? '#52E8A0' : '#f87171'; ctx.fill()
       if (i === pts.length - 1) {
-        ctx.fillStyle = '#ffffff'; ctx.font = 'bold 11px Inter,system-ui'; ctx.textAlign = 'center'
+        ctx.fillStyle = t.text; ctx.font = 'bold 11px Inter,system-ui'; ctx.textAlign = 'center'
         ctx.fillText(pt.value + (goal.unit || ''), x, y - 12)
       }
     })
 
     // Target label at end
-    ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.font = 'bold 10px Inter,system-ui'; ctx.textAlign = 'left'
+    ctx.fillStyle = theme === 'dark' ? 'rgba(255,255,255,0.4)' : t.textMuted; ctx.font = 'bold 10px Inter,system-ui'; ctx.textAlign = 'left'
     ctx.fillText('Target: ' + targetVal + (goal.unit || ''), xOfRatio(1) - 80, yOf(targetVal) - 6)
 
   }, [entries, goal, theme, t])
@@ -334,7 +334,7 @@ export default function Goals({ theme, t, user }) {
               <div style={{ display: 'flex', gap: '10px' }}>
                 <button onClick={() => setShowModal(false)} style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '6px', color: t.textMuted, padding: '8px 16px', cursor: 'pointer', fontSize: '12px', fontFamily: F }}>Cancel</button>
                 <button onClick={saveGoal} disabled={saving || !form.target_value || !form.end_date || !form.start_value}
-                  style={{ background: (!form.target_value || !form.end_date || !form.start_value) ? t.navActive : t.accent, border: 'none', borderRadius: '6px', color: t.text, padding: '8px 20px', cursor: 'pointer', fontSize: '13px', fontWeight: 700, fontFamily: F }}>
+                  style={{ background: (!form.target_value || !form.end_date || !form.start_value) ? t.navActive : t.accent, border: 'none', borderRadius: '6px', color: (!form.target_value || !form.end_date || !form.start_value) ? t.textMuted : (theme === 'dark' ? '#000' : '#fff'), padding: '8px 20px', cursor: 'pointer', fontSize: '13px', fontWeight: 700, fontFamily: F }}>
                   {saving ? 'Saving...' : 'Save Goal'}
                 </button>
               </div>
@@ -360,7 +360,7 @@ export default function Goals({ theme, t, user }) {
         <div style={{ ...card, textAlign: 'center', padding: '48px' }}>
           <div style={{ fontSize: '14px', color: t.textMuted, marginBottom: '16px' }}>No goals defined yet.</div>
           <button onClick={openNew}
-            style={{ background: t.accent, border: 'none', borderRadius: '8px', color: t.text, padding: '10px 24px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', fontFamily: F }}>
+            style={{ background: t.accent, border: 'none', borderRadius: '8px', color: theme === 'dark' ? '#000' : '#fff', padding: '10px 24px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', fontFamily: F }}>
             Set First Goal
           </button>
         </div>
