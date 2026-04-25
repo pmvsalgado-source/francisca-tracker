@@ -181,7 +181,7 @@ function DonutChart({ segments, total, t }) {
     ctx.fillText(total, cx, cy)
     ctx.textBaseline = 'alphabetic'
   }, [segments, total, t])
-  return <canvas ref={canvasRef} style={{ width: '72px', height: '72px', display: 'block', flexShrink: 0 }} />
+  return <canvas ref={canvasRef} style={{ width: '60px', height: '60px', display: 'block', flexShrink: 0 }} />
 }
 
 function KpiLineChart({ entries, t, F, cardStyle }) {
@@ -423,7 +423,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   const gymSessions = [...new Set(filteredEntries.filter(e => gymMetrics.includes(e.metric_id)).map(e => e.entry_date))].length
 
   const todayStr = new Date().toISOString().split('T')[0]
-  const upcomingEvents = events.filter(e => e.start_date >= todayStr && e.status !== 'cancelled' && e.status !== 'cancelado').slice(0, 4)
+  const upcomingEvents = events.filter(e => e.start_date >= todayStr && e.status !== 'cancelled' && e.status !== 'cancelado').slice(0, 6)
   const nextComp = upcomingEvents[0]
   const daysToNext = nextComp ? Math.ceil((new Date(nextComp.start_date) - new Date()) / 86400000) : null
 
@@ -702,7 +702,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
         .hm-main{display:grid;grid-template-columns:1fr 210px;gap:10px}
         .hm-left{display:flex;flex-direction:column;gap:10px}
         .hm-right{display:flex;flex-direction:column;gap:10px}
-        .hm-stats{display:flex;flex-wrap:nowrap;overflow:hidden;align-items:stretch}
+        .hm-stats{display:flex;flex-direction:row;flex-wrap:nowrap;overflow-x:auto;align-items:stretch}
         @media(max-width:700px){.hm-main{grid-template-columns:1fr}.hm-grid2{grid-template-columns:1fr}}
       `}</style>
 
@@ -778,8 +778,8 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
         </div>
       ) : (
         <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '10px', padding: '12px 16px', marginBottom: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', gap: '18px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+            <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
               {[
                 { label: 'HCP',   value: athlete.hcp || '—',      color: '#378ADD' },
                 { label: 'WAGR',  value: athlete.wagr || '—',     color: t.text },
@@ -793,10 +793,10 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
                 </div>
               ))}
             </div>
-            <div style={{ display: 'flex', gap: '5px', alignItems: 'center' }}>
-              <button onClick={() => { setAthleteForm({...athlete}); setEditingAthlete(true) }} style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '5px', color: t.textMuted, padding: '3px 8px', fontSize: '9px', cursor: 'pointer', fontFamily: F }}>Editar perfil</button>
-              <a href="https://www.wagr.com/playerprofile/francisca-salgado-43158" target="_blank" rel="noreferrer" style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '5px', color: t.textMuted, padding: '3px 8px', fontSize: '9px', fontFamily: F, textDecoration: 'none' }}>WAGR ↗</a>
-              <a href="https://portal.fpg.pt/handicaps-course-rating/pesquisa-de-handicaps/" target="_blank" rel="noreferrer" style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '5px', color: t.textMuted, padding: '3px 8px', fontSize: '9px', fontFamily: F, textDecoration: 'none' }}>FPG ↗</a>
+            <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+              <button onClick={() => { setAthleteForm({...athlete}); setEditingAthlete(true) }} style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '4px', color: t.textMuted, padding: '2px 7px', fontSize: '9px', cursor: 'pointer', fontFamily: F, lineHeight: '1.4' }}>Editar perfil</button>
+              <a href="https://www.wagr.com/playerprofile/francisca-salgado-43158" target="_blank" rel="noreferrer" style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '4px', color: t.textMuted, padding: '2px 7px', fontSize: '9px', fontFamily: F, textDecoration: 'none', lineHeight: '1.4', display: 'inline-block' }}>WAGR ↗</a>
+              <a href="https://portal.fpg.pt/handicaps-course-rating/pesquisa-de-handicaps/" target="_blank" rel="noreferrer" style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '4px', color: t.textMuted, padding: '2px 7px', fontSize: '9px', fontFamily: F, textDecoration: 'none', lineHeight: '1.4', display: 'inline-block' }}>FPG ↗</a>
             </div>
           </div>
         </div>
@@ -817,9 +817,9 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
             { l:'GIR',         v: s26AvgGir != null ? `${s26AvgGir}%` : '—',                         c: t.text },
             { l:'PUTTS/RND',   v: s26AvgPutts != null ? s26AvgPutts : '—',                           c: t.text },
           ].map((item, i, arr) => (
-            <div key={i} style={{ flex:1, padding:'0 10px', borderRight: i < arr.length - 1 ? `1px solid ${t.border}` : 'none', minWidth:0 }}>
-              <div style={{ fontSize:'16px', fontWeight:800, color:item.c, lineHeight:1, whiteSpace:'nowrap' }}>{item.v}</div>
-              <div style={{ fontSize:'8px', color:t.textMuted, marginTop:'3px', letterSpacing:'0.5px' }}>{item.l}</div>
+            <div key={i} style={{ flex:1, padding:'0 8px', borderRight: i < arr.length - 1 ? `1px solid ${t.border}` : 'none', minWidth:'52px', textAlign:'center' }}>
+              <div style={{ fontSize:'15px', fontWeight:800, color:item.c, lineHeight:1, whiteSpace:'nowrap' }}>{item.v}</div>
+              <div style={{ fontSize:'7px', color:t.textMuted, marginTop:'3px', letterSpacing:'0.5px', textTransform:'uppercase' }}>{item.l}</div>
             </div>
           ))}
           {bestResult && (
@@ -841,7 +841,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
         <div className="hm-left">
 
           {/* Treino — Distribuição + Carga */}
-          <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '12px 16px' }}>
+          <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '12px 16px', maxHeight: '200px', overflow: 'hidden' }}>
             <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:600, marginBottom:'12px' }}>TREINO — DISTRIBUIÇÃO E CARGA</div>
             <div className="hm-grid2">
               <div>
@@ -899,16 +899,16 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
           {/* Próximas Competições */}
           <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '12px 14px' }}>
             <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:600, marginBottom:'10px' }}>PRÓXIMAS COMPETIÇÕES</div>
-            {slotAItems.length === 0 ? (
-              <div style={{ fontSize:'11px', color:t.textMuted, fontStyle:'italic' }}>Sem competições</div>
+            {upcomingEvents.length === 0 ? (
+              <div style={{ fontSize:'11px', color:t.textMuted, fontStyle:'italic' }}>Sem eventos</div>
             ) : (
               <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
-                {slotAItems.slice(0,3).map(ev => {
+                {upcomingEvents.slice(0,3).map(ev => {
                   const d = Math.ceil((new Date(ev.start_date) - new Date()) / 86400000)
                   return (
                     <div key={ev.id} style={{ display:'flex', alignItems:'center', gap:'10px', padding:'7px 10px', background:t.bg, borderRadius:'8px', border:`1px solid ${d<=14?'#f59e0b33':t.border}` }}>
-                      <div style={{ textAlign:'center', flexShrink:0, minWidth:'34px' }}>
-                        <div style={{ fontSize:'22px', fontWeight:900, color:d<=14?'#f59e0b':'#378ADD', lineHeight:1 }}>{d}</div>
+                      <div style={{ textAlign:'center', flexShrink:0, minWidth:'36px' }}>
+                        <div style={{ fontSize:'24px', fontWeight:900, color:d<=14?'#f59e0b':'#378ADD', lineHeight:1 }}>{d}</div>
                         <div style={{ fontSize:'7px', color:t.textMuted, letterSpacing:'0.5px', fontWeight:600 }}>DIAS</div>
                       </div>
                       <div style={{ flex:1, minWidth:0 }}>
