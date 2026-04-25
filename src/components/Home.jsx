@@ -336,6 +336,8 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   const [kpiModal, setKpiModal] = useState(null)
   const [savingPrefs, setSavingPrefs] = useState(false)
   const [kpiOrder, setKpiOrder] = useState(['smash_factor','carry','stack_speed','deadlift','medball','thoracic'])
+  const [statPrefs, setStatPrefs] = useState(null)
+  const [statPanelOpen, setStatPanelOpen] = useState(false)
 
   const ATHLETE_DEFAULTS = { hcp: '1.1', wagr: '—', prev_hcp: null, prev_wagr: null, club: 'Vale de Janelas', category: 'Sub-18', fed: 'FPG', fed_num: '43832' }
   const [athlete, setAthlete] = useState(ATHLETE_DEFAULTS)
@@ -366,6 +368,9 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
             if (data.home_kpi_order) {
               try { setKpiOrder(JSON.parse(data.home_kpi_order)) } catch (_) {}
             }
+            if (data.home_stat_prefs) {
+              try { setStatPrefs(JSON.parse(data.home_stat_prefs)) } catch (_) {}
+            }
           }
         })
     }
@@ -390,6 +395,11 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
     setSavingPrefs(true)
     await supabase.from('profiles').update({ home_kpi_order: JSON.stringify(order) }).eq('id', user.id)
     setSavingPrefs(false)
+  }
+
+  const saveStatPrefs = async (keys) => {
+    if (!user?.id) return
+    await supabase.from('profiles').update({ home_stat_prefs: JSON.stringify(keys) }).eq('id', user.id)
   }
 
   // Period filter for session counts
@@ -694,12 +704,27 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   const card = { background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '16px 18px' }
   const fmtScore = v => { const n = parseFloat(v); return isNaN(n) ? '—' : n >= 0 ? `+${v}` : String(v) }
 
+  const ALL_STATS = [
+    { k:'torneios',   l:'TORNEIOS',    v: String(stats2026.length || '—'),                     c: t.text },
+    { k:'ult_score',  l:'ÚLT. SCORE',  v: s26LastScore != null ? String(s26LastScore) : '—',   c: t.text },
+    { k:'avg_score',  l:'MÉDIA SCORE', v: s26AvgScore != null ? s26AvgScore : '—',             c: t.text },
+    { k:'best_score', l:'MELHOR',      v: s26BestScore != null ? String(s26BestScore) : '—',   c: '#52E8A0' },
+    { k:'best_pos',   l:'MELHOR POS.', v: s26BestPos != null ? `#${s26BestPos}` : '—',         c: '#378ADD' },
+    { k:'top10',      l:'TOP 10',      v: s26Top10 > 0 ? `${s26Top10}×` : '0×',               c: s26Top10 > 0 ? '#f59e0b' : t.textMuted },
+    { k:'fairways',   l:'FAIRWAYS',    v: s26AvgFw != null ? `${s26AvgFw}%` : '—',             c: t.text },
+    { k:'gir',        l:'GIR',         v: s26AvgGir != null ? `${s26AvgGir}%` : '—',           c: t.text },
+    { k:'putts',      l:'PUTTS/RND',   v: s26AvgPutts != null ? s26AvgPutts : '—',             c: t.text },
+  ]
+  const DEFAULT_STAT_KEYS = ALL_STATS.map(s => s.k)
+  const activeStatKeys = statPrefs || DEFAULT_STAT_KEYS
+  const activeStats = ALL_STATS.filter(s => activeStatKeys.includes(s.k))
+
   return (
     <div style={{ fontFamily: F, color: t.text }}>
       <style>{`
         .hm-grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
         .hm-grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
-        .hm-main{display:grid;grid-template-columns:1fr 210px;gap:10px}
+        .hm-main{display:grid;grid-template-columns:1fr 260px;gap:10px}
         .hm-left{display:flex;flex-direction:column;gap:10px}
         .hm-right{display:flex;flex-direction:column;gap:10px}
         .hm-stats{display:flex;flex-direction:row;flex-wrap:nowrap;overflow-x:auto;align-items:stretch}
@@ -802,34 +827,52 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
         </div>
       )}
 
-      {/* ── LINHA 1 — MÉDIAS 2026 + MELHOR RESULTADO ── */}
+      {/* ── LINHA 1 — ÉPOCA 2026 + MELHOR RESULTADO ── */}
       <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '12px 16px', marginBottom: '10px' }}>
-        <div style={{ fontSize: '9px', letterSpacing: '2px', color: t.textMuted, fontWeight: 600, marginBottom: '10px' }}>MÉDIAS 2026</div>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'10px' }}>
+          <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:600 }}>ÉPOCA 2026</div>
+          <div style={{ position:'relative' }}>
+            <button onClick={() => setStatPanelOpen(v => !v)}
+              style={{ background:'transparent', border:`1px solid ${t.border}`, borderRadius:'4px', color:t.textMuted, padding:'2px 7px', fontSize:'9px', cursor:'pointer', fontFamily:F, lineHeight:'1.4' }}>
+              ⚙ Configurar
+            </button>
+            {statPanelOpen && (
+              <>
+                <div onClick={() => setStatPanelOpen(false)} style={{ position:'fixed', inset:0, zIndex:10 }} />
+                <div style={{ position:'absolute', right:0, top:'calc(100% + 4px)', zIndex:20, background:t.surface, border:`1px solid ${t.border}`, borderRadius:'8px', padding:'10px 12px', minWidth:'170px', boxShadow:'0 6px 24px rgba(0,0,0,0.35)' }}>
+                  <div style={{ fontSize:'8px', letterSpacing:'1px', color:t.textMuted, marginBottom:'8px', fontWeight:600 }}>STATS VISÍVEIS</div>
+                  {ALL_STATS.map(s => {
+                    const checked = activeStatKeys.includes(s.k)
+                    return (
+                      <label key={s.k} style={{ display:'flex', alignItems:'center', gap:'7px', padding:'3px 0', cursor:'pointer', fontSize:'11px', color:t.text }}>
+                        <input type="checkbox" checked={checked} onChange={e => {
+                          const next = e.target.checked ? [...activeStatKeys, s.k] : activeStatKeys.filter(k => k !== s.k)
+                          setStatPrefs(next); saveStatPrefs(next)
+                        }} style={{ accentColor:'#378ADD', cursor:'pointer' }} />
+                        {s.l}
+                      </label>
+                    )
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
         <div className="hm-stats">
-          {[
-            { l:'TORNEIOS',    v: stats2026.length || '—',                                             c: t.text },
-            { l:'ÚLT. SCORE',  v: s26LastScore != null ? s26LastScore : '—',                          c: t.text },
-            { l:'MÉDIA SCORE', v: s26AvgScore != null ? s26AvgScore : '—',                            c: t.text },
-            { l:'MELHOR',      v: s26BestScore != null ? s26BestScore : '—',                          c: '#52E8A0' },
-            { l:'MELHOR POS.', v: s26BestPos != null ? `#${s26BestPos}` : '—',                       c: '#378ADD' },
-            { l:'TOP 10',      v: s26Top10 > 0 ? `${s26Top10}×` : '0×',                              c: s26Top10 > 0 ? '#f59e0b' : t.textMuted },
-            { l:'FAIRWAYS',    v: s26AvgFw != null ? `${s26AvgFw}%` : '—',                           c: t.text },
-            { l:'GIR',         v: s26AvgGir != null ? `${s26AvgGir}%` : '—',                         c: t.text },
-            { l:'PUTTS/RND',   v: s26AvgPutts != null ? s26AvgPutts : '—',                           c: t.text },
-          ].map((item, i, arr) => (
-            <div key={i} style={{ flex:1, padding:'0 8px', borderRight: i < arr.length - 1 ? `1px solid ${t.border}` : 'none', minWidth:'52px', textAlign:'center' }}>
+          {activeStats.map((item, i, arr) => (
+            <div key={item.k} style={{ flex:1, padding:'0 8px', borderRight: i < arr.length - 1 ? `1px solid ${t.border}` : 'none', minWidth:'52px', textAlign:'center' }}>
               <div style={{ fontSize:'15px', fontWeight:800, color:item.c, lineHeight:1, whiteSpace:'nowrap' }}>{item.v}</div>
               <div style={{ fontSize:'7px', color:t.textMuted, marginTop:'3px', letterSpacing:'0.5px', textTransform:'uppercase' }}>{item.l}</div>
             </div>
           ))}
           {bestResult && (
-            <div style={{ paddingLeft:'14px', borderLeft:`1px solid ${t.border}`, flexShrink:0, minWidth:'160px' }}>
+            <div style={{ paddingLeft:'14px', borderLeft:`1px solid ${t.border}`, flexShrink:0, minWidth:'150px' }}>
               <div style={{ fontSize:'8px', letterSpacing:'1.5px', color:'#5b8aff', fontWeight:600, marginBottom:'4px' }}>MELHOR RESULTADO</div>
               <div style={{ display:'flex', alignItems:'center', gap:'6px' }}>
                 <div style={{ fontSize:'18px', fontWeight:900, color: parseFloat(bestResult.values.score)<=0?'#52E8A0':'#f87171' }}>{fmtScore(bestResult.values.score)}</div>
                 {isNewPR && <div style={{ fontSize:'9px', color:'#52E8A0', background:'#052a1a', borderRadius:'4px', padding:'1px 6px', fontWeight:700 }}>novo PR</div>}
               </div>
-              <div style={{ fontSize:'9px', color:t.textMuted, marginTop:'2px' }}>{bestResult.event_name}</div>
+              <div style={{ fontSize:'9px', color:t.textMuted, marginTop:'2px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:'140px' }}>{bestResult.event_name}</div>
               <div style={{ fontSize:'9px', color:t.textMuted }}>{formatDate(bestResult.event_date)}{bestResult.values?.par ? ` · Par ${bestResult.values.par}` : ''}</div>
             </div>
           )}
@@ -908,7 +951,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
                   return (
                     <div key={ev.id} style={{ display:'flex', alignItems:'center', gap:'10px', padding:'7px 10px', background:t.bg, borderRadius:'8px', border:`1px solid ${d<=14?'#f59e0b33':t.border}` }}>
                       <div style={{ textAlign:'center', flexShrink:0, minWidth:'36px' }}>
-                        <div style={{ fontSize:'24px', fontWeight:900, color:d<=14?'#f59e0b':'#378ADD', lineHeight:1 }}>{d}</div>
+                        <div style={{ fontSize:'26px', fontWeight:900, color:d<=14?'#f59e0b':'#378ADD', lineHeight:1 }}>{d}</div>
                         <div style={{ fontSize:'7px', color:t.textMuted, letterSpacing:'0.5px', fontWeight:600 }}>DIAS</div>
                       </div>
                       <div style={{ flex:1, minWidth:0 }}>
@@ -974,7 +1017,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
                     <div style={{ fontSize:'11px', color:t.textMuted }}>KPIs de performance</div>
                     {overdueKpis.length > 0
                       ? <div style={{ fontSize:'11px', fontWeight:700, color:'#f87171', display:'flex', alignItems:'center', gap:'4px' }}><span>⚠</span>{overdueKpis.length} em atraso</div>
-                      : <div style={{ fontSize:'11px', fontWeight:700, color:'#52E8A0' }}>OK · {okKpis.length} actualizados</div>
+                      : <div style={{ fontSize:'11px', fontWeight:700, color:'#52E8A0' }}>OK · todos em dia</div>
                     }
                   </div>
                 )
