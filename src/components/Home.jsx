@@ -639,8 +639,8 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   const s26BestScore = s26scores.length ? Math.min(...s26scores) : null
 
   // Two separate donuts: Golf categories + Gym exercises (last 4 weeks)
-  const GOLF_COLORS = ['#6366f1','#06b6d4','#10b981','#f59e0b','#f43f5e','#8b5cf6']
-  const GYM_COLORS  = ['#3b82f6','#ec4899','#14b8a6','#f97316','#a855f7','#eab308']
+  const GOLF_COLORS = ['#6366f1','#06b6d4','#10b981','#f59e0b','#f43f5e']
+  const GYM_COLORS  = ['#8b5cf6','#ec4899','#14b8a6','#f97316','#3b82f6']
   const fwaStr4w = (() => { const d = new Date(); d.setDate(d.getDate()-28); return d.toISOString().split('T')[0] })()
 
   const golfDonut = (() => {
@@ -830,6 +830,10 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
         </div>
       ) : (
         <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '10px', padding: '12px 16px', marginBottom: '12px' }}>
+          <div style={{ marginBottom: '10px' }}>
+            <div style={{ fontSize: '9px', letterSpacing: '3px', color: '#378ADD', fontWeight: 600, marginBottom: '3px' }}>PERFORMANCE · GOLF</div>
+            <div style={{ fontSize: '19px', fontWeight: 700, color: t.text, lineHeight: 1.2 }}>Francisca Salgado</div>
+          </div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
             <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', alignItems: 'flex-end' }}>
               {[
