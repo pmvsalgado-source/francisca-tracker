@@ -770,6 +770,8 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
         .hm-train-donuts{flex:0 0 55%;min-width:0}
         .hm-train-bar{flex:0 0 45%;min-width:0}
         .hm-athlete-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+        .hm-comp-outer{display:none}
+        .hm-comp-inner{display:block}
         @media(max-width:768px){
           .hm-main{grid-template-columns:1fr}
           .hm-grid2{grid-template-columns:1fr}
@@ -781,6 +783,8 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
           .hm-train-donuts{flex:none;width:100%}
           .hm-train-bar{flex:none;width:100%}
           .hm-athlete-grid{grid-template-columns:repeat(2,1fr)}
+          .hm-comp-outer{display:block}
+          .hm-comp-inner{display:none}
         }
         @media(max-width:540px){
           .hm-grid3{grid-template-columns:1fr 1fr}
@@ -1027,6 +1031,34 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
         </div>
       </div>
 
+      {/* Próximas Competições — mobile only (desktop version lives in hm-right) */}
+      <div className="hm-comp-outer" style={{ marginBottom:'10px' }}>
+        <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '12px 14px' }}>
+          <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:600, marginBottom:'10px' }}>PRÓXIMAS COMPETIÇÕES</div>
+          {upcomingEvents.length === 0 ? (
+            <div style={{ fontSize:'11px', color:t.textMuted, fontStyle:'italic' }}>Sem eventos</div>
+          ) : (
+            <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
+              {upcomingEvents.slice(0,3).map(ev => {
+                const d = Math.ceil((new Date(ev.start_date) - new Date()) / 86400000)
+                return (
+                  <div key={ev.id} style={{ display:'flex', alignItems:'center', gap:'10px', padding:'7px 10px', background:t.bg, borderRadius:'8px', border:`1px solid ${d<=14?'#f59e0b33':t.border}` }}>
+                    <div style={{ textAlign:'center', flexShrink:0, minWidth:'36px' }}>
+                      <div style={{ fontSize:'26px', fontWeight:900, color:d<=14?'#f59e0b':'#378ADD', lineHeight:1 }}>{d}</div>
+                      <div style={{ fontSize:'7px', color:t.textMuted, letterSpacing:'0.5px', fontWeight:600 }}>DIAS</div>
+                    </div>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:'10px', fontWeight:600, color:t.text, lineHeight:'1.3' }}>{ev.title}</div>
+                      <div style={{ fontSize:'9px', color:t.textMuted }}>{formatDate(ev.start_date)}{ev.end_date&&ev.end_date!==ev.start_date?` – ${formatDate(ev.end_date)}`:''}</div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* ── MAIN GRID — esquerda + direita ── */}
       <div className="hm-main">
         <div className="hm-left">
@@ -1111,30 +1143,32 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
 
         <div className="hm-right">
 
-          {/* Próximas Competições */}
-          <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '12px 14px' }}>
-            <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:600, marginBottom:'10px' }}>PRÓXIMAS COMPETIÇÕES</div>
-            {upcomingEvents.length === 0 ? (
-              <div style={{ fontSize:'11px', color:t.textMuted, fontStyle:'italic' }}>Sem eventos</div>
-            ) : (
-              <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
-                {upcomingEvents.slice(0,3).map(ev => {
-                  const d = Math.ceil((new Date(ev.start_date) - new Date()) / 86400000)
-                  return (
-                    <div key={ev.id} style={{ display:'flex', alignItems:'center', gap:'10px', padding:'7px 10px', background:t.bg, borderRadius:'8px', border:`1px solid ${d<=14?'#f59e0b33':t.border}` }}>
-                      <div style={{ textAlign:'center', flexShrink:0, minWidth:'36px' }}>
-                        <div style={{ fontSize:'26px', fontWeight:900, color:d<=14?'#f59e0b':'#378ADD', lineHeight:1 }}>{d}</div>
-                        <div style={{ fontSize:'7px', color:t.textMuted, letterSpacing:'0.5px', fontWeight:600 }}>DIAS</div>
+          {/* Próximas Competições — desktop only (mobile version lives above hm-main) */}
+          <div className="hm-comp-inner">
+            <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '12px 14px' }}>
+              <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:600, marginBottom:'10px' }}>PRÓXIMAS COMPETIÇÕES</div>
+              {upcomingEvents.length === 0 ? (
+                <div style={{ fontSize:'11px', color:t.textMuted, fontStyle:'italic' }}>Sem eventos</div>
+              ) : (
+                <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
+                  {upcomingEvents.slice(0,3).map(ev => {
+                    const d = Math.ceil((new Date(ev.start_date) - new Date()) / 86400000)
+                    return (
+                      <div key={ev.id} style={{ display:'flex', alignItems:'center', gap:'10px', padding:'7px 10px', background:t.bg, borderRadius:'8px', border:`1px solid ${d<=14?'#f59e0b33':t.border}` }}>
+                        <div style={{ textAlign:'center', flexShrink:0, minWidth:'36px' }}>
+                          <div style={{ fontSize:'26px', fontWeight:900, color:d<=14?'#f59e0b':'#378ADD', lineHeight:1 }}>{d}</div>
+                          <div style={{ fontSize:'7px', color:t.textMuted, letterSpacing:'0.5px', fontWeight:600 }}>DIAS</div>
+                        </div>
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:'10px', fontWeight:600, color:t.text, lineHeight:'1.3' }}>{ev.title}</div>
+                          <div style={{ fontSize:'9px', color:t.textMuted }}>{formatDate(ev.start_date)}{ev.end_date&&ev.end_date!==ev.start_date?` – ${formatDate(ev.end_date)}`:''}</div>
+                        </div>
                       </div>
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontSize:'10px', fontWeight:600, color:t.text, lineHeight:'1.3' }}>{ev.title}</div>
-                        <div style={{ fontSize:'9px', color:t.textMuted }}>{formatDate(ev.start_date)}{ev.end_date&&ev.end_date!==ev.start_date?` – ${formatDate(ev.end_date)}`:''}</div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
+                    )
+                  })}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Evolução HCP */}
