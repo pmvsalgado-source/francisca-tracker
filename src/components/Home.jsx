@@ -76,30 +76,25 @@ function Sparkline({ data, t, target }) {
   return <canvas ref={canvasRef} style={{ width: '100%', height: '100px', display: 'block' }} />
 }
 
-function MiniSpark({ pts, t, color = '#378ADD' }) {
-  const canvasRef = useRef(null)
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas || pts.length < 2) return
-    const dpr = window.devicePixelRatio || 1
-    const rect = canvas.getBoundingClientRect()
-    canvas.width = rect.width * dpr; canvas.height = rect.height * dpr
-    const ctx = canvas.getContext('2d'); ctx.scale(dpr, dpr)
-    const W = rect.width, H = rect.height; ctx.clearRect(0, 0, W, H)
-    const vals = pts.map(p => parseFloat(p.value))
-    const minV = Math.min(...vals), maxV = Math.max(...vals)
-    const range = maxV - minV || 1
-    const pad = { t: 4, r: 4, b: 4, l: 4 }
-    const cw = W - pad.l - pad.r, ch = H - pad.t - pad.b
-    const xOf = i => pad.l + (i / (pts.length - 1)) * cw
-    const yOf = v => pad.t + ch - ((v - minV) / range) * ch
-    ctx.beginPath()
-    pts.forEach((p, i) => { i === 0 ? ctx.moveTo(xOf(i), yOf(parseFloat(p.value))) : ctx.lineTo(xOf(i), yOf(parseFloat(p.value))) })
-    ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.lineJoin = 'round'; ctx.stroke()
-    const lx = xOf(pts.length-1), ly = yOf(vals[vals.length-1])
-    ctx.beginPath(); ctx.arc(lx, ly, 2.5, 0, Math.PI*2); ctx.fillStyle = color; ctx.fill()
-  }, [pts, color, t])
-  return <canvas ref={canvasRef} style={{ width: '100%', height: '36px', display: 'block' }} />
+function MiniSpark({ pts, color = '#378ADD' }) {
+  if (pts.length < 2) return null
+  const vals = pts.map(p => parseFloat(p.value))
+  const minV = Math.min(...vals), maxV = Math.max(...vals)
+  const range = maxV - minV || 1
+  const VW = 100, VH = 36
+  const pad = { t: 4, r: 4, b: 4, l: 4 }
+  const cw = VW - pad.l - pad.r, ch = VH - pad.t - pad.b
+  const xOf = i => pad.l + (i / (pts.length - 1)) * cw
+  const yOf = v => pad.t + ch - ((v - minV) / range) * ch
+  const polyPoints = pts.map((p, i) => `${xOf(i)},${yOf(parseFloat(p.value))}`).join(' ')
+  const lx = xOf(pts.length - 1), ly = yOf(vals[vals.length - 1])
+  return (
+    <svg width="100%" height="36" viewBox={`0 0 ${VW} ${VH}`} preserveAspectRatio="none"
+      style={{ display: 'block', maxWidth: '100%', overflow: 'hidden' }}>
+      <polyline points={polyPoints} fill="none" stroke={color} strokeWidth="1.5" strokeLinejoin="round" />
+      <circle cx={lx} cy={ly} r="2.5" fill={color} />
+    </svg>
+  )
 }
 
 function WeeklyBarChart({ weeks, t }) {
@@ -905,7 +900,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
               </div>
               <button onClick={()=>setKpiModal(null)} style={{ background:'transparent',border:`1px solid ${t.border}`,borderRadius:'8px',color:t.textMuted,padding:'6px 12px',cursor:'pointer',fontFamily:F,fontSize:'12px' }}>Fechar</button>
             </div>
-            {kpiModal.allEntries.length >= 2 && <div style={{ marginBottom:'16px' }}><MiniSpark pts={kpiModal.allEntries} t={t} color={kpiModal.color} /></div>}
+            {kpiModal.allEntries.length >= 2 && <div style={{ marginBottom:'16px', overflow:'hidden' }}><MiniSpark pts={kpiModal.allEntries} color={kpiModal.color} /></div>}
             <div className="hm2-grid3" style={{ marginBottom:'16px' }}>
               {[
                 { l:'MELHOR', v: kpiModal.allEntries.length ? Math.max(...kpiModal.allEntries.map(e=>parseFloat(e.value))).toFixed(2) : '—' },
@@ -1158,8 +1153,8 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
                     </div>
                     <div style={{ fontSize:'20px', color:kpi.trend==='↑'?'#52E8A0':kpi.trend==='↓'?'#f87171':t.textMuted, flexShrink:0, fontWeight:700 }}>{kpi.trend}</div>
                     {kpi.pts.length >= 2 && (
-                      <div style={{ width:'56px', flexShrink:0, overflow:'hidden' }}>
-                        <MiniSpark pts={kpi.pts} t={t} color={kpi.color} />
+                      <div style={{ width:'56px', minWidth:0, flexShrink:0, overflow:'hidden' }}>
+                        <MiniSpark pts={kpi.pts} color={kpi.color} />
                       </div>
                     )}
                   </div>
