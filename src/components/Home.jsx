@@ -765,13 +765,14 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
         .hm-stats{display:flex;flex-direction:row;flex-wrap:nowrap;overflow-x:auto;align-items:stretch}
         .hm-epoch-row{display:flex;gap:10px;margin-bottom:10px;align-items:stretch}
         .hm-agenda-cols{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
-        @media(max-width:700px){
+        @media(max-width:768px){
           .hm-main{grid-template-columns:1fr}
           .hm-grid2{grid-template-columns:1fr}
           .hm-epoch-row{flex-direction:column}
           .hm-agenda-cols{grid-template-columns:1fr}
+          .hm-stats{flex-wrap:wrap}
         }
-        @media(max-width:480px){
+        @media(max-width:540px){
           .hm-grid3{grid-template-columns:1fr 1fr}
         }
       `}</style>

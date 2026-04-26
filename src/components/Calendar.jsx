@@ -107,16 +107,22 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate }) {
 
   const goToToday = () => {
     const now = new Date()
+    now.setHours(0, 0, 0, 0)
     if (view === 'week') {
-      setCurrentDate(getMondayOf(now))
+      setCurrentDate(now)  // today is the leftmost visible day
     } else {
       setCurrentDate(new Date(now.getFullYear(), now.getMonth(), 1))
     }
   }
 
   const switchView = (v) => {
-    if (v === 'week') setCurrentDate(getMondayOf(new Date()))
-    else if (v === 'month') { const n = new Date(); setCurrentDate(new Date(n.getFullYear(), n.getMonth(), 1)) }
+    const now = new Date()
+    now.setHours(0, 0, 0, 0)
+    if (v === 'week') {
+      setCurrentDate(now)  // start week view from today
+    } else if (v === 'month') {
+      setCurrentDate(new Date(now.getFullYear(), now.getMonth(), 1))
+    }
     setView(v)
   }
 
@@ -198,7 +204,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate }) {
         .cal-week-cell.today-cell{background:${t.accentBg};}
         .annual-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
         .cal-year-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
-        @media(max-width:700px){.annual-grid{grid-template-columns:repeat(2,1fr)}.cal-cell{min-height:40px;padding:3px}.cal-week-cell{min-height:100px;padding:4px}}
+        @media(max-width:768px){.annual-grid{grid-template-columns:repeat(2,1fr)}.cal-cell{min-height:40px;padding:3px}.cal-week-cell{min-height:100px;padding:4px}}
         @media(max-width:600px){.cal-year-stats{grid-template-columns:repeat(2,1fr)}}
       `}</style>
 
@@ -344,9 +350,9 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate }) {
           {view === 'year' && <div style={{ fontSize: '16px', fontWeight: 700, color: '#fff' }}>Ano {year}</div>}
         </div>
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <button onClick={() => switchView('month')} style={{ background: view === 'month' ? '#243560' : 'transparent', border: '0.5px solid #2e4a6a', borderRadius: '6px', color: view === 'month' ? '#fff' : '#8aaed4', padding: '5px 12px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 600 }}>{lang==='pt'?'Mensal':'Monthly'}</button>
           <button onClick={() => switchView('week')} style={{ background: view === 'week' ? '#243560' : 'transparent', border: '0.5px solid #2e4a6a', borderRadius: '6px', color: view === 'week' ? '#fff' : '#8aaed4', padding: '5px 12px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 600 }}>Semana</button>
-          <button onClick={() => switchView('year')} style={{ background: view === 'year' ? '#243560' : 'transparent', border: '0.5px solid #2e4a6a', borderRadius: '6px', color: view === 'year' ? '#fff' : '#8aaed4', padding: '5px 12px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 600 }}>{lang==='pt'?'Anual':'Annual'}</button>
+          <button onClick={() => switchView('month')} style={{ background: view === 'month' ? '#243560' : 'transparent', border: '0.5px solid #2e4a6a', borderRadius: '6px', color: view === 'month' ? '#fff' : '#8aaed4', padding: '5px 12px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 600 }}>Mensal</button>
+          <button onClick={() => switchView('year')} style={{ background: view === 'year' ? '#243560' : 'transparent', border: '0.5px solid #2e4a6a', borderRadius: '6px', color: view === 'year' ? '#fff' : '#8aaed4', padding: '5px 12px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 600 }}>Anual</button>
           <button onClick={goToToday} style={{ background: 'transparent', border: '0.5px solid #52E8A0', borderRadius: '6px', color: '#52E8A0', padding: '5px 12px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 700 }}>Hoje</button>
           <div style={{ width: '1px', height: '14px', background: '#2e4a6a' }}></div>
           {[['events', lang==='pt'?'Eventos':'Events', '#378ADD'], ['golf', 'Golf', '#22c55e'], ['gym', lang==='pt'?'Ginásio':'Gym', '#f97316']].map(([key, label, color]) => (
@@ -373,28 +379,30 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate }) {
       {/* Monthly View */}
       {view === 'month' && (
         <div>
-          <div className="cal-grid">
-            {WEEKDAYS.map(d => (
-              <div key={d} style={{ background: t.bg, padding: '8px', textAlign: 'center', fontSize: '10px', fontWeight: 700, letterSpacing: '1px', color: t.textMuted, borderRight: `0.5px solid ${t.border}`, borderBottom: `0.5px solid ${t.border}` }}>{d}</div>
-            ))}
-            {getDaysInMonth(year, month).map((day, i) => {
-              const dayEvents = getEventsForDay(day.date)
-              const dateStr = `${day.date.getFullYear()}-${String(day.date.getMonth()+1).padStart(2,'0')}-${String(day.date.getDate()).padStart(2,'0')}`
-              const isToday = dateStr === today
-              return (
-                <div key={i} className={`cal-cell${isToday ? ' today-cell' : ''}`} onClick={() => openNew(dateStr)}
-                  style={{ background: isToday ? t.accentBg : day.current ? t.surface : t.bg, borderRight: `0.5px solid ${t.border}`, borderBottom: `0.5px solid ${t.border}` }}>
-                  <div style={{ fontSize: '12px', color: day.current ? (isToday ? t.accent : t.text) : t.textFaint, fontWeight: isToday ? 800 : 600, marginBottom: '4px' }}>{day.date.getDate()}</div>
-                  {dayEvents.slice(0, 2).map((ev, ei) => (
-                    <div key={ev.id || ei} onClick={e => { e.stopPropagation(); if (ev._isTrain) { onNavigate?.('training', { date: dateStr }) } else { openEdit(ev) } }}
-                      style={{ background: ev._isTrain ? ev._color + '33' : (ev.color || getCatColor(ev.category)), borderRadius: '4px', padding: '3px 6px', fontSize: '10px', fontWeight: 700, color: ev._isTrain ? ev._color : '#fff', marginBottom: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer', border: ev._isTrain ? `1px solid ${ev._color}44` : 'none' }}>
-                      {ev._isTrain ? (ev.type === 'golf' ? '⛳' : '💪') + ' ' : ''}{ev.title || ev.session_name || ev.name || ev.cat}
-                    </div>
-                  ))}
-                  {dayEvents.length > 2 && <div style={{ fontSize: '9px', color: t.textMuted, fontWeight: 600 }}>+{dayEvents.length - 2}</div>}
-                </div>
-              )
-            })}
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <div className="cal-grid" style={{ minWidth: '420px' }}>
+              {WEEKDAYS.map(d => (
+                <div key={d} style={{ background: t.bg, padding: '8px', textAlign: 'center', fontSize: '10px', fontWeight: 700, letterSpacing: '1px', color: t.textMuted, borderRight: `0.5px solid ${t.border}`, borderBottom: `0.5px solid ${t.border}` }}>{d}</div>
+              ))}
+              {getDaysInMonth(year, month).map((day, i) => {
+                const dayEvents = getEventsForDay(day.date)
+                const dateStr = `${day.date.getFullYear()}-${String(day.date.getMonth()+1).padStart(2,'0')}-${String(day.date.getDate()).padStart(2,'0')}`
+                const isToday = dateStr === today
+                return (
+                  <div key={i} className={`cal-cell${isToday ? ' today-cell' : ''}`} onClick={() => openNew(dateStr)}
+                    style={{ background: isToday ? t.accentBg : day.current ? t.surface : t.bg, borderRight: `0.5px solid ${t.border}`, borderBottom: `0.5px solid ${t.border}` }}>
+                    <div style={{ fontSize: '12px', color: day.current ? (isToday ? t.accent : t.text) : t.textFaint, fontWeight: isToday ? 800 : 600, marginBottom: '4px' }}>{day.date.getDate()}</div>
+                    {dayEvents.slice(0, 2).map((ev, ei) => (
+                      <div key={ev.id || ei} onClick={e => { e.stopPropagation(); if (ev._isTrain) { onNavigate?.('training', { date: dateStr }) } else { openEdit(ev) } }}
+                        style={{ background: ev._isTrain ? ev._color + '33' : (ev.color || getCatColor(ev.category)), borderRadius: '4px', padding: '3px 6px', fontSize: '10px', fontWeight: 700, color: ev._isTrain ? ev._color : '#fff', marginBottom: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer', border: ev._isTrain ? `1px solid ${ev._color}44` : 'none' }}>
+                        {ev._isTrain ? (ev.type === 'golf' ? '⛳' : '💪') + ' ' : ''}{ev.title || ev.session_name || ev.name || ev.cat}
+                      </div>
+                    ))}
+                    {dayEvents.length > 2 && <div style={{ fontSize: '9px', color: t.textMuted, fontWeight: 600 }}>+{dayEvents.length - 2}</div>}
+                  </div>
+                )
+              })}
+            </div>
           </div>
 
           {/* Month summary */}
@@ -406,11 +414,15 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate }) {
 
       {/* Week View */}
       {view === 'week' && (
-        <div>
-          <div className="cal-week-grid">
-            {WEEKDAYS.map(d => (
-              <div key={d} style={{ background: t.bg, padding: '8px', textAlign: 'center', fontSize: '10px', fontWeight: 700, letterSpacing: '1px', color: t.textMuted, borderRight: `0.5px solid ${t.border}`, borderBottom: `0.5px solid ${t.border}` }}>{d}</div>
-            ))}
+        <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+          <div className="cal-week-grid" style={{ minWidth: '500px' }}>
+            {/* Dynamic headers — match the actual days shown, not always Mon-Sun */}
+            {getWeekDays().map((day, i) => {
+              const dayLabel = WEEKDAYS[(day.getDay() + 6) % 7]
+              return (
+                <div key={`h${i}`} style={{ background: t.bg, padding: '8px', textAlign: 'center', fontSize: '10px', fontWeight: 700, letterSpacing: '1px', color: t.textMuted, borderRight: `0.5px solid ${t.border}`, borderBottom: `0.5px solid ${t.border}` }}>{dayLabel}</div>
+              )
+            })}
             {getWeekDays().map((day, i) => {
               const dateStr = `${day.getFullYear()}-${String(day.getMonth()+1).padStart(2,'0')}-${String(day.getDate()).padStart(2,'0')}`
               const dayEvents = getEventsForDay(day)

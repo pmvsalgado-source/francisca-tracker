@@ -40,6 +40,7 @@ export default function CompStats({ theme, t, user }) {
   const [detailStat, setDetailStat] = useState(null)
   const [editStat, setEditStat] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState(null)
 
   // Entry form
   const [form, setForm] = useState({ event_id: '', event_name: '', event_date: '', values: {}, notes: '', website: '' })
@@ -90,30 +91,60 @@ export default function CompStats({ theme, t, user }) {
   // ── Entry handlers ─────────────────────────────────────────────────────────
   const openNew = () => {
     setEditStat(null)
+    setSaveError(null)
     setForm({ event_id: '', event_name: '', event_date: new Date().toISOString().split('T')[0], values: {}, notes: '', website: '' })
     setShowModal(true)
   }
 
   const openEdit = (s) => {
     setEditStat(s)
+    setSaveError(null)
     setForm({ event_id: s.event_id || '', event_name: s.event_name, event_date: s.event_date, values: s.values || {}, notes: s.notes || '', website: s.website || '' })
     setShowModal(true)
   }
 
   const saveStat = async () => {
     if (!form.event_name || !form.event_date) return
+    if (!user) {
+      setSaveError('Sessão expirada. Faz login novamente.')
+      return
+    }
     setSaving(true)
+    setSaveError(null)
+
+    // Strip empty-string values so JSONB only stores actual data
+    const cleanValues = Object.fromEntries(
+      Object.entries(form.values).filter(([, v]) => v !== '' && v !== null && v !== undefined)
+    )
+
+    // Only send columns that definitely exist in competition_stats
     const payload = {
-      ...form,
       event_id: form.event_id || null,
-      updated_by: user?.email,
-      updated_at: new Date().toISOString(),
+      event_name: form.event_name,
+      event_date: form.event_date,
+      values: cleanValues,
+      notes: form.notes || null,
+      website: form.website || null,
     }
+
+    console.log('[CompStats] saveStat payload:', JSON.stringify(payload))
+
+    let result
     if (editStat) {
-      await supabase.from('competition_stats').update(payload).eq('id', editStat.id)
+      result = await supabase.from('competition_stats').update(payload).eq('id', editStat.id)
     } else {
-      await supabase.from('competition_stats').insert({ ...payload, created_by: user?.email })
+      result = await supabase.from('competition_stats').insert(payload)
     }
+
+    console.log('[CompStats] saveStat result:', result?.error ?? 'ok')
+
+    if (result?.error) {
+      console.error('[CompStats] save error:', result.error)
+      setSaveError(result.error.message || 'Erro ao guardar. Verifica a consola.')
+      setSaving(false)
+      return
+    }
+
     setSaving(false)
     setShowModal(false)
     fetchData()
@@ -495,6 +526,11 @@ export default function CompStats({ theme, t, user }) {
                 <input value={form.website || ''} onChange={e => setForm(p => ({ ...p, website: e.target.value }))} placeholder="https://..." style={inp} />
               </div>
             </div>
+            {saveError && (
+              <div style={{ color: t.danger, fontSize: '12px', padding: '8px 10px', background: t.dangerBg || '#1a0808', borderRadius: '6px', marginTop: '12px', borderLeft: `3px solid ${t.danger}` }}>
+                ⚠ {saveError}
+              </div>
+            )}
             <div style={{ display: 'flex', gap: '10px', marginTop: '20px', justifyContent: 'space-between' }}>
               <div>
                 {editStat && (
@@ -505,10 +541,10 @@ export default function CompStats({ theme, t, user }) {
                 )}
               </div>
               <div style={{ display: 'flex', gap: '10px' }}>
-                <button onClick={() => setShowModal(false)} style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '6px', color: t.textMuted, padding: '8px 16px', cursor: 'pointer', fontSize: '12px', fontFamily: F }}>Cancel</button>
+                <button onClick={() => setShowModal(false)} style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '6px', color: t.textMuted, padding: '8px 16px', cursor: 'pointer', fontSize: '12px', fontFamily: F }}>Cancelar</button>
                 <button onClick={saveStat} disabled={saving || !form.event_name}
                   style={{ background: !form.event_name ? t.navActive : t.accent, border: 'none', borderRadius: '6px', color: !form.event_name ? t.textMuted : (theme === 'dark' ? '#000' : '#fff'), padding: '8px 20px', cursor: 'pointer', fontSize: '13px', fontWeight: 700, fontFamily: F }}>
-                  {saving ? 'Saving...' : 'Save Stats'}
+                  {saving ? 'A guardar...' : 'Guardar Stats'}
                 </button>
               </div>
             </div>
