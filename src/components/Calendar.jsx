@@ -105,15 +105,6 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate }) {
     return d
   })
 
-  const goToToday = () => {
-    const now = new Date()
-    now.setHours(0, 0, 0, 0)
-    if (view === 'week') {
-      setCurrentDate(now)  // today is the leftmost visible day
-    } else {
-      setCurrentDate(new Date(now.getFullYear(), now.getMonth(), 1))
-    }
-  }
 
   const switchView = (v) => {
     const now = new Date()
@@ -350,8 +341,6 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate }) {
           {view === 'year' && <div style={{ fontSize: '16px', fontWeight: 700, color: '#fff' }}>Ano {year}</div>}
         </div>
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <button onClick={goToToday} style={{ background: 'transparent', border: '0.5px solid #52E8A0', borderRadius: '6px', color: '#52E8A0', padding: '5px 12px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 700 }}>Today</button>
-          <div style={{ width: '1px', height: '14px', background: '#2e4a6a' }}></div>
           <button onClick={() => switchView('week')} style={{ background: view === 'week' ? '#243560' : 'transparent', border: '0.5px solid #2e4a6a', borderRadius: '6px', color: view === 'week' ? '#fff' : '#8aaed4', padding: '5px 12px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 600 }}>Week</button>
           <button onClick={() => switchView('month')} style={{ background: view === 'month' ? '#243560' : 'transparent', border: '0.5px solid #2e4a6a', borderRadius: '6px', color: view === 'month' ? '#fff' : '#8aaed4', padding: '5px 12px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 600 }}>Month</button>
           <button onClick={() => switchView('year')} style={{ background: view === 'year' ? '#243560' : 'transparent', border: '0.5px solid #2e4a6a', borderRadius: '6px', color: view === 'year' ? '#fff' : '#8aaed4', padding: '5px 12px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 600 }}>Annual</button>
