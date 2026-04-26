@@ -67,11 +67,12 @@ function daysDiff(a, b) {
 
 // Keywords that identify a competition event regardless of category spelling.
 // Covers: Competição, Competition, Torneio, Open, Cup, Championship,
-// Stroke Play, Stableford, Medal, Match Play, Matchplay, Pro-Am.
+// Stroke Play, Stableford, Medal, Match Play, Matchplay, Pro-Am,
+// Nacional (also matches Internacional), Regional.
 const COMP_KEYWORDS = [
   'competi', 'torneio', ' cup', 'championship', 'stroke play',
   'stableford', 'matchplay', 'match play', 'medal play', 'pro-am', 'proam',
-  'open ', ' open',
+  'open ', ' open', 'nacional', 'regional',
 ]
 
 function isCompetition(event) {
@@ -147,7 +148,7 @@ export function calcWeekPhase(weekStart, events) {
     .filter(isCompetition)
     .map(e => ({ ...e, _sd: eventDate(e), _ed: eventEndDate(e) }))   // normalise dates once
     .filter(e => {
-      if (!e._sd) { console.warn('[periodization] event has no parseable date:', e.title, e.start_date || e.date || e.start); return false }
+      if (!e._sd) return false
       return true
     })
     .sort((a, b) => a._sd.localeCompare(b._sd))
@@ -167,7 +168,6 @@ export function calcWeekPhase(weekStart, events) {
     if (start >= ws) {
       daysToNextCompetition = Math.round((start - ws) / (1000 * 60 * 60 * 24))
       nextCompEvent = c
-      console.log('[next comp date]', c._sd, 'raw:', c.start_date || c.date || c.start, 'days:', daysToNextCompetition, 'title:', c.title)
       break
     }
   }
@@ -258,8 +258,6 @@ export function calcWeekPhase(weekStart, events) {
     phase  = 'DESCANSO'
     reason = 'Sem competições no calendário'
   }
-
-  console.log('[calc] daysToNearest:', daysToNextCompetition, 'daysToPhaseComp:', daysToPhaseComp, 'phase:', phase)
 
   return {
     phase,

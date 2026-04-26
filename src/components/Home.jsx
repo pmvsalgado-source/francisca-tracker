@@ -624,7 +624,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
     : null
   const isNewPR = bestResult && compStats.length > 0 && compStats[0]?.id === bestResult?.id
 
-  const COMP_KW = ['competi','torneio',' cup','championship','stroke play','stableford','matchplay','match play','medal play','pro-am','proam','open ']
+  const COMP_KW = ['competi','torneio',' cup','championship','stroke play','stableford','matchplay','match play','medal play','pro-am','proam','open ','nacional','regional']
   const isCompEvent = e => {
     const cat = (e.category||'').toLowerCase(); const ttl = (e.title||'').toLowerCase()
     return COMP_KW.some(kw => cat.includes(kw) || ttl.includes(kw))
