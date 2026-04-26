@@ -756,24 +756,34 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
 
   const phaseInfo = calcCurrentPhase(events)
 
-  const FOCO_HOJE = {
-    PEAK:                 'Putting · ritmo · confiança',
-    AFINACAO:             'Putting · ritmo · confiança',
-    DESENVOLVIMENTO:      'Transferência para performance',
-    DESENVOLVIMENTO_LIGHT:'Volume reduzido · técnica suave',
-    ACUMULACAO:           'Volume · base física e técnica',
-    MANUTENCAO_B2B:       'Manutenção · recuperação ativa',
-    DESCARGA:             'Reduzir carga · descanso ativo',
-    DESCANSO:             'Pausa total',
+  const HERO_INSTRUCTION = {
+    PEAK:                 'rotina de jogo · putting · ritmo',
+    AFINACAO:             'putting · wedges · rotina pré-competição',
+    DESENVOLVIMENTO:      'campo · técnica · transferência de velocidade',
+    DESENVOLVIMENTO_LIGHT:'campo suave · putting · sem fadiga',
+    ACUMULACAO:           'range · base física · técnica',
+    MANUTENCAO_B2B:       'manutenção · descanso ativo',
+    DESCARGA:             'mobilidade · sessão curta',
+    DESCANSO:             'descanso total',
+  }
+  const HERO_FOCUS = {
+    PEAK:                 'confiança · tempo · execução',
+    AFINACAO:             'ritmo · precisão · confiança',
+    DESENVOLVIMENTO:      'técnica · velocidade · transferência',
+    DESENVOLVIMENTO_LIGHT:'ritmo · precisão · frescura',
+    ACUMULACAO:           'volume · base · consistência',
+    MANUTENCAO_B2B:       'recuperação · manutenção · energia',
+    DESCARGA:             'recuperação · regeneração',
+    DESCANSO:             'recuperação total',
   }
   const PHASE_TASK_HINTS = {
-    PEAK:                 { Golf:'Rotina pré-competição · sem fadiga', Ginásio:'Ativação leve — 20 min' },
-    AFINACAO:             { Golf:'Drills de pressão · putting e wedges', Ginásio:'Mobilidade + ativação' },
-    DESENVOLVIMENTO:      { Golf:'Técnica e transferência de velocidade', Ginásio:'Força · potência' },
-    DESENVOLVIMENTO_LIGHT:{ Golf:'Volume reduzido · manutenção de ritmo', Ginásio:'Carga moderada' },
-    ACUMULACAO:           { Golf:'Volume · base técnica · física', Ginásio:'Força · capacidade aeróbia' },
-    MANUTENCAO_B2B:       { Golf:'Manutenção · ritmo suave', Ginásio:'Mobilidade · recuperação ativa' },
-    DESCARGA:             { Golf:'Sessão curta · técnica suave', Ginásio:'Mobilidade apenas' },
+    PEAK:                 { Golf:'60 min — rotina de jogo · ritmo e confiança', Ginásio:'20 min — ativação leve · sem fadiga' },
+    AFINACAO:             { Golf:'30–45 min — putting + wedges · drills de pressão', Ginásio:'20 min — mobilidade + ativação' },
+    DESENVOLVIMENTO:      { Golf:'60–90 min — técnica + velocidade · transferência', Ginásio:'60 min — força + potência' },
+    DESENVOLVIMENTO_LIGHT:{ Golf:'45 min — ritmo · volume reduzido', Ginásio:'30 min — carga moderada' },
+    ACUMULACAO:           { Golf:'90+ min — range · base técnica e física', Ginásio:'60 min — força + capacidade' },
+    MANUTENCAO_B2B:       { Golf:'30–40 min — ritmo suave · manutenção', Ginásio:'20 min — mobilidade + recuperação' },
+    DESCARGA:             { Golf:'20–30 min — técnica suave · sessão curta', Ginásio:'15 min — mobilidade apenas' },
     DESCANSO:             {},
   }
   const getTaskHint = (task) => {
@@ -1026,33 +1036,21 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
 
       {/* ── 2. HERO — FASE ATUAL ── */}
       <div style={{ background: phaseInfo.phaseColor, borderRadius:'14px', padding:'16px 20px', marginBottom:'14px' }}>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'12px' }}>
-          <div>
-            <div style={{ fontSize:'8px', letterSpacing:'3px', color:'rgba(255,255,255,0.5)', fontWeight:700, marginBottom:'3px' }}>FASE ATUAL</div>
-            <div style={{ fontSize:'34px', fontWeight:900, color:'#fff', lineHeight:1, letterSpacing:'-0.5px' }}>
-              {phaseInfo.phase === 'PEAK' && '🔴 '}{phaseInfo.phase.replace(/_/g, ' ')}
-            </div>
+        <div style={{ display:'flex', alignItems:'baseline', gap:'10px', flexWrap:'wrap', marginBottom:'10px' }}>
+          <div style={{ fontSize:'34px', fontWeight:900, color:'#fff', lineHeight:1, letterSpacing:'-0.5px' }}>
+            {phaseInfo.phase === 'PEAK' && '🔴 '}{phaseInfo.phase.replace(/_/g, ' ')}
           </div>
           {phaseInfo.daysToNextCompetition != null && (
-            <div style={{ background:'rgba(0,0,0,0.22)', borderRadius:'10px', padding:'8px 14px', textAlign:'center', flexShrink:0 }}>
-              <div style={{ fontSize:'36px', fontWeight:900, color:'#fff', lineHeight:1 }}>{phaseInfo.daysToNextCompetition}</div>
-              <div style={{ fontSize:'8px', letterSpacing:'2px', color:'rgba(255,255,255,0.6)', fontWeight:600, marginTop:'2px' }}>DIAS</div>
+            <div style={{ fontSize:'14px', fontWeight:600, color:'rgba(255,255,255,0.65)', lineHeight:1 }}>
+              · {phaseInfo.daysToNextCompetition} dia{phaseInfo.daysToNextCompetition === 1 ? '' : 's'} para competir
             </div>
           )}
         </div>
-        <div style={{ marginTop:'10px', borderTop:'1px solid rgba(255,255,255,0.15)', paddingTop:'8px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:'8px', flexWrap:'wrap' }}>
-          <span style={{ fontSize:'12px', color:'rgba(255,255,255,0.9)', fontWeight:600 }}>
-            {phaseInfo.phase === 'PEAK'
-              ? '→ Executar o plano. Zero mudanças.'
-              : phaseInfo.daysToNextCompetition === 0
-                ? '→ Competição hoje!'
-                : phaseInfo.daysToNextCompetition != null
-                  ? `→ ${phaseInfo.daysToNextCompetition} dia${phaseInfo.daysToNextCompetition === 1 ? '' : 's'} para competir`
-                  : '→ Sem competições agendadas'}
-          </span>
-          <span style={{ fontSize:'10px', color:'rgba(255,255,255,0.65)', fontWeight:500 }}>
-            Foco: {FOCO_HOJE[phaseInfo.phase]}
-          </span>
+        <div style={{ fontSize:'13px', fontWeight:600, color:'rgba(255,255,255,0.95)', marginBottom:'4px' }}>
+          → Hoje: {HERO_INSTRUCTION[phaseInfo.phase]}
+        </div>
+        <div style={{ fontSize:'11px', color:'rgba(255,255,255,0.6)' }}>
+          Foco: {HERO_FOCUS[phaseInfo.phase]}
         </div>
       </div>
 
@@ -1080,7 +1078,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
               <div style={{ display:'flex', flexDirection:'column', gap:'10px' }}>
                 {enrichedTodayTasks.map((task, i) => {
                   const done = !!todayChecked[i]
-                  const displayLabel = (!task.badge && task.detail) ? `${task.label} — ${task.detail}` : task.label
+                  const displayLabel = (!task.badge && task.detail) ? task.detail : task.label
                   const displaySub = task.hint || (task.badge ? task.detail : '')
                   return (
                     <label key={i} style={{ display:'flex', alignItems:'flex-start', gap:'10px', cursor:'pointer', userSelect:'none' }}>
@@ -1105,6 +1103,13 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
           </div>
 
           {/* ── 4. SEMANA ── */}
+          {(() => {
+            const wsStr = weekDays[0]?.toISOString().split('T')[0]
+            const weStr = weekDays[6]?.toISOString().split('T')[0]
+            const hasCalEvts = wsStr && weStr && events.some(e => e.start_date <= weStr && (e.end_date || e.start_date) >= wsStr)
+            const hasPlanData = currentPlan?.days?.some(d => d?.sessions?.length && !d.sessions[0]?.isRest)
+            if (!hasCalEvts && !hasPlanData) return null
+            return (
           <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'12px', padding:'14px 16px' }}>
             <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:600, marginBottom:'10px' }}>ESTA SEMANA</div>
             <div style={{ display:'flex', flexDirection:'column' }}>
@@ -1157,6 +1162,8 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
               })}
             </div>
           </div>
+            )
+          })()}
 
           {/* ── 5. PRÓXIMA COMPETIÇÃO ── */}
           <div style={{ background:t.surface, border:`1px solid ${daysToNextComp <= 7 ? '#ef444455' : t.border}`, borderRadius:'12px', padding:'14px 16px' }}>
@@ -1206,30 +1213,6 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
             )}
           </div>
 
-          {/* ── 7. PERFORMANCE SNAPSHOT ── */}
-          <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'12px', padding:'10px 14px', overflow:'hidden' }}>
-            <div style={{ fontSize:'8px', letterSpacing:'2px', color:t.textMuted, fontWeight:600, marginBottom:'8px' }}>PERFORMANCE SNAPSHOT</div>
-            {snapshotKpis.length === 0 ? (
-              <div style={{ fontSize:'11px', color:t.textMuted, fontStyle:'italic' }}>Sem dados.</div>
-            ) : (
-              <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
-                {snapshotKpis.map(kpi => (
-                  <div key={kpi.id} style={{ display:'flex', alignItems:'center', gap:'8px', minWidth:0 }}>
-                    <div style={{ width:'52px', fontSize:'7px', letterSpacing:'1px', color:t.textMuted, fontWeight:600, flexShrink:0 }}>{kpi.label}</div>
-                    <div style={{ fontSize:'15px', fontWeight:800, color:kpi.color, lineHeight:1, flexShrink:0 }}>{kpi.value}</div>
-                    {kpi.unit && <div style={{ fontSize:'9px', color:t.textMuted, flexShrink:0 }}>{kpi.unit}</div>}
-                    <div style={{ fontSize:'12px', color:kpi.trend==='↑'?'#52E8A0':kpi.trend==='↓'?'#f87171':t.textMuted, flexShrink:0, fontWeight:700, marginLeft:'auto' }}>{kpi.trend}</div>
-                    {kpi.pts.length >= 2 && (
-                      <div style={{ width:'44px', minWidth:0, flexShrink:0, overflow:'hidden' }}>
-                        <MiniSpark pts={kpi.pts} color={kpi.color} />
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
           {/* ── 8. RECOVERY & SUPPORT ── */}
           <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'12px', padding:'14px 16px' }}>
             <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:600, marginBottom:'10px' }}>RECOVERY & SUPPORT</div>
@@ -1243,25 +1226,14 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
                 ))}
               </div>
             ) : (
-              <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
-                {[
-                  { type:'Massagem',     icon:'💆', label:'massagem' },
-                  { type:'Physio',       icon:'🦴', label:'fisioterapia' },
-                  { type:'Mental Coach', icon:'🧠', label:'coach mental' },
-                ].map(({ type, icon, label }) => (
-                  <div key={type} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 10px', background:t.bg, borderRadius:'8px', border:`1px solid ${phaseInfo.restAlertLevel === 'red' ? '#f8717133' : t.border}` }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
-                      <span style={{ fontSize:'14px' }}>{icon}</span>
-                      <span style={{ fontSize:'11px', color:t.textMuted }}>
-                        {phaseInfo.restAlertLevel === 'red' ? '⚠️ ' : ''}Sem {label} nos últimos 30 dias
-                      </span>
-                    </div>
-                    <button onClick={() => onNavigate && onNavigate('calendar')}
-                      style={{ background:'transparent', border:`1px solid ${t.border}`, borderRadius:'6px', color:t.textMuted, padding:'3px 10px', fontSize:'10px', cursor:'pointer', fontFamily:F, fontWeight:600, whiteSpace:'nowrap' }}>
-                      Agendar
-                    </button>
-                  </div>
-                ))}
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'10px' }}>
+                <span style={{ fontSize:'11px', color: phaseInfo.restAlertLevel === 'red' ? '#f87171' : t.textMuted }}>
+                  {phaseInfo.restAlertLevel === 'red' ? '⚠️ ' : ''}Sem sessão de recuperação agendada
+                </span>
+                <button onClick={() => onNavigate && onNavigate('calendar')}
+                  style={{ background:'transparent', border:`1px solid ${t.border}`, borderRadius:'6px', color:t.textMuted, padding:'4px 12px', fontSize:'10px', cursor:'pointer', fontFamily:F, fontWeight:600, whiteSpace:'nowrap' }}>
+                  Agendar sessão
+                </button>
               </div>
             )}
           </div>
