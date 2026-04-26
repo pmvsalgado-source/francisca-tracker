@@ -797,12 +797,13 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
     return tasks
   })()
 
-  // Next competition
-  console.log('[competitions]', events.filter(e => (e.category||'').toLowerCase().includes('competi')).map(e => ({ name: e.title, date: e.start_date || e.date, category: e.category })))
-  console.log('[today]', new Date().toISOString())
+  // Normalise a raw date value to 'YYYY-MM-DD' (handles full timestamps)
+  const normDate = raw => { if (!raw) return ''; const m = String(raw).match(/^(\d{4}-\d{2}-\d{2})/); return m ? m[1] : '' }
+
+  // Next competition — use normDate so timestamp-format start_dates compare correctly
   const nextCompetition = events
-    .filter(e => isCompEvent(e) && e.start_date >= todayStr && !['cancelled','cancelado'].includes(e.status || ''))
-    .sort((a, b) => a.start_date.localeCompare(b.start_date))[0] || null
+    .filter(e => isCompEvent(e) && normDate(e.start_date || e.date || e.start) >= todayStr && !['cancelled','cancelado'].includes(e.status || ''))
+    .sort((a, b) => normDate(a.start_date || a.date || a.start).localeCompare(normDate(b.start_date || b.date || b.start)))[0] || null
   const daysToNextComp = nextCompetition
     ? Math.max(0, Math.ceil((new Date(nextCompetition.start_date) - new Date()) / 86400000))
     : null
