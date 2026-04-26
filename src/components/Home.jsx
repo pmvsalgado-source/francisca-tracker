@@ -794,6 +794,8 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   })()
 
   // Next competition
+  console.log('[competitions]', events.filter(e => (e.category||'').toLowerCase().includes('competi')).map(e => ({ name: e.title, date: e.start_date || e.date, category: e.category })))
+  console.log('[today]', new Date().toISOString())
   const nextCompetition = events
     .filter(e => isCompEvent(e) && e.start_date >= todayStr && !['cancelled','cancelado'].includes(e.status || ''))
     .sort((a, b) => a.start_date.localeCompare(b.start_date))[0] || null

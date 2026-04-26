@@ -202,6 +202,8 @@ export function calcWeekPhase(weekStart, events) {
     reason = 'Sem competições no calendário'
   }
 
+  console.log('[calc] daysToNext:', daysToNextCompetition, 'phase:', phase)
+
   return {
     phase,
     reason,
