@@ -181,7 +181,7 @@ function DonutChart({ segments, total, t }) {
     ctx.fillText(total, cx, cy)
     ctx.textBaseline = 'alphabetic'
   }, [segments, total, t])
-  return <canvas ref={canvasRef} style={{ width: '130px', height: '130px', display: 'block', flexShrink: 0 }} />
+  return <canvas ref={canvasRef} style={{ width: 'min(130px, 100%)', height: '130px', display: 'block', flexShrink: 0 }} />
 }
 
 function KpiLineChart({ entries, t, F, cardStyle }) {
@@ -765,15 +765,26 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
         .hm-stats{display:flex;flex-direction:row;flex-wrap:nowrap;overflow-x:auto;align-items:stretch}
         .hm-epoch-row{display:flex;gap:10px;margin-bottom:10px;align-items:stretch}
         .hm-agenda-cols{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+        .hm-best-card{width:220px;flex-shrink:0}
+        .hm-train-flex{display:flex;gap:12px;align-items:flex-start}
+        .hm-train-donuts{flex:0 0 55%;min-width:0}
+        .hm-train-bar{flex:0 0 45%;min-width:0}
+        .hm-athlete-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
         @media(max-width:768px){
           .hm-main{grid-template-columns:1fr}
           .hm-grid2{grid-template-columns:1fr}
           .hm-epoch-row{flex-direction:column}
           .hm-agenda-cols{grid-template-columns:1fr}
           .hm-stats{flex-wrap:wrap}
+          .hm-best-card{width:100%;flex-shrink:1}
+          .hm-train-flex{flex-direction:column}
+          .hm-train-donuts{flex:none;width:100%}
+          .hm-train-bar{flex:none;width:100%}
+          .hm-athlete-grid{grid-template-columns:repeat(2,1fr)}
         }
         @media(max-width:540px){
           .hm-grid3{grid-template-columns:1fr 1fr}
+          .hm-athlete-grid{grid-template-columns:1fr}
         }
       `}</style>
 
@@ -834,7 +845,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
       {/* ── HEADER ── */}
       {editingAthlete ? (
         <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '10px', padding: '16px', marginBottom: '12px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '8px', marginBottom: '12px' }}>
+          <div className="hm-athlete-grid">
             {[['hcp','Handicap'],['wagr','WAGR'],['club','Clube'],['category','Categoria'],['fed','Federação'],['fed_num','Nº Federado']].map(([k,l]) => (
               <div key={k}>
                 <div style={{ fontSize: '8px', color: t.textMuted, marginBottom: '3px', letterSpacing: '1px' }}>{l.toUpperCase()}</div>
@@ -922,7 +933,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
         </div>
 
         {/* Card MELHOR RESULTADO */}
-        <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '14px 18px', width:'220px', flexShrink:0, display:'flex', flexDirection:'column', justifyContent:'center' }}>
+        <div className="hm-best-card" style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '14px 18px', display:'flex', flexDirection:'column', justifyContent:'center' }}>
           <div style={{ fontSize:'8px', letterSpacing:'2px', color:'#5b8aff', fontWeight:600, marginBottom:'8px' }}>MELHOR RESULTADO</div>
           {bestResult ? (
             <>
@@ -1023,10 +1034,10 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
           {/* Treino — 2 donuts + barra carga */}
           <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '12px 16px' }}>
             <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:600, marginBottom:'10px' }}>TREINO — DISTRIBUIÇÃO E CARGA</div>
-            <div style={{ display:'flex', gap:'12px', alignItems:'flex-start' }}>
+            <div className="hm-train-flex">
 
               {/* Donuts: 55% da largura */}
-              <div style={{ flex:'0 0 55%', display:'flex', gap:'10px' }}>
+              <div className="hm-train-donuts" style={{ display:'flex', gap:'10px' }}>
 
                 {/* Golf donut */}
                 <div style={{ flex:1, minWidth:0 }}>
@@ -1073,7 +1084,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
               </div>
 
               {/* Barra carga semanal: 45% */}
-              <div style={{ flex:'0 0 45%', minWidth:0 }}>
+              <div className="hm-train-bar">
                 <div style={{ fontSize:'8px', letterSpacing:'1px', color:t.textMuted, fontWeight:600, marginBottom:'6px' }}>CARGA SEMANAL</div>
                 <WeeklyBarChart weeks={weeklyLoad} t={t} />
                 <div style={{ display:'flex', gap:'8px', marginTop:'4px', flexWrap:'wrap' }}>

@@ -43,7 +43,7 @@ export default function CompStats({ theme, t, user }) {
   const [saveError, setSaveError] = useState(null)
 
   // Entry form
-  const [form, setForm] = useState({ event_id: '', event_name: '', event_date: '', values: {}, notes: '', website: '' })
+  const [form, setForm] = useState({ event_id: '', event_name: '', event_date: '', values: {}, notes: '' })
 
   // Settings forms
   const [newField, setNewField] = useState({ label: '', unit: '', lower_better: false })
@@ -92,14 +92,14 @@ export default function CompStats({ theme, t, user }) {
   const openNew = () => {
     setEditStat(null)
     setSaveError(null)
-    setForm({ event_id: '', event_name: '', event_date: new Date().toISOString().split('T')[0], values: {}, notes: '', website: '' })
+    setForm({ event_id: '', event_name: '', event_date: new Date().toISOString().split('T')[0], values: {}, notes: '' })
     setShowModal(true)
   }
 
   const openEdit = (s) => {
     setEditStat(s)
     setSaveError(null)
-    setForm({ event_id: s.event_id || '', event_name: s.event_name, event_date: s.event_date, values: s.values || {}, notes: s.notes || '', website: s.website || '' })
+    setForm({ event_id: s.event_id || '', event_name: s.event_name, event_date: s.event_date, values: s.values || {}, notes: s.notes || '' })
     setShowModal(true)
   }
 
@@ -124,7 +124,6 @@ export default function CompStats({ theme, t, user }) {
       event_date: form.event_date,
       values: cleanValues,
       notes: form.notes || null,
-      website: form.website || null,
     }
 
     console.log('[CompStats] saveStat payload:', JSON.stringify(payload))
@@ -308,12 +307,6 @@ export default function CompStats({ theme, t, user }) {
                 style={{ flex: 1, background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '8px', color: t.textMuted, padding: '9px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: F }}>
                 Edit Stats
               </button>
-              {detailStat.website && (
-                <button onClick={() => window.open(detailStat.website, '_blank')}
-                  style={{ flex: 1, background: t.accent, border: 'none', borderRadius: '8px', color: theme === 'dark' ? '#000' : '#fff', padding: '9px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: F }}>
-                  Ver Site ↗
-                </button>
-              )}
             </div>
           </div>
         </div>
@@ -520,10 +513,6 @@ export default function CompStats({ theme, t, user }) {
                 <div style={{ fontSize: '9px', letterSpacing: '2px', color: t.textMuted, marginBottom: '6px', fontWeight: 600 }}>NOTAS</div>
                 <textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
                   placeholder="Notas, condições, destaques..." style={{ ...inp, minHeight: '64px', resize: 'vertical' }} />
-              </div>
-              <div>
-                <div style={{ fontSize: '9px', letterSpacing: '2px', color: t.textMuted, marginBottom: '6px', fontWeight: 600 }}>WEBSITE (opcional)</div>
-                <input value={form.website || ''} onChange={e => setForm(p => ({ ...p, website: e.target.value }))} placeholder="https://..." style={inp} />
               </div>
             </div>
             {saveError && (
