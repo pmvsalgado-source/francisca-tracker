@@ -41,10 +41,12 @@ function daysDiff(a, b) {
   return Math.round((b - a) / 86400000)
 }
 
-// An event is a competition if its calendar type is 'events' (the Events
-// filter in Calendar.jsx). Multi-day tournaments are supported via end_date.
+// An event is a competition if its category contains 'competi' (e.g.
+// 'Competição') or the title contains 'torneio'. Multi-day tournaments
+// are supported via end_date.
 function isCompetition(event) {
-  return event.type === 'events'
+  return (event.category || '').toLowerCase().includes('competi')
+    || (event.title || '').toLowerCase().includes('torneio')
 }
 
 // Does an event overlap any part of [wsDate, weDate] (both Date objects)?
@@ -59,9 +61,13 @@ function coversDay(event, dayStr) {
   return event.start_date <= dayStr && (event.end_date || event.start_date) >= dayStr
 }
 
-// Is dayStr (string) a training day? (has at least one golf or gym event)
+// Is dayStr (string) a training day? Matches calendar events whose category
+// suggests golf or gym training (e.g. 'Treino/Campo', 'Training Camp').
 function isTrainingDay(events, dayStr) {
-  return events.some(e => (e.type === 'golf' || e.type === 'gym') && coversDay(e, dayStr))
+  return events.some(e => {
+    const cat = (e.category || '').toLowerCase()
+    return (cat.includes('treino') || cat.includes('camp') || cat.includes('gym')) && coversDay(e, dayStr)
+  })
 }
 
 // Count consecutive training days ending on (and including) the day before weekStart

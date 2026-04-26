@@ -346,20 +346,12 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
 
   useEffect(() => {
     supabase.from('entries').select('*').order('entry_date', { ascending: true }).then(({ data }) => setEntries(data || []))
-    supabase.from('events').select('*').order('start_date').then(({ data, error }) => {
-      console.log('[events raw] count:', data?.length, 'error:', error)
-      console.log('[events raw] first 5:', data?.slice(0, 5)?.map(e => ({ id: e.id, title: e.title, type: e.type, category: e.category, start_date: e.start_date, end_date: e.end_date })))
-      console.log('[events raw] distinct types:', [...new Set((data || []).map(e => e.type))])
-      setEvents(data || [])
-    })
+    supabase.from('events').select('*').order('start_date').then(({ data }) => setEvents(data || []))
     supabase.from('training_plans').select('*').order('week_start', { ascending: false }).then(({ data }) => setTrainingPlans(data || []))
     supabase.from('competition_stats').select('*').order('event_date', { ascending: false }).then(({ data }) => setCompStats(data || []))
     supabase.from('comp_config').select('*').order('sort_order', { ascending: true }).then(({ data }) => { if (data?.length) setCompConfig(data) })
     if (user?.id) {
-      supabase.from('wagr_history').select('*').eq('user_id', user.id).then(({ data, error }) => {
-        console.log('[wagr_history]', { data, error })
-        setWagrHistory(data || [])
-      })
+      supabase.from('wagr_history').select('*').eq('user_id', user.id).then(({ data }) => setWagrHistory(data || []))
       supabase.from('profiles').select('hcp,wagr,prev_hcp,prev_wagr,athlete_club,category,fed,fed_num,home_kpi_order,home_stat_prefs').eq('id', user.id).single()
         .then(({ data }) => {
           if (data) {
@@ -787,20 +779,23 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
       })
     })
     todayCalEvents.forEach(e => {
+      const isComp = isCompEvent(e)
+      const cat = (e.category || '').toLowerCase()
+      const isGolf = !isComp && (cat.includes('treino') || cat.includes('camp'))
       tasks.push({
         label: e.title || 'Evento',
-        detail: e.type === 'events' ? 'Competição' : e.type === 'golf' ? 'Golf' : e.type === 'gym' ? 'Ginásio' : '',
-        color: e.type === 'events' ? '#ef4444' : e.type === 'golf' ? '#378ADD' : '#52E8A0',
-        badge: e.type === 'events' ? 'COMP' : null,
+        detail: isComp ? 'Competição' : isGolf ? 'Golf' : e.category || '',
+        color: isComp ? '#ef4444' : isGolf ? '#378ADD' : '#52E8A0',
+        badge: isComp ? 'COMP' : null,
         badgeColor: '#ef4444',
       })
     })
     return tasks
   })()
 
-  // Next competition (type === 'events')
+  // Next competition
   const nextCompetition = events
-    .filter(e => e.type === 'events' && e.start_date >= todayStr && !['cancelled','cancelado'].includes(e.status || ''))
+    .filter(e => isCompEvent(e) && e.start_date >= todayStr && !['cancelled','cancelado'].includes(e.status || ''))
     .sort((a, b) => a.start_date.localeCompare(b.start_date))[0] || null
   const daysToNextComp = nextCompetition
     ? Math.max(0, Math.ceil((new Date(nextCompetition.start_date) - new Date()) / 86400000))
@@ -1053,9 +1048,9 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
                 const dayEvts = events.filter(e => e.start_date <= ds && (e.end_date || e.start_date) >= ds)
                 const isToday = ds === todayStr
                 const isPast  = ds < todayStr
-                const hasComp = dayEvts.some(e => e.type === 'events')
-                const hasGolf = dayEvts.some(e => e.type === 'golf')
-                const hasGym  = dayEvts.some(e => e.type === 'gym')
+                const hasComp = dayEvts.some(e => isCompEvent(e))
+                const hasGolf = dayEvts.some(e => { const c = (e.category||'').toLowerCase(); return !isCompEvent(e) && (c.includes('treino') || c.includes('camp')) })
+                const hasGym  = dayEvts.some(e => (e.category||'').toLowerCase().includes('gym'))
                 const dotColor = hasComp ? '#ef4444' : hasGolf ? '#378ADD' : hasGym ? '#52E8A0' : null
                 return (
                   <div key={i} style={{ textAlign:'center' }}>
