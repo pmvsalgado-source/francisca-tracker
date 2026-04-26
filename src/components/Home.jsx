@@ -385,10 +385,18 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   const saveAthlete = async () => {
     if (!user?.id) return
     setAthleteSaving(true)
-    await supabase.from('profiles').update({
-      hcp: athleteForm.hcp, wagr: athleteForm.wagr, athlete_club: athleteForm.club,
-      category: athleteForm.category, fed: athleteForm.fed, fed_num: athleteForm.fed_num,
-    }).eq('id', user.id)
+    const toVal = (v) => (v && v !== '—' ? v : null)
+    const updatePayload = {
+      hcp: toVal(athleteForm.hcp),
+      wagr: toVal(athleteForm.wagr),
+      athlete_club: athleteForm.club,
+      category: athleteForm.category,
+      fed: athleteForm.fed,
+      fed_num: athleteForm.fed_num,
+    }
+    if (athlete.hcp !== athleteForm.hcp && toVal(athlete.hcp)) updatePayload.prev_hcp = toVal(athlete.hcp)
+    if (athlete.wagr !== athleteForm.wagr && toVal(athlete.wagr)) updatePayload.prev_wagr = toVal(athlete.wagr)
+    await supabase.from('profiles').update(updatePayload).eq('id', user.id)
     setAthlete(athleteForm); setAthleteSaving(false); setEditingAthlete(false)
   }
 
@@ -755,7 +763,17 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
         .hm-left{display:flex;flex-direction:column;gap:10px}
         .hm-right{display:flex;flex-direction:column;gap:10px}
         .hm-stats{display:flex;flex-direction:row;flex-wrap:nowrap;overflow-x:auto;align-items:stretch}
-        @media(max-width:700px){.hm-main{grid-template-columns:1fr}.hm-grid2{grid-template-columns:1fr}}
+        .hm-epoch-row{display:flex;gap:10px;margin-bottom:10px;align-items:stretch}
+        .hm-agenda-cols{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+        @media(max-width:700px){
+          .hm-main{grid-template-columns:1fr}
+          .hm-grid2{grid-template-columns:1fr}
+          .hm-epoch-row{flex-direction:column}
+          .hm-agenda-cols{grid-template-columns:1fr}
+        }
+        @media(max-width:480px){
+          .hm-grid3{grid-template-columns:1fr 1fr}
+        }
       `}</style>
 
       {/* ── KPI MODAL ── */}
@@ -859,7 +877,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
       )}
 
       {/* ── LINHA 1 — ÉPOCA 2026 + MELHOR RESULTADO (cards side-by-side) ── */}
-      <div style={{ display:'flex', gap:'10px', marginBottom:'10px', alignItems:'stretch' }}>
+      <div className="hm-epoch-row">
 
         {/* Card ÉPOCA 2026 */}
         <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '12px 16px', flex:1, minWidth:0 }}>
@@ -931,7 +949,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
       {/* ── AGENDA & ALERTAS — full width, 3 colunas ── */}
       <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'12px', padding:'12px 16px', marginBottom:'10px' }}>
         <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:600, marginBottom:'10px' }}>AGENDA & ALERTAS</div>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'12px' }}>
+        <div className="hm-agenda-cols">
 
           {/* Col 1 — Próximo treino com coach */}
           <div style={{ display:'flex', flexDirection:'column', gap:'5px' }}>

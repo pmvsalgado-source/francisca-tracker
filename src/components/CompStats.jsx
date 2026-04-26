@@ -103,11 +103,16 @@ export default function CompStats({ theme, t, user }) {
   const saveStat = async () => {
     if (!form.event_name || !form.event_date) return
     setSaving(true)
-    const payload = { ...form, updated_by: user.email, updated_at: new Date().toISOString() }
+    const payload = {
+      ...form,
+      event_id: form.event_id || null,
+      updated_by: user?.email,
+      updated_at: new Date().toISOString(),
+    }
     if (editStat) {
       await supabase.from('competition_stats').update(payload).eq('id', editStat.id)
     } else {
-      await supabase.from('competition_stats').insert({ ...payload, created_by: user.email })
+      await supabase.from('competition_stats').insert({ ...payload, created_by: user?.email })
     }
     setSaving(false)
     setShowModal(false)

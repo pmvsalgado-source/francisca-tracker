@@ -20,7 +20,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate }) {
   const [showModal, setShowModal] = useState(false)
   const [showCatModal, setShowCatModal] = useState(false)
   const [editEvent, setEditEvent] = useState(null)
-  const [form, setForm] = useState({ title: '', start_date: '', end_date: '', category: 'Competição', status: 'confirmed', color: '#378ADD', result: '', position: '', notes: '' })
+  const [form, setForm] = useState({ title: '', start_date: '', end_date: '', category: 'Competição', status: 'confirmed', color: '#378ADD', result: '', position: '', notes: '', fez_campo: false })
   const [catForm, setCatForm] = useState({ name: '', color: '#378ADD' })
   const [saving, setSaving] = useState(false)
   const [deleteConfirmEvent, setDeleteConfirmEvent] = useState(null)
@@ -47,13 +47,13 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate }) {
   const openNew = (date) => {
     const d = date || new Date().toISOString().split('T')[0]
     setEditEvent(null)
-    setForm({ title: '', start_date: d, end_date: d, category: categories[0]?.name || 'Competição', status: 'confirmed', color: categories[0]?.color || '#378ADD', result: '', position: '', notes: '' })
+    setForm({ title: '', start_date: d, end_date: d, category: categories[0]?.name || 'Competição', status: 'confirmed', color: categories[0]?.color || '#378ADD', result: '', position: '', notes: '', fez_campo: false })
     setShowModal(true)
   }
 
   const openEdit = (e) => {
     setEditEvent(e)
-    setForm({ title: e.title, start_date: e.start_date, end_date: e.end_date || e.start_date, category: e.category, status: e.status, color: e.color, result: e.result || '', position: e.position || '', notes: e.notes || '' })
+    setForm({ title: e.title, start_date: e.start_date, end_date: e.end_date || e.start_date, category: e.category, status: e.status, color: e.color, result: e.result || '', position: e.position || '', notes: e.notes || '', fez_campo: e.fez_campo || false })
     setShowModal(true)
   }
 
@@ -90,6 +90,35 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate }) {
   }
 
   const getCatColor = (catName) => categories.find(c => c.name === catName)?.color || '#777'
+
+  const getMondayOf = (date) => {
+    const d = new Date(date)
+    const dow = d.getDay()
+    d.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1))
+    d.setHours(0, 0, 0, 0)
+    return d
+  }
+
+  const getWeekDays = () => Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(currentDate)
+    d.setDate(currentDate.getDate() + i)
+    return d
+  })
+
+  const goToToday = () => {
+    const now = new Date()
+    if (view === 'week') {
+      setCurrentDate(getMondayOf(now))
+    } else {
+      setCurrentDate(new Date(now.getFullYear(), now.getMonth(), 1))
+    }
+  }
+
+  const switchView = (v) => {
+    if (v === 'week') setCurrentDate(getMondayOf(new Date()))
+    else if (v === 'month') { const n = new Date(); setCurrentDate(new Date(n.getFullYear(), n.getMonth(), 1)) }
+    setView(v)
+  }
 
   const getEventsForDay = (date) => {
     const d = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`
@@ -163,9 +192,13 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate }) {
         .cal-cell{background:${t.bg};padding:6px;min-height:62px;cursor:pointer;transition:background 0.1s;border-right:0.5px solid ${t.border};border-bottom:0.5px solid ${t.border};}
         .cal-cell:hover{background:${t.surface};}
         .cal-cell.today-cell{background:${t.accentBg};}
+        .cal-week-grid{display:grid;grid-template-columns:repeat(7,1fr);background:${t.surface};}
+        .cal-week-cell{background:${t.bg};padding:8px 6px;min-height:160px;cursor:pointer;transition:background 0.1s;border-right:0.5px solid ${t.border};border-bottom:0.5px solid ${t.border};}
+        .cal-week-cell:hover{background:${t.surface};}
+        .cal-week-cell.today-cell{background:${t.accentBg};}
         .annual-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
         .cal-year-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
-        @media(max-width:700px){.annual-grid{grid-template-columns:repeat(2,1fr)}.cal-cell{min-height:44px}}
+        @media(max-width:700px){.annual-grid{grid-template-columns:repeat(2,1fr)}.cal-cell{min-height:40px;padding:3px}.cal-week-cell{min-height:100px;padding:4px}}
         @media(max-width:600px){.cal-year-stats{grid-template-columns:repeat(2,1fr)}}
       `}</style>
 
@@ -231,7 +264,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate }) {
 
               <div style={{ borderTop: `1px solid ${t.border}`, paddingTop: '10px', marginTop: '2px' }}>
                 <div style={{ fontSize: '11px', letterSpacing: '1px', color: t.textMuted, marginBottom: '8px' }}>{lang==='pt'?'RESULTADO':'RESULT'}</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '8px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '8px', marginBottom: '8px' }}>
                   <div>
                     <div style={{ fontSize: '9px', color: t.textMuted, marginBottom: '4px' }}>Resultado</div>
                     <input value={form.result} onChange={e => setForm(p => ({ ...p, result: e.target.value }))} placeholder="e.g. Top 10, Cut, DNF" style={inp} />
@@ -241,6 +274,11 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate }) {
                     <input type="number" value={form.position} onChange={e => setForm(p => ({ ...p, position: e.target.value }))} placeholder="e.g. 3" style={inp} />
                   </div>
                 </div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '6px 0' }}>
+                  <input type="checkbox" checked={!!form.fez_campo} onChange={e => setForm(p => ({ ...p, fez_campo: e.target.checked }))}
+                    style={{ width: '15px', height: '15px', accentColor: t.accent, cursor: 'pointer' }} />
+                  <span style={{ fontSize: '13px', color: t.text, fontFamily: F }}>Fez campo</span>
+                </label>
               </div>
               <div>
                 <div style={{ fontSize: '9px', letterSpacing: '2px', color: t.textMuted, marginBottom: '4px' }}>{lang==='pt'?'NOTAS':'NOTES'}</div>
@@ -291,11 +329,25 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate }) {
             <div style={{ fontSize: '16px', fontWeight: 700, color: '#fff', minWidth: '160px' }}>{MONTHS[month]} {year}</div>
             <button onClick={() => setCurrentDate(new Date(year, month + 1, 1))} style={{ background: 'transparent', border: 'none', color: '#52E8A0', cursor: 'pointer', fontSize: '20px', lineHeight: 1, padding: '0 4px' }}>›</button>
           </>}
+          {view === 'week' && (() => {
+            const days = getWeekDays()
+            const s = days[0], e = days[6]
+            const label = s.getMonth() === e.getMonth()
+              ? `${s.getDate()}–${e.getDate()} ${MONTHS[s.getMonth()]} ${s.getFullYear()}`
+              : `${s.getDate()} ${MONTHS[s.getMonth()].slice(0,3)} – ${e.getDate()} ${MONTHS[e.getMonth()].slice(0,3)} ${e.getFullYear()}`
+            return <>
+              <button onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate() - 7); setCurrentDate(d) }} style={{ background: 'transparent', border: 'none', color: '#52E8A0', cursor: 'pointer', fontSize: '20px', lineHeight: 1, padding: '0 4px' }}>‹</button>
+              <div style={{ fontSize: '15px', fontWeight: 700, color: '#fff', minWidth: '200px' }}>{label}</div>
+              <button onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate() + 7); setCurrentDate(d) }} style={{ background: 'transparent', border: 'none', color: '#52E8A0', cursor: 'pointer', fontSize: '20px', lineHeight: 1, padding: '0 4px' }}>›</button>
+            </>
+          })()}
           {view === 'year' && <div style={{ fontSize: '16px', fontWeight: 700, color: '#fff' }}>Ano {year}</div>}
         </div>
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <button onClick={() => setView('month')} style={{ background: view === 'month' ? '#243560' : 'transparent', border: '0.5px solid #2e4a6a', borderRadius: '6px', color: view === 'month' ? '#fff' : '#8aaed4', padding: '5px 12px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 600 }}>{lang==='pt'?'Mensal':'Monthly'}</button>
-          <button onClick={() => setView('year')} style={{ background: view === 'year' ? '#243560' : 'transparent', border: '0.5px solid #2e4a6a', borderRadius: '6px', color: view === 'year' ? '#fff' : '#8aaed4', padding: '5px 12px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 600 }}>{lang==='pt'?'Anual':'Annual'}</button>
+          <button onClick={() => switchView('month')} style={{ background: view === 'month' ? '#243560' : 'transparent', border: '0.5px solid #2e4a6a', borderRadius: '6px', color: view === 'month' ? '#fff' : '#8aaed4', padding: '5px 12px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 600 }}>{lang==='pt'?'Mensal':'Monthly'}</button>
+          <button onClick={() => switchView('week')} style={{ background: view === 'week' ? '#243560' : 'transparent', border: '0.5px solid #2e4a6a', borderRadius: '6px', color: view === 'week' ? '#fff' : '#8aaed4', padding: '5px 12px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 600 }}>Semana</button>
+          <button onClick={() => switchView('year')} style={{ background: view === 'year' ? '#243560' : 'transparent', border: '0.5px solid #2e4a6a', borderRadius: '6px', color: view === 'year' ? '#fff' : '#8aaed4', padding: '5px 12px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 600 }}>{lang==='pt'?'Anual':'Annual'}</button>
+          <button onClick={goToToday} style={{ background: 'transparent', border: '0.5px solid #52E8A0', borderRadius: '6px', color: '#52E8A0', padding: '5px 12px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 700 }}>Hoje</button>
           <div style={{ width: '1px', height: '14px', background: '#2e4a6a' }}></div>
           {[['events', lang==='pt'?'Eventos':'Events', '#378ADD'], ['golf', 'Golf', '#22c55e'], ['gym', lang==='pt'?'Ginásio':'Gym', '#f97316']].map(([key, label, color]) => (
             <button key={key} onClick={() => setCalFilters(p => ({ ...p, [key]: !p[key] }))}
@@ -303,8 +355,8 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate }) {
               {label}
             </button>
           ))}
-          <button onClick={() => setShowCatModal(true)} style={{ background: 'transparent', border: '0.5px solid #2e4a6a', borderRadius: '6px', color: '#8aaed4', padding: '5px 12px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 600 }}>{lang==='pt'?'+ Cat':'+ Cat'}</button>
-          <button onClick={() => openNew()} style={{ background: '#52E8A0', border: 'none', borderRadius: '6px', color: '#0a2a1a', padding: '5px 14px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 700 }}>{lang==='pt'?'+ Evento':'+ Event'}</button>
+          <button onClick={() => setShowCatModal(true)} style={{ background: 'transparent', border: '0.5px solid #2e4a6a', borderRadius: '6px', color: '#8aaed4', padding: '5px 12px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 600 }}>+ Cat</button>
+          <button onClick={() => openNew()} style={{ background: '#52E8A0', border: 'none', borderRadius: '6px', color: '#0a2a1a', padding: '5px 14px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 700 }}>+ Evento</button>
         </div>
       </div>
 
@@ -348,6 +400,35 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate }) {
           {/* Month summary */}
           <div style={{ marginTop: '12px', fontSize: '11px', color: t.textMuted, display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
             <span>{MONTHS[month]}: {events.filter(e => e.start_date?.startsWith(`${year}-${String(month+1).padStart(2,'0')}`)).length} eventos</span>
+          </div>
+        </div>
+      )}
+
+      {/* Week View */}
+      {view === 'week' && (
+        <div>
+          <div className="cal-week-grid">
+            {WEEKDAYS.map(d => (
+              <div key={d} style={{ background: t.bg, padding: '8px', textAlign: 'center', fontSize: '10px', fontWeight: 700, letterSpacing: '1px', color: t.textMuted, borderRight: `0.5px solid ${t.border}`, borderBottom: `0.5px solid ${t.border}` }}>{d}</div>
+            ))}
+            {getWeekDays().map((day, i) => {
+              const dateStr = `${day.getFullYear()}-${String(day.getMonth()+1).padStart(2,'0')}-${String(day.getDate()).padStart(2,'0')}`
+              const dayEvents = getEventsForDay(day)
+              const isToday = dateStr === today
+              return (
+                <div key={i} className={`cal-week-cell${isToday ? ' today-cell' : ''}`} onClick={() => openNew(dateStr)}>
+                  <div style={{ fontSize: '17px', fontWeight: isToday ? 900 : 600, color: isToday ? t.accent : t.text, marginBottom: '6px', lineHeight: 1 }}>{day.getDate()}</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                    {dayEvents.map((ev, ei) => (
+                      <div key={ev.id || ei} onClick={e => { e.stopPropagation(); if (ev._isTrain) { onNavigate?.('training', { date: dateStr }) } else { openEdit(ev) } }}
+                        style={{ background: ev._isTrain ? ev._color + '33' : (ev.color || getCatColor(ev.category)), borderRadius: '3px', padding: '3px 5px', fontSize: '10px', fontWeight: 600, color: ev._isTrain ? ev._color : '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer', border: ev._isTrain ? `1px solid ${ev._color}44` : 'none' }}>
+                        {ev._isTrain ? (ev.type === 'golf' ? '⛳' : '💪') + ' ' : ''}{ev.title || ev.name || ev.cat}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </div>
       )}
