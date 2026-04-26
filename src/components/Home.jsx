@@ -928,6 +928,75 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
 
       </div>
 
+      {/* ── AGENDA & ALERTAS — full width, 3 colunas ── */}
+      <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'12px', padding:'12px 16px', marginBottom:'10px' }}>
+        <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:600, marginBottom:'10px' }}>AGENDA & ALERTAS</div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'12px' }}>
+
+          {/* Col 1 — Próximo treino com coach */}
+          <div style={{ display:'flex', flexDirection:'column', gap:'5px' }}>
+            <div style={{ fontSize:'8px', letterSpacing:'1px', color:t.textMuted, fontWeight:600, marginBottom:'2px' }}>PRÓXIMO TREINO COM COACH</div>
+            {[
+              { label:'Golf Coach', date: nextGolfCoachDate, color:'#378ADD' },
+              { label:'Gym Coach',  date: nextGymCoachDate,  color:'#52E8A0' },
+            ].map(({ label, date, color }) => (
+              <div key={label} onClick={() => onNavigate('training')} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'6px 10px', background:t.bg, borderRadius:'7px', cursor:'pointer' }}>
+                <div style={{ fontSize:'11px', color:t.textMuted }}>{label}</div>
+                <div style={{ fontSize:'11px', fontWeight:700, color: date && date < todayStr ? '#f87171' : color }}>
+                  {date ? formatDate(date) : '—'}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Col 2 — Programar treinos */}
+          <div style={{ display:'flex', flexDirection:'column', gap:'5px' }}>
+            <div style={{ fontSize:'8px', letterSpacing:'1px', color:t.textMuted, fontWeight:600, marginBottom:'2px' }}>PROGRAMAR TREINOS</div>
+            {(() => {
+              const golfEnd = trainingPlans.filter(p=>p.plan_type==='golf').reduce((m,p)=>p.week_end>m?p.week_end:m,'')
+              const gymEnd  = trainingPlans.filter(p=>p.plan_type==='gym').reduce((m,p)=>p.week_end>m?p.week_end:m,'')
+              return [
+                { label:'Golf — plano até', end: golfEnd },
+                { label:'Gym — plano até',  end: gymEnd  },
+              ].map(({ label, end }) => {
+                const isOk = end >= todayStr
+                const overdue = !end || end < todayStr
+                const overdueDays = overdue && end ? Math.ceil((new Date(todayStr) - new Date(end+'T12:00:00')) / 86400000) : 0
+                return (
+                  <div key={label} onClick={() => onNavigate('training')} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'6px 10px', background: overdue ? '#f8717108' : t.bg, border:`1px solid ${overdue ? '#f8717133' : t.border}`, borderRadius:'7px', cursor:'pointer' }}>
+                    <div style={{ fontSize:'11px', color:t.textMuted }}>{label}</div>
+                    {isOk
+                      ? <div style={{ fontSize:'11px', fontWeight:700, color:'#52E8A0' }}>OK · {formatDate(end)}</div>
+                      : <div style={{ fontSize:'11px', fontWeight:700, color:'#f87171', display:'flex', alignItems:'center', gap:'4px' }}>
+                          <span>⚠</span>{overdueDays > 0 ? `${overdueDays}d em atraso` : 'Sem plano'}
+                        </div>
+                    }
+                  </div>
+                )
+              })
+            })()}
+          </div>
+
+          {/* Col 3 — Registar prioridades */}
+          <div style={{ display:'flex', flexDirection:'column', gap:'5px' }}>
+            <div style={{ fontSize:'8px', letterSpacing:'1px', color:t.textMuted, fontWeight:600, marginBottom:'2px' }}>REGISTAR PRIORIDADES</div>
+            {(() => {
+              const overdueKpis = activeKpis.filter(k => k.isOverdue)
+              return (
+                <div onClick={() => onNavigate('performance')} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'6px 10px', background: overdueKpis.length > 0 ? '#f8717108' : t.bg, border:`1px solid ${overdueKpis.length > 0 ? '#f8717133' : t.border}`, borderRadius:'7px', cursor:'pointer' }}>
+                  <div style={{ fontSize:'11px', color:t.textMuted }}>KPIs de performance</div>
+                  {overdueKpis.length > 0
+                    ? <div style={{ fontSize:'11px', fontWeight:700, color:'#f87171', display:'flex', alignItems:'center', gap:'4px' }}><span>⚠</span>{overdueKpis.length} em atraso</div>
+                    : <div style={{ fontSize:'11px', fontWeight:700, color:'#52E8A0' }}>OK · todos em dia</div>
+                  }
+                </div>
+              )
+            })()}
+          </div>
+
+        </div>
+      </div>
+
       {/* ── MAIN GRID — esquerda + direita ── */}
       <div className="hm-main">
         <div className="hm-left">
@@ -1007,15 +1076,6 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
             <KpiLineChart entries={entries} t={t} F={F} cardStyle={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'12px', padding:'12px 16px' }} />
           </div>
 
-          {/* HCP & WAGR — Placeholders */}
-          <div className="hm-grid2">
-            {[{label:'EVOLUÇÃO HCP',color:'#378ADD'},{label:'EVOLUÇÃO WAGR',color:'#52E8A0'}].map(({label,color}) => (
-              <div key={label} style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'12px', padding:'12px 16px', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:'90px', gap:'6px', opacity:0.6 }}>
-                <div style={{ fontSize:'9px', letterSpacing:'2px', color, fontWeight:700 }}>{label}</div>
-                <div style={{ fontSize:'10px', color:t.textMuted, fontStyle:'italic' }}>Em breve — S2</div>
-              </div>
-            ))}
-          </div>
 
         </div>
 
@@ -1047,65 +1107,16 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
             )}
           </div>
 
-          {/* Agenda & Alertas */}
-          <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '12px 14px', flex:1 }}>
-            <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:600, marginBottom:'10px' }}>AGENDA & ALERTAS</div>
-            <div style={{ display:'flex', flexDirection:'column', gap:'5px' }}>
+          {/* Evolução HCP */}
+          <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'12px', padding:'12px 16px', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:'90px', gap:'6px', opacity:0.6 }}>
+            <div style={{ fontSize:'9px', letterSpacing:'2px', color:'#378ADD', fontWeight:700 }}>EVOLUÇÃO HCP</div>
+            <div style={{ fontSize:'10px', color:t.textMuted, fontStyle:'italic' }}>Em breve — S2</div>
+          </div>
 
-              <div style={{ fontSize:'8px', letterSpacing:'1px', color:t.textMuted, margin:'2px 0', fontWeight:600 }}>PRÓXIMO TREINO COM COACH</div>
-              {[
-                { label:'Golf Coach', date: nextGolfCoachDate, color:'#378ADD' },
-                { label:'Gym Coach',  date: nextGymCoachDate,  color:'#52E8A0' },
-              ].map(({ label, date, color }) => (
-                <div key={label} onClick={() => onNavigate('training')} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'6px 10px', background:t.bg, borderRadius:'7px', cursor:'pointer' }}>
-                  <div style={{ fontSize:'11px', color:t.textMuted }}>{label}</div>
-                  <div style={{ fontSize:'11px', fontWeight:700, color: date && date < todayStr ? '#f87171' : color }}>
-                    {date ? formatDate(date) : '—'}
-                  </div>
-                </div>
-              ))}
-
-              <div style={{ fontSize:'8px', letterSpacing:'1px', color:t.textMuted, margin:'6px 0 2px', fontWeight:600 }}>PROGRAMAR TREINOS</div>
-              {(() => {
-                const golfEnd = trainingPlans.filter(p=>p.plan_type==='golf').reduce((m,p)=>p.week_end>m?p.week_end:m,'')
-                const gymEnd  = trainingPlans.filter(p=>p.plan_type==='gym').reduce((m,p)=>p.week_end>m?p.week_end:m,'')
-                return [
-                  { label:'Golf — plano até', end: golfEnd },
-                  { label:'Gym — plano até',  end: gymEnd  },
-                ].map(({ label, end }) => {
-                  const isOk = end >= todayStr
-                  const overdue = !end || end < todayStr
-                  const overdueDays = overdue && end ? Math.ceil((new Date(todayStr) - new Date(end+'T12:00:00')) / 86400000) : 0
-                  return (
-                    <div key={label} onClick={() => onNavigate('training')} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'6px 10px', background: overdue ? '#f8717108' : t.bg, border: `1px solid ${overdue ? '#f8717133' : t.border}`, borderRadius:'7px', cursor:'pointer' }}>
-                      <div style={{ fontSize:'11px', color:t.textMuted }}>{label}</div>
-                      {isOk
-                        ? <div style={{ fontSize:'11px', fontWeight:700, color:'#52E8A0' }}>OK · {formatDate(end)}</div>
-                        : <div style={{ fontSize:'11px', fontWeight:700, color:'#f87171', display:'flex', alignItems:'center', gap:'4px' }}>
-                            <span>⚠</span>{overdueDays > 0 ? `${overdueDays}d em atraso` : 'Sem plano'}
-                          </div>
-                      }
-                    </div>
-                  )
-                })
-              })()}
-
-              <div style={{ fontSize:'8px', letterSpacing:'1px', color:t.textMuted, margin:'6px 0 2px', fontWeight:600 }}>REGISTAR PRIORIDADES</div>
-              {(() => {
-                const overdueKpis = activeKpis.filter(k => k.isOverdue)
-                const okKpis = activeKpis.filter(k => !k.isOverdue)
-                return (
-                  <div onClick={() => onNavigate('performance')} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'6px 10px', background: overdueKpis.length > 0 ? '#f8717108' : t.bg, border: `1px solid ${overdueKpis.length > 0 ? '#f8717133' : t.border}`, borderRadius:'7px', cursor:'pointer' }}>
-                    <div style={{ fontSize:'11px', color:t.textMuted }}>KPIs de performance</div>
-                    {overdueKpis.length > 0
-                      ? <div style={{ fontSize:'11px', fontWeight:700, color:'#f87171', display:'flex', alignItems:'center', gap:'4px' }}><span>⚠</span>{overdueKpis.length} em atraso</div>
-                      : <div style={{ fontSize:'11px', fontWeight:700, color:'#52E8A0' }}>OK · todos em dia</div>
-                    }
-                  </div>
-                )
-              })()}
-
-            </div>
+          {/* Evolução WAGR */}
+          <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'12px', padding:'12px 16px', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:'90px', gap:'6px', opacity:0.6 }}>
+            <div style={{ fontSize:'9px', letterSpacing:'2px', color:'#52E8A0', fontWeight:700 }}>EVOLUÇÃO WAGR</div>
+            <div style={{ fontSize:'10px', color:t.textMuted, fontStyle:'italic' }}>Em breve — S2</div>
           </div>
 
         </div>
