@@ -341,6 +341,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   const [statPanelOpen, setStatPanelOpen] = useState(false)
   const [compConfig, setCompConfig] = useState([])
   const [todayChecked, setTodayChecked] = useState({})
+  const [wagrHistory, setWagrHistory] = useState([])
 
   const ATHLETE_DEFAULTS = { hcp: '1.1', wagr: '—', prev_hcp: null, prev_wagr: null, club: 'Vale de Janelas', category: 'Sub-18', fed: 'FPG', fed_num: '43832' }
   const [athlete, setAthlete] = useState(ATHLETE_DEFAULTS)
@@ -354,6 +355,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
     supabase.from('training_plans').select('*').order('week_start', { ascending: false }).then(({ data }) => setTrainingPlans(data || []))
     supabase.from('competition_stats').select('*').order('event_date', { ascending: false }).then(({ data }) => setCompStats(data || []))
     supabase.from('comp_config').select('*').order('sort_order', { ascending: true }).then(({ data }) => { if (data?.length) setCompConfig(data) })
+    supabase.from('wagr_history').select('*').then(({ data }) => setWagrHistory(data || []))
     if (user?.id) {
       supabase.from('profiles').select('hcp,wagr,prev_hcp,prev_wagr,athlete_club,category,fed,fed_num,home_kpi_order,home_stat_prefs').eq('id', user.id).single()
         .then(({ data }) => {
@@ -503,6 +505,15 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   const wagrDelta = athlete.prev_wagr && athlete.wagr && athlete.wagr !== '—' && athlete.prev_wagr !== '—'
     ? parseInt(athlete.wagr) - parseInt(athlete.prev_wagr)
     : null
+
+  // WAGR from wagr_history (latest entry by year/week)
+  const sortedWagrH = [...wagrHistory].sort((a, b) => (b.year * 100 + b.week) - (a.year * 100 + a.week))
+  const latestWagrH = sortedWagrH[0]
+  const prevWagrH   = sortedWagrH[1]
+  const wagrRank    = latestWagrH?.rank ?? null
+  const wagrDeltaH  = (wagrRank != null && prevWagrH?.rank != null) ? wagrRank - prevWagrH.rank : null
+  const displayWagr = wagrRank != null ? String(wagrRank) : (athlete.wagr || '—')
+  const displayWagrDelta = wagrDeltaH ?? wagrDelta
 
   const latestPlanEnd = trainingPlans.length > 0
     ? trainingPlans.reduce((max, p) => p.week_end > max ? p.week_end : max, '')
@@ -792,22 +803,51 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
     ? Math.max(0, Math.ceil((new Date(nextCompetition.start_date) - new Date()) / 86400000))
     : null
 
-  // Performance snapshot — max 3 KPIs with trend
-  const SNAPSHOT_IDS = ['swing_speed', 'smash_factor', 'carry']
-  const snapshotKpis = SNAPSHOT_IDS.map(id => {
-    const def = id === 'swing_speed'
-      ? { id, label: 'VEL. SWING', unit: 'mph', color: '#378ADD' }
-      : ALL_KPIS.find(k => k.id === id)
-    if (!def) return null
-    const kEntries = entries.filter(e => e.metric_id === id && e.value && e.entry_date)
+  // Performance snapshot — HCP · WAGR · Vel. Swing
+  const snapshotKpis = (() => {
+    const kpis = []
+
+    // HCP (lower = better, so ↓ is good)
+    if (athlete.hcp && athlete.hcp !== '—') {
+      const hcpVal = parseFloat(athlete.hcp)
+      const hcpPrev = athlete.prev_hcp ? parseFloat(athlete.prev_hcp) : null
+      const diff = hcpPrev != null ? hcpVal - hcpPrev : 0
+      kpis.push({
+        id: 'hcp', label: 'HCP', unit: '', color: '#378ADD',
+        value: athlete.hcp,
+        trend: hcpPrev == null ? '→' : diff < -0.05 ? '↑' : diff > 0.05 ? '↓' : '→',
+        pts: [],
+      })
+    }
+
+    // WAGR from wagr_history (lower rank = better, so ↓ rank is good)
+    if (wagrRank != null) {
+      const diff = wagrDeltaH ?? 0
+      kpis.push({
+        id: 'wagr', label: 'WAGR', unit: '', color: '#52E8A0',
+        value: String(wagrRank),
+        trend: wagrDeltaH == null ? '→' : diff < 0 ? '↑' : diff > 0 ? '↓' : '→',
+        pts: sortedWagrH.slice(0, 8).reverse().map(h => ({ entry_date: h.reference_date || `${h.year}-01-01`, value: String(h.rank) })).filter(h => h.value !== 'null'),
+      })
+    }
+
+    // Vel. Swing from entries
+    const swingEntries = entries.filter(e => e.metric_id === 'swing_speed' && e.value && e.entry_date)
       .sort((a, b) => a.entry_date.localeCompare(b.entry_date))
-    if (!kEntries.length) return null
-    const last = kEntries[kEntries.length - 1]
-    const prev = kEntries[kEntries.length - 2]
-    const diff = prev ? parseFloat(last.value) - parseFloat(prev.value) : 0
-    const trend = !prev ? '→' : diff > 0.05 ? '↑' : diff < -0.05 ? '↓' : '→'
-    return { ...def, value: last.value, trend, pts: kEntries.slice(-8) }
-  }).filter(Boolean).slice(0, 3)
+    if (swingEntries.length) {
+      const last = swingEntries[swingEntries.length - 1]
+      const prev = swingEntries[swingEntries.length - 2]
+      const diff = prev ? parseFloat(last.value) - parseFloat(prev.value) : 0
+      kpis.push({
+        id: 'swing_speed', label: 'VEL. SWING', unit: 'mph', color: '#a855f7',
+        value: last.value,
+        trend: !prev ? '→' : diff > 0.05 ? '↑' : diff < -0.05 ? '↓' : '→',
+        pts: swingEntries.slice(-8),
+      })
+    }
+
+    return kpis.slice(0, 3)
+  })()
 
   // Recovery & support events (last 30 days)
   const thirtyDaysAgoStr = (() => { const d = new Date(); d.setDate(d.getDate()-30); return d.toISOString().split('T')[0] })()
@@ -934,8 +974,8 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
                 </div>
                 <div style={{ textAlign:'center' }}>
                   <div style={{ fontSize:'8px', letterSpacing:'1px', color:'#52E8A0', fontWeight:700, marginBottom:'2px' }}>WAGR</div>
-                  <div style={{ fontSize:'20px', fontWeight:900, color:t.text, lineHeight:1 }}>{athlete.wagr || '—'}</div>
-                  {wagrDelta && <div style={{ fontSize:'10px', color:wagrDelta<0?'#52E8A0':'#f87171', marginTop:'1px' }}>{wagrDelta<0?'▼':'▲'} {Math.abs(wagrDelta)}</div>}
+                  <div style={{ fontSize:'20px', fontWeight:900, color:t.text, lineHeight:1 }}>{displayWagr}</div>
+                  {displayWagrDelta != null && <div style={{ fontSize:'10px', color:displayWagrDelta<0?'#52E8A0':'#f87171', marginTop:'1px' }}>{displayWagrDelta<0?'▼':'▲'} {Math.abs(displayWagrDelta)}</div>}
                 </div>
               </div>
             </div>
@@ -949,23 +989,21 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
       </div>
 
       {/* ── 2. HERO — FASE ATUAL ── */}
-      <div style={{ background: phaseInfo.phaseColor + '18', border:`1.5px solid ${phaseInfo.phaseColor}55`, borderRadius:'16px', padding:'22px 24px', marginBottom:'14px', position:'relative', overflow:'hidden' }}>
-        <div style={{ position:'absolute', right:'24px', top:'50%', transform:'translateY(-50%)', fontSize:'80px', opacity:0.06, pointerEvents:'none', userSelect:'none', lineHeight:1 }}>◆</div>
-        <div style={{ fontSize:'8px', letterSpacing:'3px', color:phaseInfo.phaseColor, fontWeight:700, marginBottom:'6px' }}>FASE ATUAL</div>
-        <div style={{ display:'flex', alignItems:'baseline', gap:'14px', flexWrap:'wrap', marginBottom:'10px' }}>
-          <div style={{ fontSize:'26px', fontWeight:900, color:phaseInfo.phaseColor, letterSpacing:'-0.5px' }}>
-            {phaseInfo.phase.replace(/_/g, ' ')}
+      <div style={{ background: phaseInfo.phaseColor, borderRadius:'16px', padding:'28px 32px', marginBottom:'14px' }}>
+        <div style={{ fontSize:'9px', letterSpacing:'3px', color:'rgba(255,255,255,0.65)', fontWeight:700, marginBottom:'8px' }}>FASE ATUAL</div>
+        <div style={{ fontSize:'52px', fontWeight:900, color:'#fff', lineHeight:1, letterSpacing:'-1px', marginBottom:'12px' }}>
+          {phaseInfo.phase.replace(/_/g, ' ')}
+        </div>
+        {phaseInfo.daysToNextCompetition != null ? (
+          <div style={{ display:'inline-flex', alignItems:'baseline', gap:'8px', background:'rgba(0,0,0,0.18)', borderRadius:'10px', padding:'8px 16px', marginBottom:'14px' }}>
+            <span style={{ fontSize:'36px', fontWeight:900, color:'#fff', lineHeight:1 }}>{phaseInfo.daysToNextCompetition}</span>
+            <span style={{ fontSize:'14px', color:'rgba(255,255,255,0.85)', fontWeight:600 }}>dias para competir</span>
           </div>
-          {phaseInfo.daysToNextCompetition !== null && (
-            <div style={{ fontSize:'13px', color:t.textMuted }}>
-              <span style={{ color:t.text, fontWeight:700, fontSize:'16px' }}>{phaseInfo.daysToNextCompetition}</span> dias até à próxima competição
-            </div>
-          )}
-        </div>
-        <div style={{ fontSize:'14px', color:t.text, fontWeight:600, marginBottom:'5px' }}>
-          <span style={{ color:phaseInfo.phaseColor, marginRight:'6px' }}>▸</span>{phaseInfo.recommendedTrainingFocus}
-        </div>
-        <div style={{ fontSize:'11px', color:t.textMuted, lineHeight:1.5 }}>{phaseInfo.reason}</div>
+        ) : (
+          <div style={{ fontSize:'13px', color:'rgba(255,255,255,0.55)', marginBottom:'14px', fontStyle:'italic' }}>Sem competições agendadas</div>
+        )}
+        <div style={{ fontSize:'13px', color:'rgba(255,255,255,0.75)', fontWeight:500 }}>{phaseInfo.recommendedTrainingFocus}</div>
+        <div style={{ fontSize:'11px', color:'rgba(255,255,255,0.5)', marginTop:'4px', lineHeight:1.5 }}>{phaseInfo.reason}</div>
       </div>
 
       {/* ── MAIN GRID ── */}
