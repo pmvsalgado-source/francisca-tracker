@@ -116,15 +116,29 @@ export function calcWeekPhase(weekStart, events) {
   const thisWeekComps = competitions.filter(e => overlapsWeek(e, ws, we))
   const hasCompThisWeek = thisWeekComps.length > 0
 
-  // ── Next competition after weekStart ──────────────────────────────────────
-  // Competitions that start strictly after ws (not overlapping the current week)
-  let daysToNextCompetition = null
+  // ── Nearest upcoming competition from today (for countdown display) ────────
+  let daysToNextCompetition = null  // returned to caller — days from today
   let nextCompEvent = null
   for (const c of competitions) {
     const start = parseDate(c.start_date)
-    if (start > we) { // strictly after the week
-      daysToNextCompetition = daysDiff(ws, start)
+    if (start >= ws) {
+      daysToNextCompetition = Math.round((start - ws) / (1000 * 60 * 60 * 24))
       nextCompEvent = c
+      console.log('[next comp date]', c.start_date, 'days:', daysToNextCompetition)
+      break
+    }
+  }
+
+  // ── Next competition strictly after the current week (for phase rules) ────
+  // Phase rules (AFINACAO, DESENVOLVIMENTO_LIGHT…) are only evaluated when
+  // hasCompThisWeek=false, so we need a separate countdown from the week end.
+  let daysToPhaseComp = null
+  let phaseCompEvent = null
+  for (const c of competitions) {
+    const start = parseDate(c.start_date)
+    if (start > we) {
+      daysToPhaseComp = Math.round((start - ws) / (1000 * 60 * 60 * 24))
+      phaseCompEvent = c
       break
     }
   }
@@ -171,26 +185,26 @@ export function calcWeekPhase(weekStart, events) {
 
   } else if (
     daysSincePreviousCompetition !== null && daysSincePreviousCompetition <= 7 &&
-    daysToNextCompetition        !== null && daysToNextCompetition        <= 7
+    daysToPhaseComp              !== null && daysToPhaseComp              <= 7
   ) {
     phase  = 'MANUTENCAO_B2B'
-    reason = `Back-to-back: ${daysSincePreviousCompetition}d desde a última competição, ${daysToNextCompetition}d até à próxima`
+    reason = `Back-to-back: ${daysSincePreviousCompetition}d desde a última competição, ${daysToPhaseComp}d até à próxima`
 
-  } else if (daysToNextCompetition !== null && daysToNextCompetition >= 1 && daysToNextCompetition <= 7) {
+  } else if (daysToPhaseComp !== null && daysToPhaseComp >= 1 && daysToPhaseComp <= 7) {
     phase  = 'AFINACAO'
-    reason = `Próxima competição em ${daysToNextCompetition} dia${daysToNextCompetition === 1 ? '' : 's'}: ${nextCompEvent?.title || ''}`
+    reason = `Próxima competição em ${daysToPhaseComp} dia${daysToPhaseComp === 1 ? '' : 's'}: ${phaseCompEvent?.title || ''}`
 
-  } else if (daysToNextCompetition !== null && daysToNextCompetition <= 14) {
+  } else if (daysToPhaseComp !== null && daysToPhaseComp <= 14) {
     phase  = 'DESENVOLVIMENTO_LIGHT'
-    reason = `Próxima competição em ${daysToNextCompetition} dias: ${nextCompEvent?.title || ''}`
+    reason = `Próxima competição em ${daysToPhaseComp} dias: ${phaseCompEvent?.title || ''}`
 
-  } else if (daysToNextCompetition !== null && daysToNextCompetition <= 21) {
+  } else if (daysToPhaseComp !== null && daysToPhaseComp <= 21) {
     phase  = 'DESENVOLVIMENTO'
-    reason = `Próxima competição em ${daysToNextCompetition} dias: ${nextCompEvent?.title || ''}`
+    reason = `Próxima competição em ${daysToPhaseComp} dias: ${phaseCompEvent?.title || ''}`
 
-  } else if (daysToNextCompetition !== null && daysToNextCompetition >= 22) {
+  } else if (daysToPhaseComp !== null && daysToPhaseComp >= 22) {
     phase  = 'ACUMULACAO'
-    reason = `Próxima competição em ${daysToNextCompetition} dias — janela de acumulação`
+    reason = `Próxima competição em ${daysToPhaseComp} dias — janela de acumulação`
 
   } else if (compsLast4Weeks >= 3) {
     // No upcoming competition + intense recent block → recovery
@@ -202,7 +216,7 @@ export function calcWeekPhase(weekStart, events) {
     reason = 'Sem competições no calendário'
   }
 
-  console.log('[calc] daysToNext:', daysToNextCompetition, 'phase:', phase)
+  console.log('[calc] daysToNearest:', daysToNextCompetition, 'daysToPhaseComp:', daysToPhaseComp, 'phase:', phase)
 
   return {
     phase,
