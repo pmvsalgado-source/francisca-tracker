@@ -346,7 +346,12 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
 
   useEffect(() => {
     supabase.from('entries').select('*').order('entry_date', { ascending: true }).then(({ data }) => setEntries(data || []))
-    supabase.from('events').select('*').order('start_date').then(({ data }) => setEvents(data || []))
+    supabase.from('events').select('*').order('start_date').then(({ data, error }) => {
+      console.log('[events raw] count:', data?.length, 'error:', error)
+      console.log('[events raw] first 5:', data?.slice(0, 5)?.map(e => ({ id: e.id, title: e.title, type: e.type, category: e.category, start_date: e.start_date, end_date: e.end_date })))
+      console.log('[events raw] distinct types:', [...new Set((data || []).map(e => e.type))])
+      setEvents(data || [])
+    })
     supabase.from('training_plans').select('*').order('week_start', { ascending: false }).then(({ data }) => setTrainingPlans(data || []))
     supabase.from('competition_stats').select('*').order('event_date', { ascending: false }).then(({ data }) => setCompStats(data || []))
     supabase.from('comp_config').select('*').order('sort_order', { ascending: true }).then(({ data }) => { if (data?.length) setCompConfig(data) })
