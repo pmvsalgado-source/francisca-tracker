@@ -355,8 +355,11 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
     supabase.from('training_plans').select('*').order('week_start', { ascending: false }).then(({ data }) => setTrainingPlans(data || []))
     supabase.from('competition_stats').select('*').order('event_date', { ascending: false }).then(({ data }) => setCompStats(data || []))
     supabase.from('comp_config').select('*').order('sort_order', { ascending: true }).then(({ data }) => { if (data?.length) setCompConfig(data) })
-    supabase.from('wagr_history').select('*').then(({ data }) => setWagrHistory(data || []))
     if (user?.id) {
+      supabase.from('wagr_history').select('*').eq('user_id', user.id).then(({ data, error }) => {
+        console.log('[wagr_history]', { data, error })
+        setWagrHistory(data || [])
+      })
       supabase.from('profiles').select('hcp,wagr,prev_hcp,prev_wagr,athlete_club,category,fed,fed_num,home_kpi_order,home_stat_prefs').eq('id', user.id).single()
         .then(({ data }) => {
           if (data) {
@@ -1003,7 +1006,6 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
           <div style={{ fontSize:'13px', color:'rgba(255,255,255,0.55)', marginBottom:'14px', fontStyle:'italic' }}>Sem competições agendadas</div>
         )}
         <div style={{ fontSize:'13px', color:'rgba(255,255,255,0.75)', fontWeight:500 }}>{phaseInfo.recommendedTrainingFocus}</div>
-        <div style={{ fontSize:'11px', color:'rgba(255,255,255,0.5)', marginTop:'4px', lineHeight:1.5 }}>{phaseInfo.reason}</div>
       </div>
 
       {/* ── MAIN GRID ── */}
@@ -1139,14 +1141,14 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
           </div>
 
           {/* ── 7. PERFORMANCE SNAPSHOT ── */}
-          <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'12px', padding:'14px 16px' }}>
+          <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'12px', padding:'14px 16px', overflow:'hidden' }}>
             <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:600, marginBottom:'12px' }}>PERFORMANCE SNAPSHOT</div>
             {snapshotKpis.length === 0 ? (
               <div style={{ fontSize:'12px', color:t.textMuted, fontStyle:'italic' }}>Sem dados de performance.</div>
             ) : (
               <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
                 {snapshotKpis.map(kpi => (
-                  <div key={kpi.id} style={{ display:'flex', alignItems:'center', gap:'10px' }}>
+                  <div key={kpi.id} style={{ display:'flex', alignItems:'center', gap:'10px', minWidth:0 }}>
                     <div style={{ flex:1, minWidth:0 }}>
                       <div style={{ fontSize:'8px', letterSpacing:'1.5px', color:t.textMuted, fontWeight:600, marginBottom:'2px' }}>{kpi.label}</div>
                       <div style={{ display:'flex', alignItems:'baseline', gap:'4px' }}>
@@ -1156,7 +1158,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
                     </div>
                     <div style={{ fontSize:'20px', color:kpi.trend==='↑'?'#52E8A0':kpi.trend==='↓'?'#f87171':t.textMuted, flexShrink:0, fontWeight:700 }}>{kpi.trend}</div>
                     {kpi.pts.length >= 2 && (
-                      <div style={{ width:'56px', flexShrink:0 }}>
+                      <div style={{ width:'56px', flexShrink:0, overflow:'hidden' }}>
                         <MiniSpark pts={kpi.pts} t={t} color={kpi.color} />
                       </div>
                     )}
@@ -1166,10 +1168,10 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
             )}
           </div>
 
-          {/* ── 8. RECOVERY & SUPPORT (conditional) ── */}
-          {showRecovery && (
-            <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'12px', padding:'14px 16px' }}>
-              <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:600, marginBottom:'10px' }}>RECOVERY & SUPPORT</div>
+          {/* ── 8. RECOVERY & SUPPORT ── */}
+          <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'12px', padding:'14px 16px' }}>
+            <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:600, marginBottom:'10px' }}>RECOVERY & SUPPORT</div>
+            {recoveryEvents.length > 0 ? (
               <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
                 {recoveryEvents.map((e, i) => (
                   <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'7px 10px', background:t.bg, borderRadius:'7px' }}>
@@ -1177,14 +1179,25 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
                     <div style={{ fontSize:'10px', color:t.textMuted }}>{formatDate(e.start_date)}</div>
                   </div>
                 ))}
-                {recoveryEvents.length === 0 && phaseInfo.restAlertLevel === 'red' && (
-                  <div style={{ fontSize:'11px', color:'#f87171', fontStyle:'italic' }}>
-                    Carga crítica — agendar sessão de recuperação recomendada.
-                  </div>
-                )}
               </div>
-            </div>
-          )}
+            ) : (
+              <div>
+                <div style={{ fontSize:'11px', color:t.textMuted, fontStyle:'italic', marginBottom:'12px' }}>
+                  {phaseInfo.restAlertLevel === 'red'
+                    ? 'Carga crítica — agendar sessão de recuperação.'
+                    : 'Sem sessões registadas nos últimos 30 dias.'}
+                </div>
+                <div style={{ display:'flex', gap:'6px', flexWrap:'wrap' }}>
+                  {['Massagem', 'Physio', 'Mental Coach'].map(type => (
+                    <button key={type} onClick={() => onNavigate && onNavigate('calendar')}
+                      style={{ background:'transparent', border:`1px solid ${t.border}`, borderRadius:'8px', color:t.textMuted, padding:'5px 12px', fontSize:'11px', cursor:'pointer', fontFamily:F, fontWeight:500 }}>
+                      + {type}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
         </div>
       </div>
