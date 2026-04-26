@@ -24,7 +24,7 @@ const DEFAULT_METRICS = [
 // All UI strings in both languages
 const STRINGS = {
   en: {
-    nav: ['home','Overview','performance','Current Priorities','training','Training Plan','calendar','Calendar','competition','Competitions & Stats','chat','Chat','backoffice','Admin'],
+    nav: ['home','Overview','performance','Current Priorities','training','Training Plan','calendar','Calendar','competition','Competitions & Stats','chat','Chat','hcpwagr','HCP & WAGR','backoffice','Admin'],
     registerBtn: '+ Register Performance',
     menu: {
       home: 'Home', editProfile: 'Edit Profile', team: 'Team', manageKpis: 'Edit Priorities',
@@ -64,7 +64,7 @@ const STRINGS = {
     langModal: { title: 'Language', cancel: 'Cancel' },
   },
   pt: {
-    nav: ['home','Visão Geral','performance','Prioridades Atuais','training','Plano de Treinos','calendar','Calendário','competition','Competições & Stats','chat','Chat','backoffice','Admin'],
+    nav: ['home','Visão Geral','performance','Prioridades Atuais','training','Plano de Treinos','calendar','Calendário','competition','Competições & Stats','chat','Chat','hcpwagr','HCP & WAGR','backoffice','Admin'],
     registerBtn: '+ Registar Performance',
     menu: {
       home: 'Início', editProfile: 'Editar Perfil', team: 'Equipa', manageKpis: 'Editar Prioridades',
@@ -866,6 +866,7 @@ export default function Dashboard({ user }) {
         {!loading && view === 'calendar' && <Calendar theme={theme} t={t} user={user} lang={lang} onNavigate={(v, opts) => { if (opts?.date) setTrainingFocusDate(opts.date); setView(v) }} />}
 
                 {!loading && view === 'chat' && <Chat theme={theme} t={t} user={user} profile={profile} lang={lang} />}
+        {!loading && view === 'hcpwagr' && <HcpWagr theme={theme} t={t} user={user} />}
         {!loading && view === 'microcycles' && <Microcycles theme={theme} t={t} user={user} lang={lang} />}
         {!loading && view === 'backoffice' && <Backoffice theme={theme} t={t} user={user} />}
 
