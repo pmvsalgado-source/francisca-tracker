@@ -624,7 +624,11 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
     : null
   const isNewPR = bestResult && compStats.length > 0 && compStats[0]?.id === bestResult?.id
 
-  const isCompEvent = e => (e.category||'').toLowerCase().includes('competi') || (e.title||'').toLowerCase().includes('torneio')
+  const COMP_KW = ['competi','torneio',' cup','championship','stroke play','stableford','matchplay','match play','medal play','pro-am','proam','open ']
+  const isCompEvent = e => {
+    const cat = (e.category||'').toLowerCase(); const ttl = (e.title||'').toLowerCase()
+    return COMP_KW.some(kw => cat.includes(kw) || ttl.includes(kw))
+  }
   const upcomingComps = events.filter(e => e.start_date >= todayStr && !['cancelled','cancelado'].includes(e.status||'')).filter(isCompEvent).slice(0, 5)
   const slotAItems = upcomingComps.length > 0 ? upcomingComps : upcomingEvents.slice(0, 5)
 

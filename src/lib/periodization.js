@@ -33,7 +33,18 @@ function toMidnight(date) {
 
 // Parse a 'YYYY-MM-DD' string to a Date at noon (avoids DST boundary issues)
 function parseDate(str) {
+  if (!str) return new Date(NaN)
   return new Date(str + 'T12:00:00')
+}
+
+// Resolve the start-date field regardless of column name used in the DB row
+function eventDate(e) {
+  return e.start_date || e.date || e.start || null
+}
+
+// Resolve the end-date field, falling back to start date
+function eventEndDate(e) {
+  return e.end_date || e.end || eventDate(e)
 }
 
 // Positive integer: days from a to b (b > a → positive)
@@ -41,24 +52,33 @@ function daysDiff(a, b) {
   return Math.round((b - a) / 86400000)
 }
 
-// An event is a competition if its category contains 'competi' (e.g.
-// 'Competição') or the title contains 'torneio'. Multi-day tournaments
-// are supported via end_date.
+// Keywords that identify a competition event regardless of category spelling.
+// Covers: Competição, Competition, Torneio, Open, Cup, Championship,
+// Stroke Play, Stableford, Medal, Match Play, Matchplay, Pro-Am.
+const COMP_KEYWORDS = [
+  'competi', 'torneio', ' cup', 'championship', 'stroke play',
+  'stableford', 'matchplay', 'match play', 'medal play', 'pro-am', 'proam',
+  'open ', ' open',
+]
+
 function isCompetition(event) {
-  return (event.category || '').toLowerCase().includes('competi')
-    || (event.title || '').toLowerCase().includes('torneio')
+  const cat   = (event.category || '').toLowerCase()
+  const title = (event.title    || '').toLowerCase()
+  return COMP_KEYWORDS.some(kw => cat.includes(kw) || title.includes(kw))
 }
 
 // Does an event overlap any part of [wsDate, weDate] (both Date objects)?
 function overlapsWeek(event, wsDate, weDate) {
-  const start = parseDate(event.start_date)
-  const end   = event.end_date ? parseDate(event.end_date) : start
+  const start = parseDate(eventDate(event))
+  const end   = parseDate(eventEndDate(event))
   return start <= weDate && end >= wsDate
 }
 
 // Does any part of an event cover a specific calendar day (string 'YYYY-MM-DD')?
 function coversDay(event, dayStr) {
-  return event.start_date <= dayStr && (event.end_date || event.start_date) >= dayStr
+  const sd = eventDate(event)
+  const ed = eventEndDate(event)
+  return sd != null && sd <= dayStr && ed >= dayStr
 }
 
 // Is dayStr (string) a training day? Matches calendar events whose category
@@ -86,10 +106,10 @@ function longestRecentTrainingStreak(events, weekStart, lookbackDays = 14) {
   return streak
 }
 
-// Count competition events whose start_date falls within [fromDate, toDate)
+// Count competition events whose start date falls within [fromDate, toDate)
 function countCompetitionsInRange(competitions, fromDate, toDate) {
   return competitions.filter(c => {
-    const start = parseDate(c.start_date)
+    const start = parseDate(eventDate(c))
     return start >= fromDate && start < toDate
   }).length
 }
@@ -110,7 +130,8 @@ export function calcWeekPhase(weekStart, events) {
   we.setHours(23, 59, 59, 999)
 
   const competitions = (events || []).filter(isCompetition)
-    .sort((a, b) => a.start_date.localeCompare(b.start_date))
+    .filter(e => eventDate(e))                                        // skip rows with no date
+    .sort((a, b) => (eventDate(a) || '').localeCompare(eventDate(b) || ''))
 
   // ── Competition this week ─────────────────────────────────────────────────
   const thisWeekComps = competitions.filter(e => overlapsWeek(e, ws, we))
@@ -120,11 +141,11 @@ export function calcWeekPhase(weekStart, events) {
   let daysToNextCompetition = null  // returned to caller — days from today
   let nextCompEvent = null
   for (const c of competitions) {
-    const start = parseDate(c.start_date)
+    const start = parseDate(eventDate(c))
     if (start >= ws) {
       daysToNextCompetition = Math.round((start - ws) / (1000 * 60 * 60 * 24))
       nextCompEvent = c
-      console.log('[next comp date]', c.start_date, 'days:', daysToNextCompetition)
+      console.log('[next comp date]', eventDate(c), 'days:', daysToNextCompetition, 'title:', c.title, 'category:', c.category)
       break
     }
   }
@@ -135,7 +156,7 @@ export function calcWeekPhase(weekStart, events) {
   let daysToPhaseComp = null
   let phaseCompEvent = null
   for (const c of competitions) {
-    const start = parseDate(c.start_date)
+    const start = parseDate(eventDate(c))
     if (start > we) {
       daysToPhaseComp = Math.round((start - ws) / (1000 * 60 * 60 * 24))
       phaseCompEvent = c
@@ -147,7 +168,7 @@ export function calcWeekPhase(weekStart, events) {
   let daysSincePreviousCompetition = null
   for (let i = competitions.length - 1; i >= 0; i--) {
     const c = competitions[i]
-    const end = c.end_date ? parseDate(c.end_date) : parseDate(c.start_date)
+    const end = parseDate(eventEndDate(c))
     if (end < ws) {
       daysSincePreviousCompetition = daysDiff(end, ws)
       break
