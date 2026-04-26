@@ -8,6 +8,7 @@ import Performance from './Performance'
 import Chat from './Chat'
 import Microcycles from './Microcycles'
 import Backoffice from './Backoffice'
+import HcpWagr from './HcpWagr'
 import { supabase } from '../lib/supabase'
 
 const DEFAULT_METRICS = [
