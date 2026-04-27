@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { calcCurrentPhase, isCompetition } from '../lib/periodization'
+import { getPlansForDate } from '../lib/trainingUtils'
 
 function Sparkline({ data, t, target }) {
   const canvasRef = useRef(null)
@@ -747,53 +748,25 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
 
   const phaseInfo = calcCurrentPhase(events)
 
-  const HERO_INSTRUCTION = {
-    PEAK:                 'rotina de jogo · putting · ritmo',
-    AFINACAO:             'putting · wedges · rotina pré-competição',
-    DESENVOLVIMENTO:      'campo · técnica · transferência de velocidade',
-    DESENVOLVIMENTO_LIGHT:'campo suave · putting · sem fadiga',
-    ACUMULACAO:           'range · base física · técnica',
-    MANUTENCAO_B2B:       'manutenção · descanso ativo',
-    DESCARGA:             'mobilidade · sessão curta',
-    DESCANSO:             'descanso total',
+  const HERO_SITUACAO = {
+    PEAK:                  'Vais competir esta semana.',
+    MANUTENCAO_B2B:        'Duas competições em 7 dias.',
+    AFINACAO:              'Competição em menos de 7 dias.',
+    DESENVOLVIMENTO_LIGHT: 'Competição a 1–2 semanas.',
+    DESENVOLVIMENTO:       'Janela de trabalho — 2–3 semanas.',
+    ACUMULACAO:            'Fase de volume — mais de 3 semanas.',
+    DESCARGA:              'Bloco intenso recente.',
+    DESCANSO:              'Sem competições próximas.',
   }
-  const HERO_FOCUS = {
-    PEAK:                 'confiança · tempo · execução',
-    AFINACAO:             'ritmo · precisão · confiança',
-    DESENVOLVIMENTO:      'técnica · velocidade · transferência',
-    DESENVOLVIMENTO_LIGHT:'ritmo · precisão · frescura',
-    ACUMULACAO:           'volume · base · consistência',
-    MANUTENCAO_B2B:       'recuperação · manutenção · energia',
-    DESCARGA:             'recuperação · regeneração',
-    DESCANSO:             'recuperação total',
-  }
-  const HERO_INTENTION = {
-    PEAK:                 'Executar. Sem mudanças.',
-    AFINACAO:             'Afinar. Confiar.',
-    DESENVOLVIMENTO:      'Construir. Progredir.',
-    DESENVOLVIMENTO_LIGHT:'Manter o ritmo.',
-    ACUMULACAO:           'Acumular. Construir a base.',
-    MANUTENCAO_B2B:       'Recuperar. Manter energia.',
-    DESCARGA:             'Descansar. Regenerar.',
-    DESCANSO:             'Descanso total.',
-  }
-  const PHASE_TASK_HINTS = {
-    PEAK:                 { Golf:'60 min — rotina de jogo · ritmo e confiança', Ginásio:'20 min — ativação leve · sem fadiga' },
-    AFINACAO:             { Golf:'30–45 min — putting + wedges · drills de pressão', Ginásio:'20 min — mobilidade + ativação' },
-    DESENVOLVIMENTO:      { Golf:'60–90 min — técnica + velocidade · transferência', Ginásio:'60 min — força + potência' },
-    DESENVOLVIMENTO_LIGHT:{ Golf:'45 min — ritmo · volume reduzido', Ginásio:'30 min — carga moderada' },
-    ACUMULACAO:           { Golf:'90+ min — range · base técnica e física', Ginásio:'60 min — força + capacidade' },
-    MANUTENCAO_B2B:       { Golf:'30–40 min — ritmo suave · manutenção', Ginásio:'20 min — mobilidade + recuperação' },
-    DESCARGA:             { Golf:'20–30 min — técnica suave · sessão curta', Ginásio:'15 min — mobilidade apenas' },
-    DESCANSO:             {},
-  }
-  const getTaskHint = (task) => {
-    if (task.badge) return ''
-    const hints = PHASE_TASK_HINTS[phaseInfo.phase] || {}
-    const lbl = task.label.toLowerCase()
-    if (lbl.includes('ginásio') || lbl.includes('ginasio') || lbl.includes('gym')) return hints.Ginásio || ''
-    if (lbl.includes('golf') || lbl.includes('campo') || lbl.includes('coach')) return hints.Golf || ''
-    return ''
+  const HERO_REGRA = {
+    PEAK:                  'Não mudes nada. Faz o que já sabes.',
+    MANUTENCAO_B2B:        'Mantém o ritmo. Protege o corpo.',
+    AFINACAO:              'Afinar. Confiar. Nada de novo.',
+    DESENVOLVIMENTO_LIGHT: 'Estimula sem cansar.',
+    DESENVOLVIMENTO:       'Construir. Técnica e velocidade.',
+    ACUMULACAO:            'Acumula. Esta é a base da temporada.',
+    DESCARGA:              'Reduz carga. Não forçes.',
+    DESCANSO:              'Pausa total.',
   }
 
   // 7-day week (Mon–Sun starting from weekStartDate)
@@ -803,45 +776,24 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
     return d
   })
 
-  // Returns all non-rest sessions for a date from every plan type (golf + gym).
-  // Matches by exact week_start so today's plans are never missed by range overlap logic.
-  const getPlansForDate = (plans, dateStr) => {
-    const d = new Date(dateStr + 'T12:00:00')
-    const dow = d.getDay()
-    const mon = new Date(d); mon.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1))
-    const ws = mon.toISOString().split('T')[0]
-    const dayIdx = dow === 0 ? 6 : dow - 1
-    const sessions = []
-    plans.filter(p => p.week_start === ws).forEach(plan => {
-      const days = Array.isArray(plan.days) ? plan.days : []
-      const day = days[dayIdx] || {}
-      ;(Array.isArray(day.sessions) ? day.sessions : []).forEach(s => {
-        if (!s.isRest) sessions.push({ ...s, _plan_type: plan.plan_type || 'golf' })
-      })
-    })
-    return sessions
-  }
-
-  // Today's checklist: plan sessions + calendar events
-  const todayDayIndex = todayDate.getDay() === 0 ? 6 : todayDate.getDay() - 1
+  // Today's checklist: plan sessions (via shared util) + calendar events
   const todayPlanSessions = getPlansForDate(trainingPlans, todayStr)
   const todayCalEvents = events.filter(e => e.start_date <= todayStr && (e.end_date || e.start_date) >= todayStr)
 
   const tomorrowDate = new Date(todayDate); tomorrowDate.setDate(todayDate.getDate() + 1)
   const tomorrowStr = tomorrowDate.toISOString().split('T')[0]
-  const tomorrowDayIndex = tomorrowDate.getDay() === 0 ? 6 : tomorrowDate.getDay() - 1
   const tomorrowPlanSessions = getPlansForDate(trainingPlans, tomorrowStr)
   const tomorrowCalEvents = events.filter(e => e.start_date <= tomorrowStr && (e.end_date || e.start_date) >= tomorrowStr)
 
   const todayTasks = (() => {
     const tasks = []
     todayPlanSessions.forEach(session => {
-      const isCoach = session.session_type === 'coach'
-      const type = session._plan_type === 'gym' ? 'Ginásio' : 'Golf'
+      const isCoach = session.coachType === 'coach'
+      const type = session.type === 'gym' ? 'Ginásio' : 'Golf'
       tasks.push({
         label: isCoach ? `Treino com Coach — ${type}` : `Treino ${type}`,
-        detail: session.cat || session.name || '',
-        color: session._plan_type === 'gym' ? '#52E8A0' : '#378ADD',
+        detail: session.title || '',
+        color: session.type === 'gym' ? '#52E8A0' : '#378ADD',
       })
     })
     todayCalEvents.forEach(e => {
@@ -859,14 +811,14 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
     return tasks
   })()
 
-  const enrichedTodayTasks = todayTasks.map(task => ({ ...task, hint: getTaskHint(task) }))
+  const enrichedTodayTasks = todayTasks
 
   const tomorrowTasks = (() => {
     const tasks = []
     tomorrowPlanSessions.forEach(session => {
-      const isCoach = session.session_type === 'coach'
-      const type = session._plan_type === 'gym' ? 'Ginásio' : 'Golf'
-      tasks.push({ label: isCoach ? `Coach — ${type}` : `Treino ${type}`, detail: session.cat || session.name || '', color: session._plan_type === 'gym' ? '#52E8A0' : '#378ADD' })
+      const isCoach = session.coachType === 'coach'
+      const type = session.type === 'gym' ? 'Ginásio' : 'Golf'
+      tasks.push({ label: isCoach ? `Coach — ${type}` : `Treino ${type}`, detail: session.title || '', color: session.type === 'gym' ? '#52E8A0' : '#378ADD' })
     })
     tomorrowCalEvents.forEach(e => {
       const isComp = isCompetition(e)
@@ -891,7 +843,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   const upcomingCompsAll = events
     .filter(e => isCompetition(e) && normDate(e.start_date || e.date || e.start) >= todayStr && !['cancelled','cancelado'].includes(e.status || ''))
     .sort((a, b) => normDate(a.start_date || a.date || a.start).localeCompare(normDate(b.start_date || b.date || b.start)))
-    .slice(0, 3)
+    .slice(0, 4)
 
   // Performance snapshot — HCP · WAGR · Vel. Swing
   const snapshotKpis = (() => {
@@ -1130,10 +1082,10 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
             {phaseInfo.phase === 'PEAK' && '🔴 '}{phaseInfo.phase.replace(/_/g, ' ')}
           </div>
           <div style={{ fontSize:'12px', color:'rgba(255,255,255,0.8)', marginBottom:'3px' }}>
-            {HERO_INSTRUCTION[phaseInfo.phase]}
+            {HERO_SITUACAO[phaseInfo.phase] || ''}
           </div>
           <div style={{ fontSize:'11px', fontWeight:700, color:'rgba(255,255,255,0.55)', fontStyle:'italic' }}>
-            {HERO_INTENTION[phaseInfo.phase]}
+            {HERO_REGRA[phaseInfo.phase] || ''}
           </div>
         </div>
 
@@ -1205,15 +1157,15 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
               </div>
               {enrichedTodayTasks.length === 0 ? (
                 <div style={{ padding:'8px 0' }}>
-                  <div style={{ fontSize:'12px', color:t.textMuted, fontWeight:500, marginBottom:'3px' }}>Plano não definido</div>
-                  <div style={{ fontSize:'11px', color:t.textFaint, fontStyle:'italic' }}>Aguardando plano do coach</div>
+                  <div style={{ fontSize:'12px', color:t.textMuted, fontWeight:500, marginBottom:'3px' }}>Sem plano definido pelo coach</div>
+                  <div style={{ fontSize:'11px', color:t.textFaint, fontStyle:'italic' }}>A aguardar planeamento</div>
                 </div>
               ) : (
                 <div style={{ display:'flex', flexDirection:'column', gap:'9px' }}>
                   {enrichedTodayTasks.map((task, i) => {
                     const done = !!todayChecked[i]
                     const displayLabel = (!task.badge && task.detail) ? task.detail : task.label
-                    const displaySub = task.hint || (task.badge ? task.detail : '')
+                    const displaySub = task.badge ? task.detail : ''
                     return (
                       <label key={i} style={{ display:'flex', alignItems:'flex-start', gap:'9px', cursor:'pointer', userSelect:'none' }}>
                         <input type="checkbox" checked={done} onChange={() => setTodayChecked(p => ({...p, [i]: !p[i]}))}
@@ -1221,6 +1173,12 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
                         <div style={{ flex:1, minWidth:0 }}>
                           <div style={{ fontSize:'13px', fontWeight:600, color: done ? t.textMuted : t.text, textDecoration: done ? 'line-through' : 'none', lineHeight:1.3 }}>{displayLabel}</div>
                           {displaySub && <div style={{ fontSize:'10px', color: done ? t.textFaint : t.textMuted, marginTop:'2px' }}>{displaySub}</div>}
+                          {!task.badge && (
+                            <button onClick={e => { e.preventDefault(); onNavigate('training', { date: todayStr }) }}
+                              style={{ fontSize:'10px', color:task.color, background:'transparent', border:'none', cursor:'pointer', padding:'2px 0 0', fontFamily:F, display:'block', opacity:done?0.4:1 }}>
+                              → Ver plano
+                            </button>
+                          )}
                         </div>
                         {task.badge && (
                           <div style={{ fontSize:'8px', color:task.badgeColor||t.accent, background:(task.badgeColor||t.accent)+'18', borderRadius:'4px', padding:'2px 7px', flexShrink:0, fontWeight:700, letterSpacing:'0.5px' }}>{task.badge}</div>
@@ -1242,8 +1200,8 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
               </div>
               {tomorrowTasks.length === 0 ? (
                 <div style={{ padding:'8px 0' }}>
-                  <div style={{ fontSize:'12px', color:t.textMuted, fontWeight:500, marginBottom:'3px' }}>Plano não definido</div>
-                  <div style={{ fontSize:'11px', color:t.textFaint, fontStyle:'italic' }}>Aguardando plano do coach</div>
+                  <div style={{ fontSize:'12px', color:t.textMuted, fontWeight:500, marginBottom:'3px' }}>Sem plano definido pelo coach</div>
+                  <div style={{ fontSize:'11px', color:t.textFaint, fontStyle:'italic' }}>A aguardar planeamento</div>
                 </div>
               ) : (
                 <div style={{ display:'flex', flexDirection:'column', gap:'9px' }}>
@@ -1254,6 +1212,12 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
                         <div style={{ width:'15px', height:'15px', borderRadius:'3px', border:`1.5px solid ${t.border}`, flexShrink:0, marginTop:'1px' }} />
                         <div style={{ flex:1, minWidth:0 }}>
                           <div style={{ fontSize:'13px', fontWeight:500, color:t.textMuted, lineHeight:1.3 }}>{displayLabel}</div>
+                          {!task.badge && (
+                            <button onClick={() => onNavigate('training', { date: tomorrowStr })}
+                              style={{ fontSize:'10px', color:task.color, background:'transparent', border:'none', cursor:'pointer', padding:'2px 0 0', fontFamily:F, display:'block' }}>
+                              → Ver plano
+                            </button>
+                          )}
                         </div>
                         {task.badge && (
                           <div style={{ fontSize:'8px', color:task.badgeColor||t.accent, background:(task.badgeColor||t.accent)+'18', borderRadius:'4px', padding:'2px 7px', flexShrink:0, fontWeight:700 }}>{task.badge}</div>
@@ -1296,14 +1260,12 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
                   labelColor = '#52E8A0'
                   dot = '#52E8A0'
                 } else {
-                  const planIdx = day.getDay() === 0 ? 6 : day.getDay() - 1
-                  const planDay = currentPlan?.days && Array.isArray(currentPlan.days) ? currentPlan.days[planIdx] : null
-                  const hasPlan = planDay?.sessions?.length && !planDay.sessions[0]?.isRest
-                  if (hasPlan) {
-                    const cat = planDay.sessions[0]?.cat || planDay.sessions[0]?.name || ''
-                    const planType = currentPlan?.plan_type === 'gym' ? 'Ginásio' : 'Campo'
-                    label = cat ? `${planType} — ${cat}` : planType
-                    labelColor = currentPlan?.plan_type === 'gym' ? '#52E8A0' : '#378ADD'
+                  const daySessions = getPlansForDate(trainingPlans, ds)
+                  if (daySessions.length) {
+                    const first = daySessions[0]
+                    const planType = first.type === 'gym' ? 'Ginásio' : 'Campo'
+                    label = first.title ? `${planType} — ${first.title}` : planType
+                    labelColor = first.type === 'gym' ? '#52E8A0' : '#378ADD'
                     dot = labelColor
                   }
                 }

@@ -810,7 +810,7 @@ export default function Dashboard({ user }) {
 
         {!loading && view === 'performance' && <Performance theme={theme} t={t} user={user} lang={lang} initialTab={perfTab} trainingPlans={trainingPlans} />}
 
-        {!loading && view === 'home' && <Home theme={theme} t={t} onNavigate={v => setView(v)} onRegister={() => setShowRegister(true)} user={user} profile={profile} lang={lang} events={events} trainingPlans={trainingPlans} />}
+        {!loading && view === 'home' && <Home theme={theme} t={t} onNavigate={(v, opts) => { if (opts?.date) setTrainingFocusDate(opts.date); setView(v) }} onRegister={() => setShowRegister(true)} user={user} profile={profile} lang={lang} events={events} trainingPlans={trainingPlans} />}
 
         {!loading && view === 'history' && (
           <div>
