@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import { isCompetition } from '../lib/periodization'
 import Goals from './Goals'
 
 const COACH_GOLF = 'pmvsalgado@gmail.com'
@@ -717,11 +718,8 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
     },
   }
 
-  const COMP_KW = ['competi','torneio',' cup','championship','stroke play','stableford','matchplay','match play','medal play','pro-am','proam','open ','nacional','regional']
-  const isCompEvent = (e) => { const c=(e.category||'').toLowerCase(), tt=(e.title||'').toLowerCase(); return COMP_KW.some(kw=>c.includes(kw)||tt.includes(kw)) }
-
   const computeAllPhases = (weekStarts, evts) => {
-    const comps = evts.filter(isCompEvent)
+    const comps = evts.filter(isCompetition)
     const msDay = 86400000
     const wsMs = (ws) => new Date(ws+'T12:00:00').getTime()
     const weekHasComp = (ws) => { const s=wsMs(ws),e=s+6*msDay; return comps.some(c=>{ const cs=new Date(c.start_date+'T12:00:00').getTime(),ce=c.end_date?new Date(c.end_date+'T12:00:00').getTime():cs; return cs<=e&&ce>=s }) }
@@ -762,7 +760,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
 
   const getPhaseSummary = (ws, evts, phId) => {
     const ph = PHASES[phId] || PHASES.acumulacao
-    const comps = evts.filter(isCompEvent)
+    const comps = evts.filter(isCompetition)
     const msDay = 86400000
     const wsM = new Date(ws+'T12:00:00').getTime()
     let nextComp=null, minCs=null
@@ -1919,7 +1917,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
         allWeeks.forEach(ws => { resolvedPhases[ws] = phaseOverrides[ws] || autoPhases[ws] || 'acumulacao' })
         const mesociclos = []
         for (let i=0; i<allWeeks.length; i+=4) mesociclos.push(allWeeks.slice(i, i+4))
-        const comps = events.filter(isCompEvent)
+        const comps = events.filter(isCompetition)
         const getWeekComps = (ws) => {
           const wsMs = new Date(ws+'T12:00:00').getTime(), weMs = wsMs+6*86400000
           return comps.filter(c=>{ const cs=new Date(c.start_date+'T12:00:00').getTime(),ce=c.end_date?new Date(c.end_date+'T12:00:00').getTime():cs; return cs<=weMs&&ce>=wsMs })

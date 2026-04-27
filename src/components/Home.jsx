@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
-import { calcCurrentPhase } from '../lib/periodization'
+import { calcCurrentPhase, isCompetition } from '../lib/periodization'
 
 function Sparkline({ data, t, target }) {
   const canvasRef = useRef(null)
@@ -620,12 +620,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
     : null
   const isNewPR = bestResult && compStats.length > 0 && compStats[0]?.id === bestResult?.id
 
-  const COMP_KW = ['competi','torneio',' cup','championship','stroke play','stableford','matchplay','match play','medal play','pro-am','proam','open ','nacional','regional']
-  const isCompEvent = e => {
-    const cat = (e.category||'').toLowerCase(); const ttl = (e.title||'').toLowerCase()
-    return COMP_KW.some(kw => cat.includes(kw) || ttl.includes(kw))
-  }
-  const upcomingComps = events.filter(e => e.start_date >= todayStr && !['cancelled','cancelado'].includes(e.status||'')).filter(isCompEvent).slice(0, 5)
+  const upcomingComps = events.filter(e => e.start_date >= todayStr && !['cancelled','cancelado'].includes(e.status||'')).filter(isCompetition).slice(0, 5)
   const slotAItems = upcomingComps.length > 0 ? upcomingComps : upcomingEvents.slice(0, 5)
 
   const stats2026 = compStats.filter(s => (s.event_date||'').startsWith('2026'))
@@ -835,7 +830,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
       })
     })
     todayCalEvents.forEach(e => {
-      const isComp = isCompEvent(e)
+      const isComp = isCompetition(e)
       const cat = (e.category || '').toLowerCase()
       const isGolf = !isComp && (cat.includes('treino') || cat.includes('camp'))
       tasks.push({
@@ -860,7 +855,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
       tasks.push({ label: isCoach ? `Coach — ${type}` : `Treino ${type}`, detail: session.cat || session.name || '', color: tomorrowPlan?.plan_type === 'gym' ? '#52E8A0' : '#378ADD' })
     })
     tomorrowCalEvents.forEach(e => {
-      const isComp = isCompEvent(e)
+      const isComp = isCompetition(e)
       const cat = (e.category || '').toLowerCase()
       const isGolf = !isComp && (cat.includes('treino') || cat.includes('camp'))
       tasks.push({ label: e.title || 'Evento', detail: isComp ? 'Competição' : isGolf ? 'Golf' : e.category || '', color: isComp ? '#ef4444' : isGolf ? '#378ADD' : '#52E8A0', badge: isComp ? 'COMP' : null, badgeColor: '#ef4444' })
@@ -873,14 +868,14 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
 
   // Next competition — use normDate so timestamp-format start_dates compare correctly
   const nextCompetition = events
-    .filter(e => isCompEvent(e) && normDate(e.start_date || e.date || e.start) >= todayStr && !['cancelled','cancelado'].includes(e.status || ''))
+    .filter(e => isCompetition(e) && normDate(e.start_date || e.date || e.start) >= todayStr && !['cancelled','cancelado'].includes(e.status || ''))
     .sort((a, b) => normDate(a.start_date || a.date || a.start).localeCompare(normDate(b.start_date || b.date || b.start)))[0] || null
   const daysToNextComp = nextCompetition
     ? Math.max(0, Math.ceil((new Date(nextCompetition.start_date) - new Date()) / 86400000))
     : null
 
   const upcomingCompsAll = events
-    .filter(e => isCompEvent(e) && normDate(e.start_date || e.date || e.start) >= todayStr && !['cancelled','cancelado'].includes(e.status || ''))
+    .filter(e => isCompetition(e) && normDate(e.start_date || e.date || e.start) >= todayStr && !['cancelled','cancelado'].includes(e.status || ''))
     .sort((a, b) => normDate(a.start_date || a.date || a.start).localeCompare(normDate(b.start_date || b.date || b.start)))
     .slice(0, 3)
 
@@ -1267,8 +1262,8 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
                 const dayEvts = events.filter(e => e.start_date <= ds && (e.end_date || e.start_date) >= ds)
                 const isToday = ds === todayStr
                 const isPast  = ds < todayStr
-                const compEvts = dayEvts.filter(isCompEvent)
-                const golfEvts = dayEvts.filter(e => { const c = (e.category||'').toLowerCase(); return !isCompEvent(e) && (c.includes('treino') || c.includes('training') || c.includes('camp')) })
+                const compEvts = dayEvts.filter(isCompetition)
+                const golfEvts = dayEvts.filter(e => { const c = (e.category||'').toLowerCase(); return !isCompetition(e) && (c.includes('treino') || c.includes('training') || c.includes('camp')) })
                 const gymEvts  = dayEvts.filter(e => (e.category||'').toLowerCase().includes('gym'))
 
                 let label = isPast ? '' : '—'

@@ -75,10 +75,19 @@ const COMP_KEYWORDS = [
   'open ', ' open', 'nacional', 'regional',
 ]
 
-function isCompetition(event) {
+export function isCompetition(event) {
   const cat   = (event.category || '').toLowerCase()
   const title = (event.title    || '').toLowerCase()
   return COMP_KEYWORDS.some(kw => cat.includes(kw) || title.includes(kw))
+}
+
+// Returns the first competition event on or after fromDate, sorted by start date.
+export function getNextCompetition(events, fromDate) {
+  const from = parseDate(fromDate)
+  return (events || [])
+    .filter(isCompetition)
+    .filter(e => { const d = parseDate(eventDate(e)); return !isNaN(d) && d >= from })
+    .sort((a, b) => eventDate(a).localeCompare(eventDate(b)))[0] || null
 }
 
 // Does an event overlap any part of [wsDate, weDate] (both Date objects)?
