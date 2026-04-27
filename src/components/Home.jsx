@@ -776,6 +776,16 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
     DESCARGA:             'recuperação · regeneração',
     DESCANSO:             'recuperação total',
   }
+  const HERO_INTENTION = {
+    PEAK:                 'Executar. Sem mudanças.',
+    AFINACAO:             'Afinar. Confiar.',
+    DESENVOLVIMENTO:      'Construir. Progredir.',
+    DESENVOLVIMENTO_LIGHT:'Manter o ritmo.',
+    ACUMULACAO:           'Acumular. Construir a base.',
+    MANUTENCAO_B2B:       'Recuperar. Manter energia.',
+    DESCARGA:             'Descansar. Regenerar.',
+    DESCANSO:             'Descanso total.',
+  }
   const PHASE_TASK_HINTS = {
     PEAK:                 { Golf:'60 min — rotina de jogo · ritmo e confiança', Ginásio:'20 min — ativação leve · sem fadiga' },
     AFINACAO:             { Golf:'30–45 min — putting + wedges · drills de pressão', Ginásio:'20 min — mobilidade + ativação' },
@@ -809,6 +819,13 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
     : null
   const todayCalEvents = events.filter(e => e.start_date <= todayStr && (e.end_date || e.start_date) >= todayStr)
 
+  const tomorrowDate = new Date(todayDate); tomorrowDate.setDate(todayDate.getDate() + 1)
+  const tomorrowStr = tomorrowDate.toISOString().split('T')[0]
+  const tomorrowDayIndex = tomorrowDate.getDay() === 0 ? 6 : tomorrowDate.getDay() - 1
+  const tomorrowPlan = trainingPlans.find(p => p.week_start <= tomorrowStr && p.week_end >= tomorrowStr)
+  const tomorrowPlanDay = tomorrowPlan?.days && Array.isArray(tomorrowPlan.days) ? tomorrowPlan.days[tomorrowDayIndex] : null
+  const tomorrowCalEvents = events.filter(e => e.start_date <= tomorrowStr && (e.end_date || e.start_date) >= tomorrowStr)
+
   const todayTasks = (() => {
     const tasks = []
     todayPlanDay?.sessions?.forEach(session => {
@@ -838,6 +855,23 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
 
   const enrichedTodayTasks = todayTasks.map(task => ({ ...task, hint: getTaskHint(task) }))
 
+  const tomorrowTasks = (() => {
+    const tasks = []
+    tomorrowPlanDay?.sessions?.forEach(session => {
+      if (session.isRest) return
+      const isCoach = session.session_type === 'coach'
+      const type = tomorrowPlan?.plan_type === 'gym' ? 'Ginásio' : 'Golf'
+      tasks.push({ label: isCoach ? `Coach — ${type}` : `Treino ${type}`, detail: session.cat || session.name || '', color: tomorrowPlan?.plan_type === 'gym' ? '#52E8A0' : '#378ADD' })
+    })
+    tomorrowCalEvents.forEach(e => {
+      const isComp = isCompEvent(e)
+      const cat = (e.category || '').toLowerCase()
+      const isGolf = !isComp && (cat.includes('treino') || cat.includes('camp'))
+      tasks.push({ label: e.title || 'Evento', detail: isComp ? 'Competição' : isGolf ? 'Golf' : e.category || '', color: isComp ? '#ef4444' : isGolf ? '#378ADD' : '#52E8A0', badge: isComp ? 'COMP' : null, badgeColor: '#ef4444' })
+    })
+    return tasks
+  })()
+
   // Normalise a raw date value to 'YYYY-MM-DD' (handles full timestamps)
   const normDate = raw => { if (!raw) return ''; const m = String(raw).match(/^(\d{4}-\d{2}-\d{2})/); return m ? m[1] : '' }
 
@@ -848,6 +882,11 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   const daysToNextComp = nextCompetition
     ? Math.max(0, Math.ceil((new Date(nextCompetition.start_date) - new Date()) / 86400000))
     : null
+
+  const upcomingCompsAll = events
+    .filter(e => isCompEvent(e) && normDate(e.start_date || e.date || e.start) >= todayStr && !['cancelled','cancelado'].includes(e.status || ''))
+    .sort((a, b) => normDate(a.start_date || a.date || a.start).localeCompare(normDate(b.start_date || b.date || b.start)))
+    .slice(0, 3)
 
   // Performance snapshot — HCP · WAGR · Vel. Swing
   const snapshotKpis = (() => {
@@ -929,6 +968,15 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
     return items.sort((a, b) => a.date.localeCompare(b.date)).slice(0, 3)
   })()
 
+  const coachReminders = (() => {
+    const reminders = []
+    const hasGolfPlan = trainingPlans.some(p => (p.plan_type === 'golf' || !p.plan_type) && p.week_start <= weekStartStr && p.week_end >= weekStartStr)
+    const hasGymPlan  = trainingPlans.some(p => p.plan_type === 'gym' && p.week_start <= weekStartStr && p.week_end >= weekStartStr)
+    if (!hasGolfPlan) reminders.push({ label: 'Plano golf em falta' })
+    if (!hasGymPlan)  reminders.push({ label: 'Plano ginásio em falta' })
+    return reminders
+  })()
+
   // Alert colour
   const alertColor = phaseInfo.restAlertLevel === 'red' ? '#f87171'
     : phaseInfo.restAlertLevel === 'yellow' ? '#f59e0b'
@@ -941,19 +989,28 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   return (
     <div style={{ fontFamily: F, color: t.text }}>
       <style>{`
-        .hm2-main{display:grid;grid-template-columns:1fr 320px;gap:12px}
-        .hm2-left{display:flex;flex-direction:column;gap:12px}
-        .hm2-right{display:flex;flex-direction:column;gap:12px}
+        *{box-sizing:border-box}
+        .hm2-main{display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start}
+        .hm2-left{display:flex;flex-direction:column;gap:14px}
+        .hm2-right{display:flex;flex-direction:column;gap:12px;position:sticky;top:16px}
         .hm2-grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
         .hm-athlete-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+        .hm-hero-row{display:grid;grid-template-columns:1fr 240px;gap:12px;margin-bottom:16px;align-items:stretch}
+        .hm-hoje-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+        .hm-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px}
+        .hm-section-label{font-size:9px;letter-spacing:2px;font-weight:700;margin-bottom:10px;text-transform:uppercase}
+        .hm-divider{border:none;border-top:1px solid var(--border);margin:10px 0}
         @media(max-width:768px){
           .hm2-main{grid-template-columns:1fr}
+          .hm2-right{position:static}
           .hm2-grid3{grid-template-columns:1fr 1fr}
           .hm-athlete-grid{grid-template-columns:repeat(2,1fr)}
+          .hm-hero-row{grid-template-columns:1fr}
         }
         @media(max-width:480px){
           .hm2-grid3{grid-template-columns:1fr}
           .hm-athlete-grid{grid-template-columns:1fr}
+          .hm-hoje-row{grid-template-columns:1fr}
         }
       `}</style>
 
@@ -1058,24 +1115,63 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
         )}
       </div>
 
-      {/* ── 2. HERO — FASE ATUAL ── */}
-      <div style={{ background: phaseInfo.phaseColor, borderRadius:'14px', padding:'16px 20px', marginBottom:'14px' }}>
-        <div style={{ display:'flex', alignItems:'baseline', gap:'10px', flexWrap:'wrap', marginBottom:'10px' }}>
-          <div style={{ fontSize:'34px', fontWeight:900, color:'#fff', lineHeight:1, letterSpacing:'-0.5px' }}>
+      {/* ── HERO ROW — fase + próxima competição ── */}
+      <div className="hm-hero-row">
+
+        {/* Fase atual */}
+        <div style={{ background: phaseInfo.phaseColor, borderRadius:'14px', padding:'16px 20px', display:'flex', flexDirection:'column', justifyContent:'center', minHeight:'120px' }}>
+          <div style={{ fontSize:'8px', letterSpacing:'3px', color:'rgba(255,255,255,0.5)', fontWeight:700, marginBottom:'6px' }}>FASE ATUAL</div>
+          <div style={{ fontSize:'22px', fontWeight:900, color:'#fff', lineHeight:1, letterSpacing:'-0.3px', marginBottom:'6px' }}>
             {phaseInfo.phase === 'PEAK' && '🔴 '}{phaseInfo.phase.replace(/_/g, ' ')}
           </div>
-          {phaseInfo.daysToNextCompetition != null && (
-            <div style={{ fontSize:'14px', fontWeight:600, color:'rgba(255,255,255,0.65)', lineHeight:1 }}>
-              · {phaseInfo.daysToNextCompetition} dia{phaseInfo.daysToNextCompetition === 1 ? '' : 's'} para competir
+          <div style={{ fontSize:'12px', color:'rgba(255,255,255,0.8)', marginBottom:'3px' }}>
+            {HERO_INSTRUCTION[phaseInfo.phase]}
+          </div>
+          <div style={{ fontSize:'11px', fontWeight:700, color:'rgba(255,255,255,0.55)', fontStyle:'italic' }}>
+            {HERO_INTENTION[phaseInfo.phase]}
+          </div>
+        </div>
+
+        {/* Próxima competição */}
+        {upcomingCompsAll.length > 0 ? (
+          <div style={{ background:t.surface, border:`1px solid ${daysToNextComp != null && daysToNextComp <= 7 ? '#ef444433' : t.border}`, borderRadius:'14px', padding:'16px', display:'flex', flexDirection:'column', gap:'0', minHeight:'120px', justifyContent:'center' }}>
+            <div style={{ fontSize:'8px', letterSpacing:'2px', color:t.textMuted, fontWeight:700, marginBottom:'10px' }}>PRÓXIMA COMPETIÇÃO</div>
+            <div style={{ display:'flex', alignItems:'center', gap:'14px', marginBottom:'10px' }}>
+              <div style={{ textAlign:'center', flexShrink:0, lineHeight:1 }}>
+                <div style={{ fontSize:'42px', fontWeight:900, color: daysToNextComp != null && daysToNextComp <= 7 ? '#ef4444' : daysToNextComp != null && daysToNextComp <= 14 ? '#f59e0b' : '#378ADD', lineHeight:1 }}>
+                  {daysToNextComp ?? '—'}
+                </div>
+                <div style={{ fontSize:'7px', letterSpacing:'1.5px', color:t.textMuted, fontWeight:700, marginTop:'2px' }}>DIAS</div>
+              </div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:'13px', fontWeight:700, color:t.text, lineHeight:1.3, marginBottom:'3px' }}>{upcomingCompsAll[0].title}</div>
+                <div style={{ fontSize:'11px', color:t.textMuted }}>
+                  {formatDate(upcomingCompsAll[0].start_date)}
+                  {upcomingCompsAll[0].end_date && upcomingCompsAll[0].end_date !== upcomingCompsAll[0].start_date ? ` — ${formatDate(upcomingCompsAll[0].end_date)}` : ''}
+                </div>
+                {upcomingCompsAll[0].location && <div style={{ fontSize:'10px', color:t.textFaint, marginTop:'2px' }}>📍 {upcomingCompsAll[0].location}</div>}
+              </div>
             </div>
-          )}
-        </div>
-        <div style={{ fontSize:'13px', fontWeight:600, color:'rgba(255,255,255,0.95)', marginBottom:'4px' }}>
-          → Hoje: {HERO_INSTRUCTION[phaseInfo.phase]}
-        </div>
-        <div style={{ fontSize:'11px', color:'rgba(255,255,255,0.6)' }}>
-          Foco: {HERO_FOCUS[phaseInfo.phase]}
-        </div>
+            {upcomingCompsAll.length > 1 && (
+              <div style={{ borderTop:`1px solid ${t.border}`, paddingTop:'8px', display:'flex', flexDirection:'column', gap:'5px' }}>
+                {upcomingCompsAll.slice(1).map((comp, i) => {
+                  const d = Math.max(0, Math.ceil((new Date(normDate(comp.start_date) + 'T12:00:00') - new Date()) / 86400000))
+                  return (
+                    <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:'8px' }}>
+                      <div style={{ fontSize:'11px', color:t.textMuted, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1 }}>{comp.title}</div>
+                      <div style={{ fontSize:'10px', color:t.textFaint, flexShrink:0, fontWeight:600, background:t.bg, padding:'1px 7px', borderRadius:'10px' }}>{d}d</div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'14px', padding:'16px', display:'flex', flexDirection:'column', justifyContent:'center', minHeight:'120px' }}>
+            <div style={{ fontSize:'8px', letterSpacing:'2px', color:t.textMuted, fontWeight:700, marginBottom:'8px' }}>PRÓXIMA COMPETIÇÃO</div>
+            <div style={{ fontSize:'12px', color:t.textMuted, fontStyle:'italic' }}>Sem competições agendadas</div>
+          </div>
+        )}
       </div>
 
       {/* ── MAIN GRID ── */}
@@ -1084,58 +1180,91 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
         {/* ── LEFT COLUMN ── */}
         <div className="hm2-left">
 
-          {/* ── 3. HOJE ── */}
-          <div style={{ background:t.surface, border:`2px solid ${t.accent}33`, borderRadius:'12px', padding:'14px 16px' }}>
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'12px' }}>
-              <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.accent, fontWeight:700 }}>
-                HOJE — {todayDate.toLocaleDateString('pt-PT', { weekday:'long', day:'2-digit', month:'short' }).toUpperCase()}
+          {/* ── HOJE & AMANHÃ ── */}
+          <div className="hm-hoje-row">
+
+            {/* HOJE */}
+            <div style={{ background:t.surface, border:`1.5px solid ${t.accent}44`, borderRadius:'14px', padding:'16px 18px' }}>
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'12px' }}>
+                <div>
+                  <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.accent, fontWeight:700 }}>HOJE</div>
+                  <div style={{ fontSize:'11px', color:t.textMuted, marginTop:'1px' }}>
+                    {todayDate.toLocaleDateString('pt-PT', { weekday:'long', day:'2-digit', month:'short' })}
+                  </div>
+                </div>
+                {enrichedTodayTasks.length > 0 && (
+                  <div style={{ fontSize:'10px', color:t.textMuted, background:t.bg, padding:'2px 8px', borderRadius:'10px', border:`1px solid ${t.border}` }}>
+                    {enrichedTodayTasks.filter((_,i) => todayChecked[i]).length}/{enrichedTodayTasks.length}
+                  </div>
+                )}
               </div>
-              {enrichedTodayTasks.length > 0 && (
-                <div style={{ fontSize:'9px', color:t.textMuted }}>
-                  {enrichedTodayTasks.filter((_,i) => todayChecked[i]).length}/{enrichedTodayTasks.length} feito
+              {enrichedTodayTasks.length === 0 ? (
+                <div style={{ padding:'8px 0' }}>
+                  <div style={{ fontSize:'12px', color:t.textMuted, fontWeight:500, marginBottom:'3px' }}>Plano não definido</div>
+                  <div style={{ fontSize:'11px', color:t.textFaint, fontStyle:'italic' }}>Aguardando plano do coach</div>
+                </div>
+              ) : (
+                <div style={{ display:'flex', flexDirection:'column', gap:'9px' }}>
+                  {enrichedTodayTasks.map((task, i) => {
+                    const done = !!todayChecked[i]
+                    const displayLabel = (!task.badge && task.detail) ? task.detail : task.label
+                    const displaySub = task.hint || (task.badge ? task.detail : '')
+                    return (
+                      <label key={i} style={{ display:'flex', alignItems:'flex-start', gap:'9px', cursor:'pointer', userSelect:'none' }}>
+                        <input type="checkbox" checked={done} onChange={() => setTodayChecked(p => ({...p, [i]: !p[i]}))}
+                          style={{ accentColor: task.color || t.accent, width:'15px', height:'15px', cursor:'pointer', flexShrink:0, marginTop:'1px' }} />
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:'13px', fontWeight:600, color: done ? t.textMuted : t.text, textDecoration: done ? 'line-through' : 'none', lineHeight:1.3 }}>{displayLabel}</div>
+                          {displaySub && <div style={{ fontSize:'10px', color: done ? t.textFaint : t.textMuted, marginTop:'2px' }}>{displaySub}</div>}
+                        </div>
+                        {task.badge && (
+                          <div style={{ fontSize:'8px', color:task.badgeColor||t.accent, background:(task.badgeColor||t.accent)+'18', borderRadius:'4px', padding:'2px 7px', flexShrink:0, fontWeight:700, letterSpacing:'0.5px' }}>{task.badge}</div>
+                        )}
+                      </label>
+                    )
+                  })}
                 </div>
               )}
             </div>
-            {enrichedTodayTasks.length === 0 ? (
-              <div style={{ fontSize:'12px', color:t.textMuted, fontStyle:'italic' }}>Sem tarefas agendadas para hoje.</div>
-            ) : (
-              <div style={{ display:'flex', flexDirection:'column', gap:'10px' }}>
-                {enrichedTodayTasks.map((task, i) => {
-                  const done = !!todayChecked[i]
-                  const displayLabel = (!task.badge && task.detail) ? task.detail : task.label
-                  const displaySub = task.hint || (task.badge ? task.detail : '')
-                  return (
-                    <label key={i} style={{ display:'flex', alignItems:'flex-start', gap:'10px', cursor:'pointer', userSelect:'none' }}>
-                      <input
-                        type="checkbox"
-                        checked={done}
-                        onChange={() => setTodayChecked(p => ({...p, [i]: !p[i]}))}
-                        style={{ accentColor: task.color || t.accent, width:'16px', height:'16px', cursor:'pointer', flexShrink:0, marginTop:'2px' }}
-                      />
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontSize:'13px', fontWeight:600, color: done ? t.textMuted : t.text, textDecoration: done ? 'line-through' : 'none', lineHeight:1.3 }}>{displayLabel}</div>
-                        {displaySub && <div style={{ fontSize:'10px', color: done ? t.textFaint : t.textMuted, marginTop:'2px', fontStyle:'italic' }}>{displaySub}</div>}
-                      </div>
-                      {task.badge && (
-                        <div style={{ fontSize:'9px', color:task.badgeColor||t.accent, background:(task.badgeColor||t.accent)+'22', borderRadius:'4px', padding:'2px 7px', flexShrink:0, fontWeight:700, letterSpacing:'0.5px' }}>{task.badge}</div>
-                      )}
-                    </label>
-                  )
-                })}
+
+            {/* AMANHÃ */}
+            <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'14px', padding:'16px 18px' }}>
+              <div style={{ marginBottom:'12px' }}>
+                <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:700 }}>AMANHÃ</div>
+                <div style={{ fontSize:'11px', color:t.textMuted, marginTop:'1px' }}>
+                  {tomorrowDate.toLocaleDateString('pt-PT', { weekday:'long', day:'2-digit', month:'short' })}
+                </div>
               </div>
-            )}
+              {tomorrowTasks.length === 0 ? (
+                <div style={{ padding:'8px 0' }}>
+                  <div style={{ fontSize:'12px', color:t.textMuted, fontWeight:500, marginBottom:'3px' }}>Plano não definido</div>
+                  <div style={{ fontSize:'11px', color:t.textFaint, fontStyle:'italic' }}>Aguardando plano do coach</div>
+                </div>
+              ) : (
+                <div style={{ display:'flex', flexDirection:'column', gap:'9px' }}>
+                  {tomorrowTasks.map((task, i) => {
+                    const displayLabel = (!task.badge && task.detail) ? task.detail : task.label
+                    return (
+                      <div key={i} style={{ display:'flex', alignItems:'flex-start', gap:'9px' }}>
+                        <div style={{ width:'15px', height:'15px', borderRadius:'3px', border:`1.5px solid ${t.border}`, flexShrink:0, marginTop:'1px' }} />
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:'13px', fontWeight:500, color:t.textMuted, lineHeight:1.3 }}>{displayLabel}</div>
+                        </div>
+                        {task.badge && (
+                          <div style={{ fontSize:'8px', color:task.badgeColor||t.accent, background:(task.badgeColor||t.accent)+'18', borderRadius:'4px', padding:'2px 7px', flexShrink:0, fontWeight:700 }}>{task.badge}</div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
           </div>
 
-          {/* ── 4. SEMANA ── */}
-          {(() => {
-            const wsStr = weekDays[0]?.toISOString().split('T')[0]
-            const weStr = weekDays[6]?.toISOString().split('T')[0]
-            const hasCalEvts = wsStr && weStr && events.some(e => e.start_date <= weStr && (e.end_date || e.start_date) >= wsStr)
-            const hasPlanData = currentPlan?.days?.some(d => d?.sessions?.length && !d.sessions[0]?.isRest)
-            if (!hasCalEvts && !hasPlanData) return null
-            return (
-          <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'12px', padding:'14px 16px' }}>
-            <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:600, marginBottom:'10px' }}>ESTA SEMANA</div>
+          {/* ── ESTA SEMANA ── */}
+          <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'14px', padding:'16px 18px' }}>
+            <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:700, marginBottom:'12px' }}>ESTA SEMANA</div>
             <div style={{ display:'flex', flexDirection:'column' }}>
               {weekDays.map((day, i) => {
                 const ds = day.toISOString().split('T')[0]
@@ -1146,17 +1275,21 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
                 const golfEvts = dayEvts.filter(e => { const c = (e.category||'').toLowerCase(); return !isCompEvent(e) && (c.includes('treino') || c.includes('training') || c.includes('camp')) })
                 const gymEvts  = dayEvts.filter(e => (e.category||'').toLowerCase().includes('gym'))
 
-                let label = '—'
+                let label = isPast ? '' : '—'
                 let labelColor = t.textFaint
+                let dot = null
                 if (compEvts.length) {
-                  label = compEvts[0].title?.slice(0, 28) || 'Competição'
+                  label = compEvts[0].title?.slice(0, 30) || 'Competição'
                   labelColor = '#ef4444'
+                  dot = '#ef4444'
                 } else if (golfEvts.length) {
-                  label = golfEvts[0].title?.slice(0, 28) || 'Campo'
+                  label = golfEvts[0].title?.slice(0, 30) || 'Golf'
                   labelColor = '#378ADD'
+                  dot = '#378ADD'
                 } else if (gymEvts.length) {
-                  label = 'Ginásio'
+                  label = gymEvts[0].title?.slice(0, 30) || 'Ginásio'
                   labelColor = '#52E8A0'
+                  dot = '#52E8A0'
                 } else {
                   const planIdx = day.getDay() === 0 ? 6 : day.getDay() - 1
                   const planDay = currentPlan?.days && Array.isArray(currentPlan.days) ? currentPlan.days[planIdx] : null
@@ -1166,93 +1299,69 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
                     const planType = currentPlan?.plan_type === 'gym' ? 'Ginásio' : 'Campo'
                     label = cat ? `${planType} — ${cat}` : planType
                     labelColor = currentPlan?.plan_type === 'gym' ? '#52E8A0' : '#378ADD'
-                  } else if (!isPast) {
-                    label = 'Descanso'
-                    labelColor = t.textFaint
+                    dot = labelColor
                   }
                 }
 
                 return (
-                  <div key={i} style={{ display:'flex', alignItems:'center', gap:'10px', padding:'5px 0', borderBottom: i < 6 ? `1px solid ${t.border}` : 'none', opacity: isPast && !isToday ? 0.5 : 1 }}>
-                    <div style={{ width:'28px', fontSize:'11px', color: isToday ? t.accent : t.textMuted, fontWeight: isToday ? 700 : 500, flexShrink:0 }}>
+                  <div key={i} style={{ display:'flex', alignItems:'center', gap:'12px', padding:'7px 0', borderBottom: i < 6 ? `1px solid ${t.border}` : 'none', opacity: isPast && !isToday ? 0.45 : 1 }}>
+                    <div style={{ width:'30px', fontSize:'11px', color: isToday ? t.accent : t.textMuted, fontWeight: isToday ? 800 : 500, flexShrink:0 }}>
                       {DAY_LABELS[i]}
                     </div>
-                    <div style={{ flex:1, fontSize:'12px', color: isToday ? t.text : labelColor, fontWeight: isToday ? 600 : 400, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                      {label}
+                    {dot && <div style={{ width:'6px', height:'6px', borderRadius:'50%', background:dot, flexShrink:0 }} />}
+                    {!dot && <div style={{ width:'6px', height:'6px', flexShrink:0 }} />}
+                    <div style={{ flex:1, fontSize:'12px', color: isToday ? t.text : label ? labelColor : t.textFaint, fontWeight: isToday ? 600 : label ? 500 : 400, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                      {label || '—'}
                     </div>
-                    {isToday && <div style={{ width:'5px', height:'5px', borderRadius:'50%', background:t.accent, flexShrink:0 }} />}
+                    {isToday && <div style={{ fontSize:'8px', letterSpacing:'1px', color:t.accent, fontWeight:700, background:t.accentBg||t.bg, padding:'1px 6px', borderRadius:'8px', flexShrink:0 }}>hoje</div>}
                   </div>
                 )
               })}
             </div>
           </div>
-            )
-          })()}
 
-          {/* ── 5. PRÓXIMA COMPETIÇÃO ── */}
-          <div style={{ background:t.surface, border:`1px solid ${daysToNextComp <= 7 ? '#ef444455' : t.border}`, borderRadius:'12px', padding:'14px 16px' }}>
-            <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:600, marginBottom:'10px' }}>PRÓXIMA COMPETIÇÃO</div>
-            {nextCompetition ? (
-              <div style={{ display:'flex', alignItems:'center', gap:'16px' }}>
-                <div style={{ textAlign:'center', flexShrink:0, minWidth:'64px' }}>
-                  <div style={{ fontSize:'52px', fontWeight:900, lineHeight:1, color: daysToNextComp <= 7 ? '#ef4444' : daysToNextComp <= 14 ? '#f59e0b' : '#378ADD' }}>{daysToNextComp}</div>
-                  <div style={{ fontSize:'8px', letterSpacing:'1px', color:t.textMuted, fontWeight:600, marginTop:'2px' }}>DIAS</div>
-                </div>
-                <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontSize:'15px', fontWeight:700, color:t.text, lineHeight:'1.3', marginBottom:'4px' }}>{nextCompetition.title}</div>
-                  <div style={{ fontSize:'11px', color:t.textMuted }}>
-                    {formatDate(nextCompetition.start_date)}{nextCompetition.end_date && nextCompetition.end_date !== nextCompetition.start_date ? ` – ${formatDate(nextCompetition.end_date)}` : ''}
-                  </div>
-                  {nextCompetition.location && <div style={{ fontSize:'10px', color:t.textFaint, marginTop:'2px' }}>📍 {nextCompetition.location}</div>}
-                </div>
-              </div>
-            ) : (
-              <div style={{ fontSize:'12px', color:t.textMuted, fontStyle:'italic' }}>Sem competições agendadas.</div>
-            )}
-          </div>
 
         </div>
 
         {/* ── RIGHT COLUMN ── */}
         <div className="hm2-right">
 
-          {/* ── 6. ESTADO DE CARGA ── */}
-          <div style={{ background:t.surface, border:`1.5px solid ${alertBorder}`, borderRadius:'12px', padding:'14px 16px' }}>
-            <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:600, marginBottom:'10px' }}>ESTADO DE CARGA</div>
+          {/* ── ESTADO DE CARGA ── */}
+          <div style={{ background:t.surface, border:`1px solid ${phaseInfo.restAlert ? alertColor + '44' : t.border}`, borderRadius:'14px', padding:'14px 16px' }}>
+            <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:700, marginBottom:'8px' }}>ESTADO DE CARGA</div>
             {phaseInfo.restAlert ? (
-              <div style={{ display:'flex', gap:'10px', alignItems:'flex-start' }}>
-                <div style={{ fontSize:'24px', lineHeight:1, flexShrink:0 }}>{phaseInfo.restAlertLevel === 'red' ? '🔴' : '🟡'}</div>
+              <div style={{ display:'flex', gap:'10px', alignItems:'center' }}>
+                <div style={{ fontSize:'18px', lineHeight:1, flexShrink:0 }}>{phaseInfo.restAlertLevel === 'red' ? '🔴' : '🟡'}</div>
                 <div>
-                  <div style={{ fontSize:'13px', fontWeight:700, color:alertColor, marginBottom:'4px' }}>
-                    {phaseInfo.restAlertLevel === 'red' ? 'Carga crítica' : 'Carga elevada'}
-                  </div>
-                  <div style={{ fontSize:'11px', color:t.textMuted, lineHeight:1.5 }}>{phaseInfo.reason}</div>
+                  <div style={{ fontSize:'12px', fontWeight:700, color:alertColor }}>{phaseInfo.restAlertLevel === 'red' ? 'Carga crítica' : 'Carga elevada'}</div>
+                  <div style={{ fontSize:'10px', color:t.textMuted, marginTop:'2px', lineHeight:1.4 }}>{phaseInfo.reason}</div>
                 </div>
               </div>
             ) : (
-              <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
-                <div style={{ fontSize:'22px', lineHeight:1 }}>✅</div>
-                <div style={{ fontSize:'13px', fontWeight:700, color:'#52E8A0' }}>Carga equilibrada ✓</div>
+              <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
+                <div style={{ fontSize:'16px', lineHeight:1 }}>✅</div>
+                <div style={{ fontSize:'12px', fontWeight:600, color:'#52E8A0' }}>Carga equilibrada</div>
               </div>
             )}
           </div>
 
           {/* ── AGENDA & ALERTAS ── */}
-          <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'12px', padding:'14px 16px' }}>
-            <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:600, marginBottom:'12px' }}>AGENDA & ALERTAS</div>
+          <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'14px', padding:'16px' }}>
+            <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:700, marginBottom:'14px' }}>AGENDA & ALERTAS</div>
 
-            {/* A — Sessões agendadas (dados reais) */}
+            {/* A — Agenda real */}
             {agendaItems.length > 0 && (
-              <div style={{ marginBottom:'12px', paddingBottom:'12px', borderBottom:`1px solid ${t.border}` }}>
-                <div style={{ fontSize:'8px', letterSpacing:'1px', color:t.textMuted, fontWeight:700, marginBottom:'7px' }}>SESSÕES AGENDADAS</div>
-                <div style={{ display:'flex', flexDirection:'column', gap:'5px' }}>
+              <div style={{ marginBottom:'14px' }}>
+                <div style={{ fontSize:'8px', letterSpacing:'1.5px', color:'#378ADD', fontWeight:700, marginBottom:'7px' }}>AGENDA REAL</div>
+                <div style={{ display:'flex', flexDirection:'column', gap:'4px' }}>
                   {agendaItems.map((item, i) => {
                     const daysAway = Math.ceil((new Date(item.date + 'T12:00:00') - new Date()) / 86400000)
                     const dayLabel = daysAway <= 0 ? 'Hoje' : daysAway === 1 ? 'Amanhã' : `${daysAway}d`
                     return (
-                      <div key={i} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'7px 10px', background:t.bg, borderRadius:'7px', borderLeft:`3px solid ${item.color}` }}>
-                        <div style={{ fontSize:'11px', color:t.text, fontWeight:600 }}>{item.label}</div>
-                        <div style={{ fontSize:'10px', fontWeight: daysAway <= 1 ? 700 : 400, color: daysAway <= 1 ? item.color : t.textMuted }}>{dayLabel}</div>
+                      <div key={i} style={{ display:'flex', alignItems:'center', gap:'8px', padding:'6px 0' }}>
+                        <div style={{ width:'3px', height:'3px', borderRadius:'50%', background:item.color, flexShrink:0 }} />
+                        <div style={{ fontSize:'12px', color:t.text, flex:1 }}>{item.label}</div>
+                        <div style={{ fontSize:'10px', fontWeight:600, color: daysAway <= 1 ? item.color : t.textFaint }}>{dayLabel}</div>
                       </div>
                     )
                   })}
@@ -1260,23 +1369,22 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
               </div>
             )}
 
-            {/* B — Recovery Status (lógica derivada) */}
-            <div>
-              <div style={{ fontSize:'8px', letterSpacing:'1px', color:t.textMuted, fontWeight:700, marginBottom:'7px' }}>RECOVERY STATUS</div>
-              <div style={{ display:'flex', flexDirection:'column', gap:'5px' }}>
+            {/* B — Recovery Status */}
+            <div style={{ marginBottom: coachReminders.length > 0 ? '14px' : '0' }}>
+              <div style={{ fontSize:'8px', letterSpacing:'1.5px', color:'#f59e0b', fontWeight:700, marginBottom:'7px' }}>RECOVERY STATUS</div>
+              <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
                 {recoveryStatus.map((r, i) => (
-                  <div key={i} style={{ display:'flex', alignItems:'center', gap:'8px', padding:'7px 10px', background: r.alert ? '#1a080844' : t.bg, border:`1px solid ${r.alert ? t.danger + '55' : t.border}`, borderRadius:'7px' }}>
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ fontSize:'11px', fontWeight:600, color: r.alert ? t.danger : t.text }}>
-                        {r.alert ? '⚠️ ' : '✓ '}{r.label}
-                      </div>
-                      <div style={{ fontSize:'10px', color:t.textMuted, marginTop:'1px' }}>
-                        {r.daysSince === null ? 'Nunca registado' : `${r.daysSince} dias`}
-                      </div>
+                  <div key={i} style={{ display:'flex', alignItems:'center', gap:'8px' }}>
+                    <div style={{ fontSize:'11px', flex:1, minWidth:0 }}>
+                      <span style={{ color: r.alert ? t.danger : '#52E8A0', marginRight:'5px' }}>{r.alert ? '⚠' : '✓'}</span>
+                      <span style={{ color: r.alert ? t.text : t.textMuted, fontWeight: r.alert ? 600 : 400 }}>{r.label}</span>
+                      <span style={{ color:t.textFaint, fontSize:'10px', marginLeft:'5px' }}>
+                        {r.daysSince === null ? 'Nunca' : `${r.daysSince}d`}
+                      </span>
                     </div>
                     {r.alert && (
                       <button onClick={() => onNavigate && onNavigate('calendar')}
-                        style={{ background:'transparent', border:`1px solid ${t.border}`, borderRadius:'5px', color:t.textMuted, padding:'3px 9px', fontSize:'10px', cursor:'pointer', fontFamily:F, fontWeight:600, whiteSpace:'nowrap', flexShrink:0 }}>
+                        style={{ background:'transparent', border:`1px solid ${t.border}`, borderRadius:'5px', color:t.textMuted, padding:'2px 8px', fontSize:'9px', cursor:'pointer', fontFamily:F, fontWeight:600, whiteSpace:'nowrap', flexShrink:0 }}>
                         Agendar
                       </button>
                     )}
@@ -1284,6 +1392,25 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
                 ))}
               </div>
             </div>
+
+            {/* C — Coach Reminders (menor destaque) */}
+            {coachReminders.length > 0 && (
+              <div style={{ paddingTop:'12px', borderTop:`1px solid ${t.border}` }}>
+                <div style={{ fontSize:'8px', letterSpacing:'1.5px', color:t.textFaint, fontWeight:700, marginBottom:'7px' }}>COACH REMINDERS</div>
+                <div style={{ display:'flex', flexDirection:'column', gap:'5px' }}>
+                  {coachReminders.map((r, i) => (
+                    <div key={i} style={{ display:'flex', alignItems:'center', gap:'8px' }}>
+                      <span style={{ fontSize:'10px', color:t.textFaint }}>⚠</span>
+                      <span style={{ fontSize:'11px', color:t.textFaint, flex:1 }}>{r.label}</span>
+                      <button onClick={() => onNavigate && onNavigate('training')}
+                        style={{ background:'transparent', border:`1px solid ${t.border}`, borderRadius:'5px', color:t.textFaint, padding:'2px 8px', fontSize:'9px', cursor:'pointer', fontFamily:F, fontWeight:600, whiteSpace:'nowrap', flexShrink:0 }}>
+                        Ver plano
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
         </div>
