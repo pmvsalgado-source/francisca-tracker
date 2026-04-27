@@ -208,6 +208,8 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
   const [phaseOverrides, setPhaseOverrides] = useState({})
   const [editingPhaseWs, setEditingPhaseWs] = useState(null)
   const [savingPhaseOverride, setSavingPhaseOverride] = useState(false)
+  const [showCriterios, setShowCriterios] = useState(false)
+  const [expandedPhaseKey, setExpandedPhaseKey] = useState(null)
 
   const email = (user?.email||'').toLowerCase()
   const DAYS_LONG  = lang==='pt' ? DAYS_PT : DAYS_EN
@@ -667,12 +669,54 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
 
   // ── PERIODIZAÇÃO ────────────────────────────────────────────────────────────
   const PHASES = {
-    acumulacao:    { id:'acumulacao',     label:'ACUMULAÇÃO',     color:'#22c55e', bg:'#f0fdf4', icon:'🏋️', fisico:'ALTA — força máxima, volume alto', tecnico:'ALTO — todas as categorias, novidades técnicas', putting:'Sessão dedicada 2×/sem', criterio:'Sem competição nas próximas 2 semanas', sessoes:'5–6' },
-    desenvolvimento:{ id:'desenvolvimento',label:'DESENVOLVIMENTO',color:'#3b82f6', bg:'#eff6ff', icon:'📈', fisico:'ALTA — carga moderada-alta, explosividade', tecnico:'MÉDIO-ALTO — aprofundar skills', putting:'A meio da semana (Qua/Qui)', criterio:'Competição em 2 semanas', sessoes:'4–5' },
-    afinacao:      { id:'afinacao',       label:'AFINAÇÃO',       color:'#eab308', bg:'#fefce8', icon:'🎯', fisico:'-40% volume, intensidade mantida', tecnico:'Score practice, sem técnica nova', putting:'Intensivo — 3×/sem mínimo', criterio:'Competição na próxima semana (gap ≥7d)', sessoes:'3–4' },
-    peak:          { id:'peak',           label:'PEAK',           color:'#ef4444', bg:'#fef2f2', icon:'🏆', fisico:'MÍNIMA — só activação, zero físico 48h antes', tecnico:'Rotina pré-comp, simulação torneio', putting:'Rotina de competição', criterio:'Semana de competição', sessoes:'3–4' },
-    manutencao:    { id:'manutencao',     label:'MANUTENÇÃO B2B', color:'#f97316', bg:'#fff7ed', icon:'🔄', fisico:'SEM FÍSICO PESADO — recuperação activa', tecnico:'Manutenção técnica, sem nova carga', putting:'Manutenção da rotina', criterio:'Competição seguinte em <7 dias (B2B)', sessoes:'3' },
-    descarga:      { id:'descarga',       label:'DESCARGA',       color:'#9ca3af', bg:'#f3f4f6', icon:'🔋', fisico:'-50% volume, mobilidade e recuperação', tecnico:'Técnica leve, zero novas aprendizagens', putting:'Manutenção mínima', criterio:'4ª semana do bloco ou após PEAK', sessoes:'2–3' },
+    peak:             { id:'peak',               label:'PEAK',                   color:'#ef4444', bg:'#fef2f2',
+      situacao:'Vais competir esta semana.', regra:'Não mudes nada. Faz o que já sabes.', hoje:'Putting + wedges + confiança.',
+      golfSugestao:['30–45 min putting: ritmo e distância','wedges 50–80m: controlo','poucos drivers: sensação','rotina pré-volta'],
+      gymSugestao:['ativação leve: mobilidade + core','20–30 min máximo'],
+      evitar:['treino pesado','mudanças técnicas','muitas bolas'],
+    },
+    manutencao:       { id:'manutencao',         label:'MANUTENÇÃO B2B',         color:'#f97316', bg:'#fff7ed',
+      situacao:'Entre competições próximas.', regra:'Recuperar e manter.', hoje:'Leve + sensações.',
+      golfSugestao:['putting','wedges','poucos ferros','sessão curta'],
+      gymSugestao:['recuperação ativa','mobilidade','ativação leve'],
+      evitar:['carga física','técnica nova'],
+    },
+    afinacao:         { id:'afinacao',           label:'AFINAÇÃO',               color:'#eab308', bg:'#fefce8',
+      situacao:'Competição nos próximos dias.', regra:'Afinar, não mudar.', hoje:'Jogo curto + ritmo.',
+      golfSugestao:['putting competitivo: 1 bola, pressão','wedges: distâncias','ferro médio: controlo','rotina consistente'],
+      gymSugestao:['leve a moderado','mobilidade','velocidade leve'],
+      evitar:['técnica nova','sessões longas'],
+    },
+    desenvolvimentoLight:{ id:'desenvolvimentoLight', label:'DESENVOLVIMENTO LIGHT', color:'#60a5fa', bg:'#eff6ff',
+      situacao:'Tens pouco tempo entre torneios.', regra:'Melhorar sem cansar.', hoje:'Técnica leve + controlo.',
+      golfSugestao:['wedges + putting','drills simples: contacto / alinhamento','controlo de distâncias','sessões curtas'],
+      gymSugestao:['moderado','força leve','mobilidade'],
+      evitar:['carga alta','volume excessivo'],
+    },
+    desenvolvimento:  { id:'desenvolvimento',    label:'DESENVOLVIMENTO',         color:'#3b82f6', bg:'#dbeafe',
+      situacao:'Tens 2–3 semanas até competir.', regra:'Treinar para jogar melhor.', hoje:'Range com intenção + velocidade.',
+      golfSugestao:['treino de velocidade: driver','ferro com alvo e objetivo','drills com feedback','sessões com foco claro'],
+      gymSugestao:['força + potência','velocidade','sessões completas'],
+      evitar:['bater bolas sem objetivo'],
+    },
+    acumulacao:       { id:'acumulacao',         label:'ACUMULAÇÃO',             color:'#22c55e', bg:'#f0fdf4',
+      situacao:'Longe de competições.', regra:'Construir base.', hoje:'Volume + técnica.',
+      golfSugestao:['muitas bolas no range','técnica detalhada','repetição controlada','putting básico consistente'],
+      gymSugestao:['força base','volume mais alto','progressão de carga'],
+      evitar:['foco em score','pouca repetição'],
+    },
+    descarga:         { id:'descarga',           label:'DESCARGA',               color:'#9ca3af', bg:'#f3f4f6',
+      situacao:'Vens de carga alta ou estás cansada.', regra:'Reduzir carga.', hoje:'Leve + recuperar.',
+      golfSugestao:['putting leve','wedges simples','poucos swings','ritmo sem pressão'],
+      gymSugestao:['mobilidade','recuperação','muito leve'],
+      evitar:['intensidade alta','volume'],
+    },
+    descanso:         { id:'descanso',           label:'DESCANSO',               color:'#6b7280', bg:'#f9fafb',
+      situacao:'Estás cansada física ou mentalmente.', regra:'Parar para recuperar.', hoje:'Descansar.',
+      golfSugestao:['opcional: putting leve','ou zero treino'],
+      gymSugestao:['descanso total'],
+      evitar:['treinar por obrigação'],
+    },
   }
 
   const computeAllPhases = (weekStarts, evts) => {
@@ -681,31 +725,57 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
     const msDay = 86400000
     const wsMs = (ws) => new Date(ws+'T12:00:00').getTime()
     const weekHasComp = (ws) => { const s=wsMs(ws),e=s+6*msDay; return comps.some(c=>{ const cs=new Date(c.start_date+'T12:00:00').getTime(),ce=c.end_date?new Date(c.end_date+'T12:00:00').getTime():cs; return cs<=e&&ce>=s }) }
-    const addW = (ws,n) => { const d=new Date(ws+'T12:00:00'); d.setDate(d.getDate()+n*7); return d.toISOString().split('T')[0] }
-    const lastCompEndBefore = (ws) => { const wsM=wsMs(ws); let lat=null; comps.forEach(c=>{ const ce=c.end_date?new Date(c.end_date+'T12:00:00').getTime():new Date(c.start_date+'T12:00:00').getTime(); if(ce<wsM&&(lat===null||ce>lat))lat=ce }); return lat }
-    const nextCompStartFrom = (ws) => { const wsM=wsMs(ws); let ear=null; comps.forEach(c=>{ const cs=new Date(c.start_date+'T12:00:00').getTime(); if(cs>=wsM&&(ear===null||cs<ear))ear=cs }); return ear }
+    const daysToNext = (ws) => { const wsM=wsMs(ws); let mn=null; comps.forEach(c=>{ const cs=new Date(c.start_date+'T12:00:00').getTime(); if(cs>wsM&&(mn===null||cs<mn))mn=cs }); return mn===null?999:Math.round((mn-wsM)/msDay) }
+    const daysSinceLast = (ws) => { const wsM=wsMs(ws); let lat=null; comps.forEach(c=>{ const ce=c.end_date?new Date(c.end_date+'T12:00:00').getTime():new Date(c.start_date+'T12:00:00').getTime(); if(ce<wsM&&(lat===null||ce>lat))lat=ce }); return lat===null?999:Math.round((wsM-lat)/msDay) }
     const sorted=[...weekStarts].sort()
     const phases={}, alerts={}
-    let blockLen=0, lastWasPeak=false
-    sorted.forEach(ws=>{
-      const thisC=weekHasComp(ws),next1C=weekHasComp(addW(ws,1)),next2C=weekHasComp(addW(ws,2))
+    sorted.forEach((ws,idx)=>{
+      const wa=[]
+      // Yellow alerts
+      if(idx>=3){
+        const p4=sorted.slice(idx-3,idx+1)
+        if(p4.filter(w=>weekHasComp(w)).length>=3) wa.push({level:'yellow',icon:'⚠️',text:'3 competições nas últimas 4 semanas — considera uma semana de descarga'})
+        if(p4.every(w=>phases[w]&&!['descarga','descanso'].includes(phases[w]))) wa.push({level:'yellow',icon:'⚠️',text:'Sem semana de descarga há 4+ semanas — considera reduzir carga'})
+      }
+      // Red alerts
+      if(idx>=5){ const p6=sorted.slice(idx-5,idx+1); if(p6.every(w=>phases[w]&&!['descarga','descanso'].includes(phases[w]))) wa.push({level:'red',icon:'🔴',text:'6 semanas sem descarga — risco de fadiga acumulada'}) }
+      if(idx>=4){ if(sorted.slice(idx-4,idx+1).filter(w=>weekHasComp(w)).length>=4) wa.push({level:'red',icon:'🔴',text:'4 competições em 5 semanas — reduzir carga urgente'}) }
+      // B2B alert
+      const nextWs=sorted[idx+1]
+      if(weekHasComp(ws)&&nextWs&&weekHasComp(nextWs)) wa.push({level:'orange',icon:'🔴',text:'B2B — competições em semanas consecutivas'})
+      alerts[ws]=wa
+      const hasRed=wa.some(a=>a.level==='red'), hasYellow=wa.some(a=>a.level==='yellow')
+      const thisC=weekHasComp(ws), dtN=daysToNext(ws), dsL=daysSinceLast(ws)
       let phId
-      if(lastWasPeak||blockLen>=3) phId='descarga'
+      if(hasRed) phId='descanso'
+      else if(hasYellow) phId='descarga'
       else if(thisC) phId='peak'
-      else if(next1C){ const lce=lastCompEndBefore(ws),ncs=nextCompStartFrom(addW(ws,1)); const gap=lce&&ncs?(ncs-lce)/msDay:99; phId=gap<7?'manutencao':'afinacao' }
-      else if(next2C) phId='desenvolvimento'
+      else if(dsL<=7&&dtN>=1&&dtN<=7) phId='manutencao'
+      else if(dtN>=1&&dtN<=7) phId='afinacao'
+      else if(dtN<=14) phId='desenvolvimentoLight'
+      else if(dtN<=21) phId='desenvolvimento'
       else phId='acumulacao'
       phases[ws]=phId
-      const wa=[]
-      if(phId==='peak'&&weekHasComp(addW(ws,1))) wa.push({icon:'🔴',text:'B2B — competições consecutivas'})
-      const idx=sorted.indexOf(ws)
-      if(idx>=3){ const prev4=sorted.slice(idx-3,idx+1); if(prev4.every(w=>phases[w]&&phases[w]!=='descarga')) wa.push({icon:'⚠️',text:'Sem descarga há 4+ semanas'}) }
-      if(idx>=4){ const prev5=sorted.slice(idx-4,idx+1); if(prev5.every(w=>phases[w]&&phases[w]!=='descarga')) wa.push({icon:'⚠️',text:'Sem pausa há 5+ semanas'}) }
-      alerts[ws]=wa
-      lastWasPeak=phId==='peak'
-      if(phId==='descarga') blockLen=0; else blockLen++
     })
     return {phases,alerts}
+  }
+
+  const getPhaseSummary = (ws, evts, phId) => {
+    const ph = PHASES[phId] || PHASES.acumulacao
+    const isCompEvent = (e) => (e.category||'').toLowerCase().includes('competi') || (e.title||'').toLowerCase().includes('torneio')
+    const comps = evts.filter(isCompEvent)
+    const msDay = 86400000
+    const wsM = new Date(ws+'T12:00:00').getTime()
+    let nextComp=null, minCs=null
+    comps.forEach(c=>{ const cs=new Date(c.start_date+'T12:00:00').getTime(); if(cs>wsM&&(minCs===null||cs<minCs)){minCs=cs;nextComp=c} })
+    let prevComp=null, maxCe=null
+    comps.forEach(c=>{ const ce=c.end_date?new Date(c.end_date+'T12:00:00').getTime():new Date(c.start_date+'T12:00:00').getTime(); if(ce<wsM&&(maxCe===null||ce>maxCe)){maxCe=ce;prevComp=c} })
+    return {
+      phase:phId, reason:ph.situacao,
+      nextCompetition:nextComp?.title||null, daysToNextCompetition:minCs?Math.round((minCs-wsM)/msDay):null,
+      previousCompetition:prevComp?.title||null, daysSincePreviousCompetition:maxCe?Math.round((wsM-maxCe)/msDay):null,
+      recommendedToday:ph.hoje, golfSuggestion:ph.golfSugestao, gymSuggestion:ph.gymSugestao, avoid:ph.evitar,
+    }
   }
 
   const applyTemplate = (tpl) => {
@@ -1255,29 +1325,21 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
           {/* Legenda de periodização */}
           <div style={{...card,marginBottom:'16px',padding:'14px 16px'}}>
             <button onClick={()=>setShowLegend(p=>!p)} style={{width:'100%',display:'flex',justifyContent:'space-between',alignItems:'center',background:'transparent',border:'none',cursor:'pointer',fontFamily:F,padding:0}}>
-              <div style={{fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600}}>LEGENDA DE PERIODIZAÇÃO</div>
+              <div style={{fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600}}>LEGENDA DE FASES</div>
               <div style={{fontSize:'12px',color:t.textMuted}}>{showLegend?'▲':'▼'}</div>
             </button>
             {showLegend && (
-              <div style={{marginTop:'12px',display:'flex',flexDirection:'column',gap:'8px'}}>
+              <div style={{marginTop:'12px',display:'flex',flexDirection:'column',gap:'6px'}}>
                 {Object.values(PHASES).map(ph=>(
                   <div key={ph.id} style={{display:'flex',gap:'10px',alignItems:'flex-start',padding:'8px 10px',borderRadius:'8px',background:ph.bg,border:`1px solid ${ph.color}33`}}>
-                    <div style={{display:'flex',flexDirection:'column',gap:'3px',alignItems:'center',flexShrink:0,minWidth:'90px',textAlign:'center'}}>
-                      <div style={{fontSize:'16px'}}>{ph.icon}</div>
-                      <div style={{padding:'2px 6px',borderRadius:'4px',fontSize:'8px',fontWeight:700,letterSpacing:'1px',color:ph.color,background:`${ph.color}22`}}>{ph.label}</div>
-                      <div style={{fontSize:'9px',color:ph.color,fontWeight:600}}>{ph.sessoes} sess./sem</div>
-                    </div>
-                    <div style={{display:'flex',flexDirection:'column',gap:'3px'}}>
-                      <div style={{fontSize:'10px',color:t.text}}><span style={{fontWeight:700,color:ph.color}}>Físico: </span>{ph.fisico}</div>
-                      <div style={{fontSize:'10px',color:t.text}}><span style={{fontWeight:700,color:ph.color}}>Técnico: </span>{ph.tecnico}</div>
-                      <div style={{fontSize:'10px',color:t.text}}><span style={{fontWeight:700,color:ph.color}}>Putting: </span>{ph.putting}</div>
-                      <div style={{fontSize:'9px',color:t.textMuted,fontStyle:'italic'}}>Critério: {ph.criterio}</div>
+                    <div style={{padding:'2px 8px',borderRadius:'4px',fontSize:'8px',fontWeight:700,letterSpacing:'1px',color:'#fff',background:ph.color,whiteSpace:'nowrap',alignSelf:'flex-start',marginTop:'1px'}}>{ph.label}</div>
+                    <div style={{display:'flex',flexDirection:'column',gap:'2px',flex:1}}>
+                      <div style={{fontSize:'10px',color:t.text,fontWeight:600}}>{ph.situacao}</div>
+                      <div style={{fontSize:'9px',color:t.textMuted}}>{ph.regra}</div>
+                      <div style={{fontSize:'9px',color:ph.color,fontWeight:600}}>Hoje: {ph.hoje}</div>
                     </div>
                   </div>
                 ))}
-                <div style={{marginTop:'8px',fontSize:'10px',color:t.textMuted,borderTop:`1px solid ${t.border}`,paddingTop:'8px'}}>
-                  🔴 B2B = competições consecutivas · ⚠️ sem descarga há 4+ semanas · ⚠️ sem pausa há 5+ semanas
-                </div>
               </div>
             )}
           </div>
@@ -1845,7 +1907,6 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
       {/* ── PERIODIZAÇÃO ── */}
       {subTab==='periodizacao' && (() => {
         const isCoach = email===COACH_GOLF||email===COACH_GYM||email===ADMIN
-        // Build 24-week window: 4 past + current + 19 future
         const today = new Date()
         const todayStr = today.toISOString().split('T')[0]
         const currentWsDate = new Date(todayStr+'T12:00:00')
@@ -1855,95 +1916,174 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
         const addWeeks = (ws, n) => { const d=new Date(ws+'T12:00:00'); d.setDate(d.getDate()+n*7); return d.toISOString().split('T')[0] }
         const allWeeks = Array.from({length:24}, (_,i) => addWeeks(currentWs, i-4))
         const {phases: autoPhases, alerts: autoAlerts} = computeAllPhases(allWeeks, eventsData)
-
-        // Apply overrides
         const resolvedPhases = {}
         allWeeks.forEach(ws => { resolvedPhases[ws] = phaseOverrides[ws] || autoPhases[ws] || 'acumulacao' })
-
-        // Group into mesociclos of 4 weeks
         const mesociclos = []
-        for (let i=0; i<allWeeks.length; i+=4) {
-          mesociclos.push(allWeeks.slice(i, i+4))
-        }
-
-        // Get competitions per week
+        for (let i=0; i<allWeeks.length; i+=4) mesociclos.push(allWeeks.slice(i, i+4))
         const isCompEvent = (e) => (e.category||'').toLowerCase().includes('competi') || (e.title||'').toLowerCase().includes('torneio')
         const comps = eventsData.filter(isCompEvent)
         const getWeekComps = (ws) => {
-          const wsMs = new Date(ws+'T12:00:00').getTime()
-          const weMs = wsMs + 6*86400000
-          return comps.filter(c => {
-            const cs = new Date(c.start_date+'T12:00:00').getTime()
-            const ce = c.end_date ? new Date(c.end_date+'T12:00:00').getTime() : cs
-            return cs<=weMs && ce>=wsMs
-          })
+          const wsMs = new Date(ws+'T12:00:00').getTime(), weMs = wsMs+6*86400000
+          return comps.filter(c=>{ const cs=new Date(c.start_date+'T12:00:00').getTime(),ce=c.end_date?new Date(c.end_date+'T12:00:00').getTime():cs; return cs<=weMs&&ce>=wsMs })
         }
-
-        // Global alerts across all weeks
+        // Deduplicated global alerts
+        const seen = new Set()
         const globalAlerts = []
-        const weekAlerts = autoAlerts
-        let b2bFound=false, noDescarga4=false, noPause5=false
-        allWeeks.forEach(ws => {
-          const wa = weekAlerts[ws]||[]
-          if(wa.some(a=>a.text.includes('B2B'))) b2bFound=true
-          if(wa.some(a=>a.text.includes('4+'))) noDescarga4=true
-          if(wa.some(a=>a.text.includes('5+'))) noPause5=true
-        })
-        if(b2bFound) globalAlerts.push({icon:'🔴', text:'Competições B2B detectadas no período'})
-        if(noDescarga4) globalAlerts.push({icon:'⚠️', text:'Semana de descarga em falta (4+ semanas consecutivas)'})
-        if(noPause5) globalAlerts.push({icon:'⚠️', text:'Sem pausa há 5+ semanas — risco de overtraining'})
+        allWeeks.forEach(ws=>(autoAlerts[ws]||[]).forEach(a=>{ if(!seen.has(a.text)){seen.add(a.text);globalAlerts.push(a)} }))
+
+        const currentPhId = resolvedPhases[currentWs]
+        const currentPh = PHASES[currentPhId] || PHASES.acumulacao
+        const currentSummary = getPhaseSummary(currentWs, eventsData, currentPhId)
 
         return (
           <div>
+            {/* Criteria modal */}
+            {showCriterios && (
+              <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.55)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:999}} onClick={()=>setShowCriterios(false)}>
+                <div style={{background:t.surface,border:`1px solid ${t.border}`,borderRadius:'14px',padding:'24px',width:'90%',maxWidth:'480px',maxHeight:'85vh',overflowY:'auto'}} onClick={e=>e.stopPropagation()}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px'}}>
+                    <div style={{fontSize:'11px',letterSpacing:'2px',color:'#7e22ce',fontWeight:700}}>CRITÉRIOS DE FASE</div>
+                    <button onClick={()=>setShowCriterios(false)} style={{background:'transparent',border:'none',color:t.textMuted,cursor:'pointer',fontSize:'18px',lineHeight:1}}>✕</button>
+                  </div>
+                  <div style={{display:'flex',flexDirection:'column',gap:'10px',fontSize:'11px',color:t.text,lineHeight:1.6}}>
+                    <div style={{fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:700,marginBottom:'2px'}}>ORDEM DE PRIORIDADE</div>
+                    {[
+                      {ph:'descanso',           crit:'Fadiga forte, dor, quebra de performance ou saturação'},
+                      {ph:'descarga',           crit:'4+ semanas sem descarga, 3 comp. em 4 semanas ou sinais de carga alta'},
+                      {ph:'peak',               crit:'Há competição esta semana'},
+                      {ph:'manutencao',         crit:'Competição na semana anterior e nova competição nos próximos 7 dias'},
+                      {ph:'afinacao',           crit:'Competição nos próximos 1–7 dias (sem comp. esta semana)'},
+                      {ph:'desenvolvimentoLight',crit:'Competição nos próximos 8–14 dias'},
+                      {ph:'desenvolvimento',    crit:'Competição nos próximos 15–21 dias'},
+                      {ph:'acumulacao',         crit:'Competição a 22+ dias ou calendário vazio'},
+                    ].map(({ph,crit},i)=>{
+                      const p=PHASES[ph]||PHASES.acumulacao
+                      return (
+                        <div key={ph} style={{display:'flex',gap:'10px',alignItems:'flex-start',padding:'8px',borderRadius:'8px',background:p.bg,border:`1px solid ${p.color}33`}}>
+                          <div style={{fontSize:'9px',color:t.textMuted,fontWeight:700,minWidth:'14px'}}>{i+1}</div>
+                          <div style={{padding:'1px 7px',borderRadius:'4px',fontSize:'8px',fontWeight:700,color:'#fff',background:p.color,whiteSpace:'nowrap'}}>{p.label}</div>
+                          <div style={{fontSize:'10px',color:t.text}}>{crit}</div>
+                        </div>
+                      )
+                    })}
+                    <div style={{borderTop:`1px solid ${t.border}`,paddingTop:'12px',marginTop:'4px'}}>
+                      <div style={{fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:700,marginBottom:'8px'}}>ALERTAS AUTOMÁTICOS</div>
+                      <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
+                        <div style={{padding:'8px',borderRadius:'8px',background:'#fffbeb',border:'1px solid #fcd34d',fontSize:'10px',color:'#92400e'}}>
+                          <div style={{fontWeight:700,marginBottom:'3px'}}>⚠️ Alerta amarelo (recomenda DESCARGA)</div>
+                          <ul style={{margin:0,paddingLeft:'16px',lineHeight:1.8}}>
+                            <li>3 competições nas últimas 4 semanas</li>
+                            <li>4 semanas consecutivas sem descarga</li>
+                          </ul>
+                        </div>
+                        <div style={{padding:'8px',borderRadius:'8px',background:'#fef2f2',border:'1px solid #fca5a5',fontSize:'10px',color:'#b91c1c'}}>
+                          <div style={{fontWeight:700,marginBottom:'3px'}}>🔴 Alerta vermelho (recomenda DESCANSO)</div>
+                          <ul style={{margin:0,paddingLeft:'16px',lineHeight:1.8}}>
+                            <li>6 semanas consecutivas sem descarga/descanso</li>
+                            <li>4 competições em 5 semanas</li>
+                            <li>Fadiga ≥8/10 (ajuste manual pelo coach)</li>
+                            <li>Dor persistente (ajuste manual pelo coach)</li>
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{borderTop:`1px solid ${t.border}`,paddingTop:'10px',fontSize:'10px',color:t.textMuted,fontStyle:'italic'}}>
+                      Nota: DESCANSO e DESCARGA por fadiga ou dor requerem ajuste manual pelo coach. Os alertas automáticos baseiam-se apenas no calendário de competições.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Current week card */}
+            <div style={{...card,marginBottom:'16px',padding:'16px',background:currentPh.bg,border:`2px solid ${currentPh.color}55`}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:'8px'}}>
+                <div style={{display:'flex',flexDirection:'column',gap:'5px'}}>
+                  <div style={{fontSize:'8px',letterSpacing:'2px',color:currentPh.color,fontWeight:700}}>SEMANA ACTUAL</div>
+                  <div style={{padding:'3px 10px',borderRadius:'20px',fontSize:'10px',fontWeight:700,color:'#fff',background:currentPh.color,alignSelf:'flex-start'}}>{currentPh.label}</div>
+                  <div style={{fontSize:'12px',color:t.text,fontWeight:600}}>{currentPh.situacao}</div>
+                  <div style={{fontSize:'11px',color:t.textMuted}}>{currentPh.regra}</div>
+                  <div style={{fontSize:'11px',color:currentPh.color,fontWeight:600}}>Hoje: {currentPh.hoje}</div>
+                </div>
+                <button onClick={()=>setShowCriterios(true)}
+                  style={{padding:'5px 12px',borderRadius:'20px',border:`1px solid ${t.border}`,background:'transparent',color:t.textMuted,cursor:'pointer',fontSize:'10px',fontFamily:F,fontWeight:500,whiteSpace:'nowrap'}}>
+                  Ver critérios
+                </button>
+              </div>
+              {currentSummary.daysToNextCompetition !== null && (
+                <div style={{marginTop:'10px',fontSize:'10px',color:t.textMuted,display:'flex',gap:'12px',flexWrap:'wrap',borderTop:`1px solid ${currentPh.color}33`,paddingTop:'8px'}}>
+                  <span>Próxima: <b style={{color:t.text}}>{currentSummary.nextCompetition}</b></span>
+                  <span>em <b style={{color:currentPh.color}}>{currentSummary.daysToNextCompetition} dias</b></span>
+                </div>
+              )}
+            </div>
+
             {/* Global alerts */}
             {globalAlerts.length>0 && (
               <div style={{marginBottom:'16px',display:'flex',flexDirection:'column',gap:'6px'}}>
                 {globalAlerts.map((a,i)=>(
-                  <div key={i} style={{display:'flex',alignItems:'center',gap:'8px',padding:'9px 14px',borderRadius:'8px',background:a.icon==='🔴'?'#fef2f2':'#fffbeb',border:`1px solid ${a.icon==='🔴'?'#fca5a5':'#fcd34d'}`,fontSize:'12px',fontWeight:600,color:a.icon==='🔴'?'#b91c1c':'#92400e'}}>
-                    <span>{a.icon}</span><span>{a.text}</span>
+                  <div key={i} style={{display:'flex',alignItems:'flex-start',gap:'8px',padding:'9px 14px',borderRadius:'10px',
+                    background:a.level==='red'?'#fef2f2':a.level==='orange'?'#fff7ed':'#fffbeb',
+                    border:`1px solid ${a.level==='red'?'#fca5a5':a.level==='orange'?'#fdba74':'#fcd34d'}`,
+                    fontSize:'11px',fontWeight:500,color:a.level==='red'?'#b91c1c':a.level==='orange'?'#c2410c':'#92400e'}}>
+                    <span style={{flexShrink:0}}>{a.icon}</span><span>{a.text}</span>
                   </div>
                 ))}
               </div>
             )}
 
-            {/* Legenda collapsible */}
-            <div style={{...card,marginBottom:'16px',padding:'14px 16px'}}>
-              <button onClick={()=>setShowLegend(p=>!p)} style={{width:'100%',display:'flex',justifyContent:'space-between',alignItems:'center',background:'transparent',border:'none',cursor:'pointer',fontFamily:F,padding:0}}>
-                <div style={{fontSize:'9px',letterSpacing:'2px',color:'#7e22ce',fontWeight:700}}>LEGENDA DE FASES</div>
-                <div style={{fontSize:'12px',color:t.textMuted}}>{showLegend?'▲':'▼'}</div>
-              </button>
-              {showLegend && (
-                <div style={{marginTop:'12px',display:'flex',flexDirection:'column',gap:'8px'}}>
-                  {Object.values(PHASES).map(ph=>(
-                    <div key={ph.id} style={{display:'flex',gap:'10px',alignItems:'flex-start',padding:'10px',borderRadius:'8px',background:ph.bg,border:`1px solid ${ph.color}33`}}>
-                      <div style={{display:'flex',flexDirection:'column',gap:'3px',alignItems:'center',flexShrink:0,minWidth:'96px',textAlign:'center'}}>
-                        <div style={{fontSize:'18px'}}>{ph.icon}</div>
-                        <div style={{padding:'3px 8px',borderRadius:'4px',fontSize:'8px',fontWeight:700,letterSpacing:'1px',color:'#fff',background:ph.color}}>{ph.label}</div>
-                        <div style={{fontSize:'9px',color:ph.color,fontWeight:600,marginTop:'1px'}}>{ph.sessoes} sess./sem</div>
-                      </div>
-                      <div style={{display:'flex',flexDirection:'column',gap:'3px',flex:1}}>
-                        <div style={{fontSize:'10px',color:t.text}}><span style={{fontWeight:700,color:ph.color}}>Físico: </span>{ph.fisico}</div>
-                        <div style={{fontSize:'10px',color:t.text}}><span style={{fontWeight:700,color:ph.color}}>Técnico: </span>{ph.tecnico}</div>
-                        <div style={{fontSize:'10px',color:t.text}}><span style={{fontWeight:700,color:ph.color}}>Putting: </span>{ph.putting}</div>
-                        <div style={{fontSize:'9px',color:t.textMuted,fontStyle:'italic',marginTop:'2px'}}>Critério: {ph.criterio}</div>
-                      </div>
+            {/* Phase guide — compact accordion */}
+            <div style={{...card,marginBottom:'20px',padding:'14px 16px'}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px'}}>
+                <div style={{fontSize:'9px',letterSpacing:'2px',color:'#7e22ce',fontWeight:700}}>GUIA DE FASES</div>
+                <div style={{fontSize:'10px',color:t.textMuted}}>Clica para ver sugestões</div>
+              </div>
+              <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
+                {Object.values(PHASES).map(ph=>{
+                  const isExp = expandedPhaseKey===ph.id
+                  return (
+                    <div key={ph.id} style={{borderRadius:'10px',background:ph.bg,border:`1px solid ${isExp?ph.color:ph.color+'44'}`,overflow:'hidden'}}>
+                      <button onClick={()=>setExpandedPhaseKey(isExp?null:ph.id)}
+                        style={{width:'100%',display:'flex',alignItems:'center',gap:'10px',padding:'10px 12px',background:'transparent',border:'none',cursor:'pointer',fontFamily:F,textAlign:'left'}}>
+                        <div style={{padding:'2px 8px',borderRadius:'4px',fontSize:'8px',fontWeight:700,letterSpacing:'1px',color:'#fff',background:ph.color,whiteSpace:'nowrap',flexShrink:0}}>{ph.label}</div>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:'11px',fontWeight:600,color:t.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ph.situacao}</div>
+                          <div style={{fontSize:'10px',color:t.textMuted,marginTop:'1px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ph.regra}</div>
+                        </div>
+                        <div style={{fontSize:'10px',color:ph.color,fontWeight:600,flexShrink:0,marginRight:'4px',whiteSpace:'nowrap'}}>Hoje: {ph.hoje}</div>
+                        <div style={{fontSize:'11px',color:ph.color,flexShrink:0}}>{isExp?'▲':'▼'}</div>
+                      </button>
+                      {isExp && (
+                        <div style={{padding:'0 12px 12px',display:'flex',flexDirection:'column',gap:'8px'}}>
+                          <div style={{height:'1px',background:ph.color+'33',marginBottom:'4px'}} />
+                          <div>
+                            <div style={{fontSize:'8px',letterSpacing:'1.5px',color:ph.color,fontWeight:700,marginBottom:'4px'}}>SUGESTÃO GOLF (RANGE / JOGO CURTO / PUTTING)</div>
+                            {ph.golfSugestao.map((sg,i)=><div key={i} style={{fontSize:'11px',color:t.text,paddingLeft:'8px',lineHeight:1.8}}>· {sg}</div>)}
+                          </div>
+                          <div>
+                            <div style={{fontSize:'8px',letterSpacing:'1.5px',color:ph.color,fontWeight:700,marginBottom:'4px'}}>SUGESTÃO GINÁSIO</div>
+                            {ph.gymSugestao.map((sg,i)=><div key={i} style={{fontSize:'11px',color:t.text,paddingLeft:'8px',lineHeight:1.8}}>· {sg}</div>)}
+                          </div>
+                          <div>
+                            <div style={{fontSize:'8px',letterSpacing:'1.5px',color:'#ef4444',fontWeight:700,marginBottom:'4px'}}>EVITAR</div>
+                            {ph.evitar.map((sg,i)=><div key={i} style={{fontSize:'11px',color:'#b91c1c',paddingLeft:'8px',lineHeight:1.8}}>· {sg}</div>)}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  ))}
-                </div>
-              )}
+                  )
+                })}
+              </div>
             </div>
 
             {/* Mesociclos */}
             {mesociclos.map((block, mIdx) => {
               const blockLabel = `Mesociclo ${mIdx+1}`
-              const blockStart = block[0]
-              const blockEnd = block[block.length-1]
+              const blockStart = block[0], blockEnd = block[block.length-1]
               const blockHasCurrent = block.includes(currentWs)
               const blockStartDate = new Date(blockStart+'T12:00:00').toLocaleDateString('pt-PT',{day:'2-digit',month:'short'})
-              const blockEndDate = new Date(blockEnd+'T12:00:00')
-              blockEndDate.setDate(blockEndDate.getDate()+6)
+              const blockEndDate = new Date(blockEnd+'T12:00:00'); blockEndDate.setDate(blockEndDate.getDate()+6)
               const blockEndStr = blockEndDate.toLocaleDateString('pt-PT',{day:'2-digit',month:'short'})
-
               return (
                 <div key={mIdx} style={{marginBottom:'20px'}}>
                   <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'10px'}}>
@@ -1951,52 +2091,34 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
                     <div style={{fontSize:'10px',color:t.textMuted}}>{blockStartDate} – {blockEndStr}</div>
                     {blockHasCurrent && <div style={{padding:'2px 8px',borderRadius:'10px',background:'#f3e8ff',color:'#7e22ce',fontSize:'9px',fontWeight:700}}>ACTUAL</div>}
                   </div>
-
                   <div className="train-perio-grid">
                     {block.map(ws => {
                       const phId = resolvedPhases[ws]
                       const ph = PHASES[phId] || PHASES.acumulacao
                       const isManual = !!phaseOverrides[ws]
-                      const isCurrent = ws===currentWs
-                      const isPast = ws<currentWs
+                      const isCurrent = ws===currentWs, isPast = ws<currentWs
                       const weekComps = getWeekComps(ws)
                       const weekAl = autoAlerts[ws]||[]
                       const isEditing = editingPhaseWs===ws
-
-                      const wsDate = new Date(ws+'T12:00:00')
-                      const weDate = new Date(ws+'T12:00:00'); weDate.setDate(weDate.getDate()+6)
+                      const wsDate = new Date(ws+'T12:00:00'), weDate = new Date(ws+'T12:00:00')
+                      weDate.setDate(weDate.getDate()+6)
                       const wsLabel = wsDate.toLocaleDateString('pt-PT',{day:'2-digit',month:'short'})
                       const weLabel = weDate.toLocaleDateString('pt-PT',{day:'2-digit',month:'short'})
-
-                      // Days until week start
                       const daysToWs = Math.round((new Date(ws+'T12:00:00').getTime()-new Date(todayStr+'T12:00:00').getTime())/86400000)
-
                       return (
-                        <div key={ws} style={{
-                          background: isPast ? t.surface : ph.bg,
-                          border: `1px solid ${isCurrent?ph.color:isPast?t.border:ph.color+'55'}`,
-                          borderRadius:'10px',
-                          padding:'12px',
-                          opacity: isPast?0.7:1,
-                          position:'relative',
-                        }}>
+                        <div key={ws} style={{background:isPast?t.surface:ph.bg,border:`1px solid ${isCurrent?ph.color:isPast?t.border:ph.color+'55'}`,borderRadius:'10px',padding:'12px',opacity:isPast?0.7:1,position:'relative'}}>
                           {/* Week header */}
                           <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'8px'}}>
                             <div>
                               <div style={{fontSize:'9px',color:t.textMuted,fontWeight:600,letterSpacing:'1px'}}>{wsLabel} – {weLabel}</div>
                               {isCurrent && <div style={{fontSize:'8px',color:ph.color,fontWeight:700,marginTop:'1px'}}>SEMANA ACTUAL</div>}
-                              {!isCurrent && !isPast && daysToWs>0 && <div style={{fontSize:'8px',color:t.textMuted}}>em {daysToWs}d</div>}
+                              {!isCurrent&&!isPast&&daysToWs>0 && <div style={{fontSize:'8px',color:t.textMuted}}>em {daysToWs}d</div>}
                               {isPast && <div style={{fontSize:'8px',color:t.textMuted}}>passado</div>}
                             </div>
-                            <button onClick={()=>navigateToWeek(ws)}
-                              style={{background:'transparent',border:`1px solid ${ph.color}66`,borderRadius:'6px',color:ph.color,padding:'3px 8px',cursor:'pointer',fontSize:'10px',fontFamily:F,fontWeight:600}}>
-                              Ir para Semana →
-                            </button>
+                            <button onClick={()=>navigateToWeek(ws)} style={{background:'transparent',border:`1px solid ${ph.color}66`,borderRadius:'6px',color:ph.color,padding:'3px 8px',cursor:'pointer',fontSize:'10px',fontFamily:F,fontWeight:600}}>Ir →</button>
                           </div>
-
-                          {/* Phase badge */}
+                          {/* Phase badge + coach edit */}
                           <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'8px'}}>
-                            <div style={{fontSize:'16px'}}>{ph.icon}</div>
                             <div style={{flex:1}}>
                               <div style={{display:'inline-flex',alignItems:'center',gap:'4px'}}>
                                 <div style={{padding:'3px 8px',borderRadius:'4px',fontSize:'9px',fontWeight:700,letterSpacing:'1px',color:'#fff',background:ph.color}}>{ph.label}</div>
@@ -2004,13 +2126,9 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
                               </div>
                             </div>
                             {isCoach && (
-                              <button onClick={()=>setEditingPhaseWs(isEditing?null:ws)}
-                                style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'6px',color:t.textMuted,padding:'3px 6px',cursor:'pointer',fontSize:'9px',fontFamily:F}}>
-                                ✏️
-                              </button>
+                              <button onClick={()=>setEditingPhaseWs(isEditing?null:ws)} style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'6px',color:t.textMuted,padding:'3px 6px',cursor:'pointer',fontSize:'9px',fontFamily:F}}>✏️</button>
                             )}
                           </div>
-
                           {/* Phase override dropdown */}
                           {isEditing && isCoach && (
                             <>
@@ -2018,34 +2136,24 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
                               <div style={{position:'relative',zIndex:11,marginBottom:'8px',background:t.bg,border:`1px solid ${t.border}`,borderRadius:'8px',padding:'8px',display:'flex',flexDirection:'column',gap:'4px'}}>
                                 <div style={{fontSize:'9px',letterSpacing:'1px',color:t.textMuted,fontWeight:600,marginBottom:'4px'}}>SELECCIONAR FASE</div>
                                 {Object.values(PHASES).map(opt=>(
-                                  <button key={opt.id} disabled={savingPhaseOverride}
-                                    onClick={()=>savePhaseOverride(ws,opt.id)}
-                                    style={{display:'flex',alignItems:'center',gap:'6px',padding:'5px 8px',borderRadius:'6px',
-                                      border:`1px solid ${phId===opt.id?opt.color:t.border}`,
-                                      background:phId===opt.id?opt.color+'22':'transparent',
-                                      cursor:'pointer',fontFamily:F,textAlign:'left',width:'100%'}}>
-                                    <span style={{fontSize:'13px'}}>{opt.icon}</span>
+                                  <button key={opt.id} disabled={savingPhaseOverride} onClick={()=>savePhaseOverride(ws,opt.id)}
+                                    style={{display:'flex',alignItems:'center',gap:'6px',padding:'5px 8px',borderRadius:'6px',border:`1px solid ${phId===opt.id?opt.color:t.border}`,background:phId===opt.id?opt.color+'22':'transparent',cursor:'pointer',fontFamily:F,textAlign:'left',width:'100%'}}>
                                     <span style={{fontSize:'10px',fontWeight:600,color:opt.color}}>{opt.label}</span>
                                     {phId===opt.id && <span style={{marginLeft:'auto',fontSize:'9px',color:opt.color}}>✓</span>}
                                   </button>
                                 ))}
                                 {isManual && (
-                                  <button disabled={savingPhaseOverride} onClick={()=>clearPhaseOverride(ws)}
-                                    style={{marginTop:'4px',padding:'5px 8px',borderRadius:'6px',border:`1px solid #ef4444`,background:'transparent',cursor:'pointer',fontFamily:F,fontSize:'10px',color:'#ef4444',fontWeight:600}}>
-                                    ↺ Repor automático
-                                  </button>
+                                  <button disabled={savingPhaseOverride} onClick={()=>clearPhaseOverride(ws)} style={{marginTop:'4px',padding:'5px 8px',borderRadius:'6px',border:'1px solid #ef4444',background:'transparent',cursor:'pointer',fontFamily:F,fontSize:'10px',color:'#ef4444',fontWeight:600}}>↺ Repor automático</button>
                                 )}
                               </div>
                             </>
                           )}
-
-                          {/* Foco fields */}
+                          {/* Situacao + Regra + Hoje */}
                           <div style={{display:'flex',flexDirection:'column',gap:'3px',marginBottom:'8px'}}>
-                            <div style={{fontSize:'9px',color:t.text,lineHeight:1.4}}><span style={{fontWeight:700,color:ph.color}}>Físico: </span>{ph.fisico}</div>
-                            <div style={{fontSize:'9px',color:t.text,lineHeight:1.4}}><span style={{fontWeight:700,color:ph.color}}>Técnico: </span>{ph.tecnico}</div>
-                            <div style={{fontSize:'9px',color:t.text,lineHeight:1.4}}><span style={{fontWeight:700,color:ph.color}}>Putting: </span>{ph.putting}</div>
+                            <div style={{fontSize:'9px',color:t.text,lineHeight:1.5}}><span style={{fontWeight:700,color:ph.color}}>Situação: </span>{ph.situacao}</div>
+                            <div style={{fontSize:'9px',color:t.text,lineHeight:1.5}}><span style={{fontWeight:700,color:ph.color}}>Regra: </span>{ph.regra}</div>
+                            <div style={{fontSize:'9px',color:ph.color,fontWeight:600,lineHeight:1.5}}>Hoje: {ph.hoje}</div>
                           </div>
-
                           {/* Competitions */}
                           {weekComps.length>0 && (
                             <div style={{display:'flex',flexDirection:'column',gap:'3px',marginBottom:'6px'}}>
@@ -2058,12 +2166,11 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
                               ))}
                             </div>
                           )}
-
-                          {/* Week-level alerts */}
+                          {/* Week alerts */}
                           {weekAl.length>0 && (
                             <div style={{display:'flex',flexDirection:'column',gap:'2px'}}>
                               {weekAl.map((a,ai)=>(
-                                <div key={ai} style={{fontSize:'9px',color:a.icon==='🔴'?'#b91c1c':'#92400e',fontWeight:600,display:'flex',alignItems:'center',gap:'3px'}}>
+                                <div key={ai} style={{fontSize:'9px',color:a.level==='red'?'#b91c1c':'#92400e',fontWeight:500,display:'flex',alignItems:'center',gap:'3px'}}>
                                   <span>{a.icon}</span><span>{a.text}</span>
                                 </div>
                               ))}
