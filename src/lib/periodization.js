@@ -90,6 +90,16 @@ export function getNextCompetition(events, fromDate) {
     .sort((a, b) => eventDate(a).localeCompare(eventDate(b)))[0] || null
 }
 
+// Returns up to `limit` upcoming competition events from fromDate, sorted by start date.
+export function getUpcomingCompetitions(events, fromDate, limit = 4) {
+  const from = parseDate(fromDate)
+  return (events || [])
+    .filter(isCompetition)
+    .filter(e => { const d = parseDate(eventDate(e)); return !isNaN(d) && d >= from })
+    .sort((a, b) => eventDate(a).localeCompare(eventDate(b)))
+    .slice(0, limit)
+}
+
 // Does an event overlap any part of [wsDate, weDate] (both Date objects)?
 function overlapsWeek(event, wsDate, weDate) {
   const start = parseDate(eventDate(event))
