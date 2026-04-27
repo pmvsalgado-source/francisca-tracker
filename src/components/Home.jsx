@@ -949,8 +949,8 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
         *{box-sizing:border-box}
         .hm2-grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
         .hm-athlete-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
-        .hm-hero-row{display:grid;grid-template-columns:1fr 1.7fr;gap:12px;margin-bottom:12px;align-items:stretch}
-        .hm-hoje-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+        .hm-hoje-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+        .hm-row2{display:grid;grid-template-columns:2fr 280px;gap:12px;margin-bottom:12px;align-items:start}
         .hm-row3{display:grid;grid-template-columns:1fr 280px;gap:12px;align-items:start}
         .hm-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px}
         .hm-section-label{font-size:9px;letter-spacing:2px;font-weight:700;margin-bottom:10px;text-transform:uppercase}
@@ -958,7 +958,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
         @media(max-width:768px){
           .hm2-grid3{grid-template-columns:1fr 1fr}
           .hm-athlete-grid{grid-template-columns:repeat(2,1fr)}
-          .hm-hero-row{grid-template-columns:1fr}
+          .hm-row2{grid-template-columns:1fr}
           .hm-row3{grid-template-columns:1fr}
         }
         @media(max-width:480px){
@@ -1069,26 +1069,105 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
         )}
       </div>
 
-      {/* ── HERO ROW — fase + próxima competição ── */}
-      <div className="hm-hero-row">
+      {/* ── HERO — inline compact ── */}
+      <div style={{ display:'flex', alignItems:'center', gap:'10px', padding:'8px 14px', borderRadius:'10px', background:`${phaseInfo.phaseColor}22`, border:`1px solid ${phaseInfo.phaseColor}44`, marginBottom:'12px' }}>
+        <div style={{ width:'8px', height:'8px', borderRadius:'50%', background:phaseInfo.phaseColor, flexShrink:0 }} />
+        <div style={{ flex:1, minWidth:0 }}>
+          <span style={{ fontSize:'12px', fontWeight:700, color:t.text }}>
+            {HERO_SITUACAO[phaseInfo.phase] || phaseInfo.phase.replace(/_/g,' ')}
+          </span>
+          {phaseInfo.recommendedTrainingFocus && (
+            <span style={{ fontSize:'11px', color:t.textMuted, marginLeft:'10px' }}>
+              {phaseInfo.recommendedTrainingFocus}
+            </span>
+          )}
+        </div>
+        <div style={{ fontSize:'8px', letterSpacing:'1.5px', color:phaseInfo.phaseColor, fontWeight:700, flexShrink:0, textTransform:'uppercase' }}>
+          {phaseInfo.phase.replace(/_/g,' ')}
+        </div>
+      </div>
 
-        {/* Fase atual */}
-        <div style={{ background: phaseInfo.phaseColor, borderRadius:'14px', padding:'10px 16px', display:'flex', flexDirection:'column', justifyContent:'center', minHeight:'80px' }}>
-          <div style={{ fontSize:'7px', letterSpacing:'3px', color:'rgba(255,255,255,0.5)', fontWeight:700, marginBottom:'4px' }}>FASE ATUAL</div>
-          <div style={{ fontSize:'17px', fontWeight:900, color:'#fff', lineHeight:1, letterSpacing:'-0.3px', marginBottom:'4px' }}>
-            {phaseInfo.phase === 'PEAK' && '🔴 '}{phaseInfo.phase.replace(/_/g, ' ')}
+      {/* ── ROW 2: HOJE & AMANHÃ | PRÓXIMA COMPETIÇÃO ── */}
+      <div className="hm-row2">
+
+        {/* HOJE + AMANHÃ */}
+        <div className="hm-hoje-row">
+
+          {/* HOJE */}
+          <div style={{ background:t.surface, border:`1.5px solid ${t.accent}44`, borderRadius:'14px', padding:'16px 18px' }}>
+            <div style={{ marginBottom:'10px' }}>
+              <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.accent, fontWeight:700 }}>HOJE</div>
+              <div style={{ fontSize:'11px', color:t.textMuted, marginTop:'1px' }}>
+                {todayDate.toLocaleDateString('pt-PT', { weekday:'long', day:'2-digit', month:'short' })}
+              </div>
+            </div>
+            {todayPlanSessions.length === 0 ? (
+              <div>
+                <div style={{ fontSize:'12px', color:t.textMuted, fontWeight:500, marginBottom:'3px' }}>Sem plano definido pelo coach</div>
+                <div style={{ fontSize:'11px', color:t.textFaint, fontStyle:'italic' }}>A aguardar planeamento</div>
+              </div>
+            ) : (
+              <div style={{ display:'flex', flexDirection:'column', gap:'8px' }}>
+                {todayPlanSessions.map((session, i) => (
+                  <div key={i}>
+                    <div style={{ fontSize:'12px', fontWeight:600, color: session.type==='gym' ? '#52E8A0' : '#378ADD' }}>
+                      {session.title}
+                    </div>
+                    {(session.duration || session.notes) && (
+                      <div style={{ fontSize:'10px', color:t.textMuted, marginTop:'2px', lineHeight:1.3 }}>
+                        {[session.duration ? `${session.duration} min` : null, session.notes].filter(Boolean).join(' · ')}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                <button onClick={() => onNavigate('training', { date: todayStr })}
+                  style={{ fontSize:'10px', color:t.accent, background:'transparent', border:`1px solid ${t.accent}44`, borderRadius:'5px', cursor:'pointer', padding:'3px 10px', fontFamily:F, fontWeight:600, marginTop:'2px', display:'inline-block' }}>
+                  → Ver plano
+                </button>
+              </div>
+            )}
           </div>
-          <div style={{ fontSize:'11px', color:'rgba(255,255,255,0.85)', marginBottom:'2px', lineHeight:1.3 }}>
-            {HERO_SITUACAO[phaseInfo.phase] || ''}
+
+          {/* AMANHÃ */}
+          <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'14px', padding:'16px 18px' }}>
+            <div style={{ marginBottom:'10px' }}>
+              <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:700 }}>AMANHÃ</div>
+              <div style={{ fontSize:'11px', color:t.textMuted, marginTop:'1px' }}>
+                {tomorrowDate.toLocaleDateString('pt-PT', { weekday:'long', day:'2-digit', month:'short' })}
+              </div>
+            </div>
+            {tomorrowPlanSessions.length === 0 ? (
+              <div>
+                <div style={{ fontSize:'12px', color:t.textMuted, fontWeight:500, marginBottom:'3px' }}>Sem plano definido pelo coach</div>
+                <div style={{ fontSize:'11px', color:t.textFaint, fontStyle:'italic' }}>A aguardar planeamento</div>
+              </div>
+            ) : (
+              <div style={{ display:'flex', flexDirection:'column', gap:'8px' }}>
+                {tomorrowPlanSessions.map((session, i) => (
+                  <div key={i}>
+                    <div style={{ fontSize:'12px', fontWeight:600, color: session.type==='gym' ? '#52E8A0' : '#378ADD' }}>
+                      {session.title}
+                    </div>
+                    {(session.duration || session.notes) && (
+                      <div style={{ fontSize:'10px', color:t.textMuted, marginTop:'2px', lineHeight:1.3 }}>
+                        {[session.duration ? `${session.duration} min` : null, session.notes].filter(Boolean).join(' · ')}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                <button onClick={() => onNavigate('training', { date: tomorrowStr })}
+                  style={{ fontSize:'10px', color:t.textMuted, background:'transparent', border:`1px solid ${t.border}`, borderRadius:'5px', cursor:'pointer', padding:'3px 10px', fontFamily:F, fontWeight:600, marginTop:'2px', display:'inline-block' }}>
+                  → Ver plano
+                </button>
+              </div>
+            )}
           </div>
-          <div style={{ fontSize:'10px', fontWeight:600, color:'rgba(255,255,255,0.5)', fontStyle:'italic' }}>
-            {HERO_REGRA[phaseInfo.phase] || ''}
-          </div>
+
         </div>
 
-        {/* Próxima competição */}
+        {/* PRÓXIMA COMPETIÇÃO */}
         {upcomingCompsAll.length > 0 ? (
-          <div style={{ background:t.surface, border:`1px solid ${daysToNextComp != null && daysToNextComp <= 7 ? '#ef444433' : t.border}`, borderRadius:'14px', padding:'16px', display:'flex', flexDirection:'column', gap:'0', minHeight:'80px', justifyContent:'center' }}>
+          <div style={{ background:t.surface, border:`1px solid ${daysToNextComp != null && daysToNextComp <= 7 ? '#ef444433' : t.border}`, borderRadius:'14px', padding:'16px' }}>
             <div style={{ fontSize:'8px', letterSpacing:'2px', color:t.textMuted, fontWeight:700, marginBottom:'10px' }}>PRÓXIMA COMPETIÇÃO</div>
             <div style={{ display:'flex', alignItems:'center', gap:'14px', marginBottom:'10px' }}>
               <div style={{ textAlign:'center', flexShrink:0, lineHeight:1 }}>
@@ -1121,67 +1200,11 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
             )}
           </div>
         ) : (
-          <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'14px', padding:'16px', display:'flex', flexDirection:'column', justifyContent:'center', minHeight:'80px' }}>
+          <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'14px', padding:'16px' }}>
             <div style={{ fontSize:'8px', letterSpacing:'2px', color:t.textMuted, fontWeight:700, marginBottom:'8px' }}>PRÓXIMA COMPETIÇÃO</div>
             <div style={{ fontSize:'12px', color:t.textMuted, fontStyle:'italic' }}>Sem competições agendadas</div>
           </div>
         )}
-      </div>
-
-      {/* ── ROW 2: HOJE & AMANHÃ ── */}
-      <div className="hm-hoje-row">
-
-        {/* HOJE */}
-        <div style={{ background:t.surface, border:`1.5px solid ${t.accent}44`, borderRadius:'14px', padding:'16px 18px' }}>
-          <div style={{ marginBottom:'10px' }}>
-            <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.accent, fontWeight:700 }}>HOJE</div>
-            <div style={{ fontSize:'11px', color:t.textMuted, marginTop:'1px' }}>
-              {todayDate.toLocaleDateString('pt-PT', { weekday:'long', day:'2-digit', month:'short' })}
-            </div>
-          </div>
-          {todayPlanSessions.length === 0 ? (
-            <div>
-              <div style={{ fontSize:'12px', color:t.textMuted, fontWeight:500, marginBottom:'3px' }}>Sem plano definido pelo coach</div>
-              <div style={{ fontSize:'11px', color:t.textFaint, fontStyle:'italic' }}>A aguardar planeamento</div>
-            </div>
-          ) : (
-            <div>
-              <div style={{ fontSize:'14px', fontWeight:700, color:t.text, marginBottom:'10px' }}>
-                {todayPlanSessions.length === 1 ? '1 sessão planeada' : `${todayPlanSessions.length} sessões planeadas`}
-              </div>
-              <button onClick={() => onNavigate('training', { date: todayStr })}
-                style={{ fontSize:'11px', color:t.accent, background:'transparent', border:`1px solid ${t.accent}55`, borderRadius:'6px', cursor:'pointer', padding:'4px 12px', fontFamily:F, fontWeight:600 }}>
-                → Ver plano
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* AMANHÃ */}
-        <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'14px', padding:'16px 18px' }}>
-          <div style={{ marginBottom:'10px' }}>
-            <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:700 }}>AMANHÃ</div>
-            <div style={{ fontSize:'11px', color:t.textMuted, marginTop:'1px' }}>
-              {tomorrowDate.toLocaleDateString('pt-PT', { weekday:'long', day:'2-digit', month:'short' })}
-            </div>
-          </div>
-          {tomorrowPlanSessions.length === 0 ? (
-            <div>
-              <div style={{ fontSize:'12px', color:t.textMuted, fontWeight:500, marginBottom:'3px' }}>Sem plano definido pelo coach</div>
-              <div style={{ fontSize:'11px', color:t.textFaint, fontStyle:'italic' }}>A aguardar planeamento</div>
-            </div>
-          ) : (
-            <div>
-              <div style={{ fontSize:'14px', fontWeight:700, color:t.text, marginBottom:'10px' }}>
-                {tomorrowPlanSessions.length === 1 ? '1 sessão planeada' : `${tomorrowPlanSessions.length} sessões planeadas`}
-              </div>
-              <button onClick={() => onNavigate('training', { date: tomorrowStr })}
-                style={{ fontSize:'11px', color:t.textMuted, background:'transparent', border:`1px solid ${t.border}`, borderRadius:'6px', cursor:'pointer', padding:'4px 12px', fontFamily:F, fontWeight:600 }}>
-                → Ver plano
-              </button>
-            </div>
-          )}
-        </div>
 
       </div>
 
@@ -1250,20 +1273,28 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
 
           {agendaItems.length > 0 && (
             <div style={{ marginBottom:'14px' }}>
-              <div style={{ fontSize:'8px', letterSpacing:'1.5px', color:'#378ADD', fontWeight:700, marginBottom:'7px' }}>AGENDA</div>
-              <div style={{ display:'flex', flexDirection:'column', gap:'4px' }}>
-                {agendaItems.map((item, i) => {
-                  const daysAway = Math.ceil((new Date(item.date + 'T12:00:00') - new Date()) / 86400000)
-                  const dayLabel = daysAway <= 0 ? 'Hoje' : daysAway === 1 ? 'Amanhã' : `${daysAway}d`
-                  return (
-                    <div key={i} style={{ display:'flex', alignItems:'center', gap:'8px', padding:'6px 0' }}>
-                      <div style={{ width:'3px', height:'3px', borderRadius:'50%', background:item.color, flexShrink:0 }} />
-                      <div style={{ fontSize:'12px', color:t.text, flex:1 }}>{item.label}</div>
-                      <div style={{ fontSize:'10px', fontWeight:600, color: daysAway <= 1 ? item.color : t.textFaint }}>{dayLabel}</div>
-                    </div>
-                  )
-                })}
-              </div>
+              <div style={{ fontSize:'8px', letterSpacing:'1.5px', color:t.textMuted, fontWeight:700, marginBottom:'8px' }}>AGENDA</div>
+              {['#378ADD','#52E8A0'].map(color => {
+                const group = agendaItems.filter(a => a.color === color)
+                if (!group.length) return null
+                const groupLabel = color === '#378ADD' ? 'Golf' : 'S&C'
+                return (
+                  <div key={color} style={{ marginBottom:'8px' }}>
+                    <div style={{ fontSize:'8px', letterSpacing:'1px', color, fontWeight:700, marginBottom:'4px' }}>{groupLabel}</div>
+                    {group.map((item, i) => {
+                      const daysAway = Math.ceil((new Date(item.date + 'T12:00:00') - new Date()) / 86400000)
+                      const dayLabel = daysAway <= 0 ? 'Hoje' : daysAway === 1 ? 'Amanhã' : `${daysAway}d`
+                      return (
+                        <div key={i} style={{ display:'flex', alignItems:'center', gap:'8px', padding:'3px 0' }}>
+                          <div style={{ width:'3px', height:'3px', borderRadius:'50%', background:color, flexShrink:0 }} />
+                          <div style={{ fontSize:'11px', color:t.text, flex:1 }}>{item.label}</div>
+                          <div style={{ fontSize:'10px', fontWeight:600, color: daysAway <= 1 ? color : t.textFaint }}>{dayLabel}</div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })}
             </div>
           )}
 
@@ -1273,10 +1304,10 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
               {recoveryStatus.map((r, i) => (
                 <div key={i} style={{ display:'flex', alignItems:'center', gap:'8px' }}>
                   <div style={{ fontSize:'10px', flex:1, minWidth:0 }}>
-                    <span style={{ color: r.alert ? t.danger : t.textFaint, marginRight:'4px' }}>{r.alert ? '⚠' : '·'}</span>
+                    <span style={{ color: r.alert ? '#f59e0b' : t.textFaint, marginRight:'4px' }}>{r.alert ? '⚠' : '·'}</span>
                     <span style={{ color: r.alert ? t.text : t.textMuted, fontWeight: r.alert ? 600 : 400 }}>{r.label}</span>
                     <span style={{ color:t.textFaint, fontSize:'9px', marginLeft:'4px' }}>
-                      {r.daysSince === null ? 'Nunca' : `${r.daysSince}d`}
+                      {r.daysSince === null ? 'Sem registo' : `${r.daysSince}d`}
                     </span>
                   </div>
                   {r.alert && (
