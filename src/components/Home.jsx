@@ -895,15 +895,39 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
     return kpis.slice(0, 3)
   })()
 
-  // Recovery & support events (last 30 days)
-  const thirtyDaysAgoStr = (() => { const d = new Date(); d.setDate(d.getDate()-30); return d.toISOString().split('T')[0] })()
-  const RECOVERY_KW = ['massagem','massage','fisio','physio','mental','recuper','recovery','reiki','psicolog']
-  const recoveryEvents = events.filter(e => {
-    if (e.start_date < thirtyDaysAgoStr) return false
-    const title = (e.title || '').toLowerCase()
-    return RECOVERY_KW.some(kw => title.includes(kw))
+  // Recovery status — derived from past events, no dedicated data model
+  const RECOVERY_TYPES = [
+    { key: 'massage', label: 'Massagem',     keywords: ['massagem', 'massage', 'reiki'] },
+    { key: 'physio',  label: 'Fisioterapia', keywords: ['fisio', 'physio'] },
+    { key: 'mental',  label: 'Coach Mental', keywords: ['mental', 'psicolog'] },
+  ]
+  const recoveryStatus = RECOVERY_TYPES.map(type => {
+    const past = events
+      .filter(e => {
+        const title = (e.title || '').toLowerCase()
+        const cat   = (e.category || '').toLowerCase()
+        return type.keywords.some(kw => title.includes(kw) || cat.includes(kw))
+      })
+      .sort((a, b) => normDate(b.start_date || b.date).localeCompare(normDate(a.start_date || a.date)))
+    const lastDateStr = past[0] ? normDate(past[0].start_date || past[0].date) : null
+    const daysSince = lastDateStr
+      ? Math.floor((new Date() - new Date(lastDateStr + 'T12:00:00')) / 86400000)
+      : null
+    return { ...type, lastDateStr, daysSince, alert: daysSince === null || daysSince > 25 }
   })
-  const showRecovery = recoveryEvents.length > 0 || phaseInfo.restAlertLevel === 'red'
+
+  // Agenda items — real scheduled sessions only (max 3)
+  const agendaItems = (() => {
+    const items = []
+    if (nextGolfCoachDate) items.push({ label: 'Coach · Golf',     date: nextGolfCoachDate, color: '#378ADD' })
+    if (nextGymCoachDate)  items.push({ label: 'Coach · Ginásio',  date: nextGymCoachDate,  color: '#52E8A0' })
+    const coachDates = new Set([nextGolfCoachDate, nextGymCoachDate].filter(Boolean))
+    if (nextTrainingDate && !coachDates.has(nextTrainingDate)) {
+      const plan = trainingPlans.find(p => p.week_start <= nextTrainingDate && p.week_end >= nextTrainingDate)
+      items.push({ label: plan?.plan_type === 'gym' ? 'Treino Ginásio' : 'Treino Golf', date: nextTrainingDate, color: plan?.plan_type === 'gym' ? '#52E8A0' : '#378ADD' })
+    }
+    return items.sort((a, b) => a.date.localeCompare(b.date)).slice(0, 3)
+  })()
 
   // Alert colour
   const alertColor = phaseInfo.restAlertLevel === 'red' ? '#f87171'
@@ -1213,29 +1237,53 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
             )}
           </div>
 
-          {/* ── 8. RECOVERY & SUPPORT ── */}
+          {/* ── AGENDA & ALERTAS ── */}
           <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'12px', padding:'14px 16px' }}>
-            <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:600, marginBottom:'10px' }}>RECOVERY & SUPPORT</div>
-            {recoveryEvents.length > 0 ? (
-              <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
-                {recoveryEvents.map((e, i) => (
-                  <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'7px 10px', background:t.bg, borderRadius:'7px' }}>
-                    <div style={{ fontSize:'11px', color:t.text, fontWeight:600 }}>{e.title}</div>
-                    <div style={{ fontSize:'10px', color:t.textMuted }}>{formatDate(e.start_date)}</div>
+            <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:600, marginBottom:'12px' }}>AGENDA & ALERTAS</div>
+
+            {/* A — Sessões agendadas (dados reais) */}
+            {agendaItems.length > 0 && (
+              <div style={{ marginBottom:'12px', paddingBottom:'12px', borderBottom:`1px solid ${t.border}` }}>
+                <div style={{ fontSize:'8px', letterSpacing:'1px', color:t.textMuted, fontWeight:700, marginBottom:'7px' }}>SESSÕES AGENDADAS</div>
+                <div style={{ display:'flex', flexDirection:'column', gap:'5px' }}>
+                  {agendaItems.map((item, i) => {
+                    const daysAway = Math.ceil((new Date(item.date + 'T12:00:00') - new Date()) / 86400000)
+                    const dayLabel = daysAway <= 0 ? 'Hoje' : daysAway === 1 ? 'Amanhã' : `${daysAway}d`
+                    return (
+                      <div key={i} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'7px 10px', background:t.bg, borderRadius:'7px', borderLeft:`3px solid ${item.color}` }}>
+                        <div style={{ fontSize:'11px', color:t.text, fontWeight:600 }}>{item.label}</div>
+                        <div style={{ fontSize:'10px', fontWeight: daysAway <= 1 ? 700 : 400, color: daysAway <= 1 ? item.color : t.textMuted }}>{dayLabel}</div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* B — Recovery Status (lógica derivada) */}
+            <div>
+              <div style={{ fontSize:'8px', letterSpacing:'1px', color:t.textMuted, fontWeight:700, marginBottom:'7px' }}>RECOVERY STATUS</div>
+              <div style={{ display:'flex', flexDirection:'column', gap:'5px' }}>
+                {recoveryStatus.map((r, i) => (
+                  <div key={i} style={{ display:'flex', alignItems:'center', gap:'8px', padding:'7px 10px', background: r.alert ? '#1a080844' : t.bg, border:`1px solid ${r.alert ? t.danger + '55' : t.border}`, borderRadius:'7px' }}>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:'11px', fontWeight:600, color: r.alert ? t.danger : t.text }}>
+                        {r.alert ? '⚠️ ' : '✓ '}{r.label}
+                      </div>
+                      <div style={{ fontSize:'10px', color:t.textMuted, marginTop:'1px' }}>
+                        {r.daysSince === null ? 'Nunca registado' : `${r.daysSince} dias`}
+                      </div>
+                    </div>
+                    {r.alert && (
+                      <button onClick={() => onNavigate && onNavigate('calendar')}
+                        style={{ background:'transparent', border:`1px solid ${t.border}`, borderRadius:'5px', color:t.textMuted, padding:'3px 9px', fontSize:'10px', cursor:'pointer', fontFamily:F, fontWeight:600, whiteSpace:'nowrap', flexShrink:0 }}>
+                        Agendar
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
-            ) : (
-              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'10px' }}>
-                <span style={{ fontSize:'11px', color: phaseInfo.restAlertLevel === 'red' ? '#f87171' : t.textMuted }}>
-                  {phaseInfo.restAlertLevel === 'red' ? '⚠️ ' : ''}Sem sessão de recuperação agendada
-                </span>
-                <button onClick={() => onNavigate && onNavigate('calendar')}
-                  style={{ background:'transparent', border:`1px solid ${t.border}`, borderRadius:'6px', color:t.textMuted, padding:'4px 12px', fontSize:'10px', cursor:'pointer', fontFamily:F, fontWeight:600, whiteSpace:'nowrap' }}>
-                  Agendar sessão
-                </button>
-              </div>
-            )}
+            </div>
           </div>
 
         </div>
