@@ -1233,25 +1233,17 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
         <div style={{ fontSize:'11px', color:t.textMuted }}>{lang==='pt' ? 'Plano de treino, prioridades e periodização' : 'Training plan, priorities and periodisation'}</div>
       </div>
 
-      {/* ── SUB-TABS ── */}
-      <div style={{display:'flex',gap:'8px',marginBottom:'24px',flexWrap:'wrap'}}>
-        {subLabels.map(({key,role,label,icon,bg,color})=>{
+      {/* ── SUB-TABS (compact pills) ── */}
+      <div style={{display:'flex',gap:'6px',marginBottom:'24px',flexWrap:'wrap',paddingBottom:'14px',borderBottom:`1px solid ${t.border}`}}>
+        {subLabels.map(({key,role,label,color})=>{
           const active = subTab===key
           return (
             <button key={key} onClick={()=>setSubTab(key)}
-              style={{display:'flex',alignItems:'center',gap:'12px',padding:'14px 20px',borderRadius:'12px',
-                border:`1px solid ${active?color:t.border}`,background:active?bg:'transparent',
-                cursor:'pointer',fontFamily:F,flex:'1 1 auto',minWidth:'160px',textAlign:'left'}}>
-              <div style={{width:'38px',height:'38px',borderRadius:'50%',
-                background:active?color+'22':t.bg||'#f5f5f5',
-                display:'flex',alignItems:'center',justifyContent:'center',
-                color:active?color:t.textMuted,flexShrink:0}}>
-                {icon}
-              </div>
-              <div>
-                {role && <div style={{fontSize:'9px',letterSpacing:'1px',color:active?color:t.textMuted,fontWeight:600,marginBottom:'2px'}}>{role}</div>}
-                <div style={{fontSize:'13px',fontWeight:active?700:400,color:active?(color==='#185FA5'?golfDark:color===gymDark?gymDark:t.text):t.textMuted}}>{label}</div>
-              </div>
+              style={{padding:'5px 14px',borderRadius:'20px',border:`1px solid ${active?color:t.border}`,
+                background:active?color+'18':'transparent',color:active?color:t.textMuted,
+                cursor:'pointer',fontSize:'11px',fontWeight:active?700:500,fontFamily:F,
+                letterSpacing:'0.2px',whiteSpace:'nowrap'}}>
+              {role ? <><span style={{fontSize:'8px',letterSpacing:'1px',opacity:0.65,marginRight:'4px'}}>{role}</span>{label}</> : label}
             </button>
           )
         })}

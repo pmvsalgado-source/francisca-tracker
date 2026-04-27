@@ -271,10 +271,15 @@ export default function Performance({ theme, t, user, lang = 'en', initialTab = 
         <div style={{ fontSize: '11px', color: t.textMuted }}>{lang === 'pt' ? 'Evolução, métricas e objetivos' : 'Evolution, metrics and goals'}</div>
       </div>
 
-      {/* Sub-nav */}
-      <div style={{ display: 'flex', gap: '6px', marginBottom: '20px', flexWrap: 'wrap' }}>
+      {/* Sub-nav (compact pills) */}
+      <div style={{ display: 'flex', gap: '6px', marginBottom: '22px', flexWrap: 'wrap', paddingBottom: '14px', borderBottom: `1px solid ${t.border}` }}>
         {subTabs.map(([lbl, key]) => (
-          <button key={key} onClick={() => setSubTab(key)} style={{ ...btn(subTab === key), borderRadius: '20px', padding: '6px 18px' }}>{lbl}</button>
+          <button key={key} onClick={() => setSubTab(key)}
+            style={{ padding: '5px 14px', borderRadius: '20px', border: `1px solid ${subTab === key ? t.accent : t.border}`,
+              background: subTab === key ? t.accent + '18' : 'transparent', color: subTab === key ? t.accent : t.textMuted,
+              cursor: 'pointer', fontSize: '11px', fontWeight: subTab === key ? 700 : 500, fontFamily: F, whiteSpace: 'nowrap' }}>
+            {lbl}
+          </button>
         ))}
       </div>
 
@@ -292,6 +297,35 @@ export default function Performance({ theme, t, user, lang = 'en', initialTab = 
       {/* ── PRIORIDADES (Focus + Evolution merged) ── */}
       {!loading && subTab === 'focus' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+          {/* KPI Strip */}
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {metrics.filter(m => m.id !== '__notes__').map(m => {
+              const last = entries.filter(e => e.metric_id === m.id && e.value).sort((a,b) => b.entry_date.localeCompare(a.entry_date))[0]
+              const prev = entries.filter(e => e.metric_id === m.id && e.value).sort((a,b) => b.entry_date.localeCompare(a.entry_date))[1]
+              const delta = last && prev ? (parseFloat(last.value) - parseFloat(prev.value)) : null
+              const pctOfTarget = last && m.target ? Math.min(100, Math.round((parseFloat(last.value) / m.target) * 100)) : null
+              return (
+                <div key={m.id} style={{ flex: '1 1 120px', minWidth: '110px', background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '10px 12px' }}>
+                  <div style={{ fontSize: '8px', letterSpacing: '1.5px', color: t.textMuted, fontWeight: 700, marginBottom: '4px', textTransform: 'uppercase' }}>{m.label}</div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                    <div style={{ fontSize: '18px', fontWeight: 900, color: last ? t.text : t.textFaint, lineHeight: 1 }}>{last ? last.value : '—'}</div>
+                    {m.unit && last && <div style={{ fontSize: '10px', color: t.textMuted }}>{m.unit}</div>}
+                  </div>
+                  {delta !== null && (
+                    <div style={{ fontSize: '10px', color: delta >= 0 ? t.success : t.danger, fontWeight: 600, marginTop: '2px' }}>
+                      {delta >= 0 ? '+' : ''}{delta.toFixed(1)}{m.unit}
+                    </div>
+                  )}
+                  {pctOfTarget !== null && (
+                    <div style={{ marginTop: '5px', height: '2px', background: t.border, borderRadius: '1px', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${pctOfTarget}%`, background: pctOfTarget >= 100 ? t.success : t.accent, borderRadius: '1px' }} />
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
 
           {/* Training context banner */}
           <div style={{ ...card, padding: '14px 18px' }}>

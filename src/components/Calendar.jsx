@@ -173,9 +173,9 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate }) {
   const month = currentDate.getMonth()
   const today = new Date().toISOString().split('T')[0]
 
-  const F = 'system-ui,-apple-system,sans-serif'
-  const btn = (active) => ({ background: active ? t.accent : 'transparent', border: `1px solid ${active ? t.accent : t.border}`, borderRadius: '4px', color: active ? (theme === 'dark' ? '#000' : '#fff') : t.textMuted, padding: '5px 12px', cursor: 'pointer', fontSize: '11px', fontFamily: F, transition: 'all 0.15s' })
-  const inp = { background: t.bg, border: `1px solid ${t.border}`, borderRadius: '4px', color: t.text, padding: '6px 10px', fontSize: '13px', fontFamily: F, outline: 'none', width: '100%', boxSizing: 'border-box' }
+  const F = "'Inter', system-ui, sans-serif"
+  const btn = (active) => ({ background: active ? t.accent + '18' : 'transparent', border: `1px solid ${active ? t.accent : t.border}`, borderRadius: '20px', color: active ? t.accent : t.textMuted, padding: '5px 14px', cursor: 'pointer', fontSize: '11px', fontFamily: F, fontWeight: active ? 700 : 500 })
+  const inp = { background: t.bg, border: `1px solid ${t.border}`, borderRadius: '8px', color: t.text, padding: '6px 10px', fontSize: '13px', fontFamily: F, outline: 'none', width: '100%', boxSizing: 'border-box' }
 
   // Annual stats
   const yearEvents = events.filter(e => e.start_date?.startsWith(year.toString()))
@@ -185,11 +185,11 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate }) {
   return (
     <div style={{ fontFamily: F, color: t.text }}>
       <style>{`
-        .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);background:${t.surface};border-radius:0 0 10px 10px;overflow:hidden;}
+        .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);background:${t.surface};border-radius:0 0 14px 14px;overflow:hidden;border:1px solid ${t.border};border-top:none;}
         .cal-cell{background:${t.bg};padding:6px;min-height:62px;cursor:pointer;transition:background 0.1s;border-right:0.5px solid ${t.border};border-bottom:0.5px solid ${t.border};}
         .cal-cell:hover{background:${t.surface};}
         .cal-cell.today-cell{background:${t.accentBg};}
-        .cal-week-grid{display:grid;grid-template-columns:repeat(7,1fr);background:${t.surface};}
+        .cal-week-grid{display:grid;grid-template-columns:repeat(7,1fr);background:${t.surface};border-radius:0 0 14px 14px;overflow:hidden;border:1px solid ${t.border};border-top:none;}
         .cal-week-cell{background:${t.bg};padding:8px 6px;min-height:160px;cursor:pointer;transition:background 0.1s;border-right:0.5px solid ${t.border};border-bottom:0.5px solid ${t.border};}
         .cal-week-cell:hover{background:${t.surface};}
         .cal-week-cell.today-cell{background:${t.accentBg};}
@@ -203,14 +203,14 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate }) {
       {deleteConfirmEvent && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
           <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '14px', padding: '28px 32px', maxWidth: '380px', width: '90%' }}>
-            <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '8px', color: t.text }}>Delete this event?</div>
+            <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '8px', color: t.text }}>{lang === 'pt' ? 'Apagar este evento?' : 'Delete this event?'}</div>
             <div style={{ fontSize: '13px', color: t.textMuted, marginBottom: '24px', lineHeight: 1.6 }}>
               <b style={{ color: t.text }}>{deleteConfirmEvent.title}</b><br/>
               {deleteConfirmEvent.start_date} {deleteConfirmEvent.end_date !== deleteConfirmEvent.start_date ? `→ ${deleteConfirmEvent.end_date}` : ''}
             </div>
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-              <button onClick={() => setDeleteConfirmEvent(null)} style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '6px', color: t.textMuted, padding: '8px 16px', cursor: 'pointer', fontSize: '12px', fontFamily: F }}>Cancel</button>
-              <button onClick={confirmDeleteEvent} style={{ background: 'transparent', border: `1px solid ${t.danger || '#f87171'}`, borderRadius: '6px', color: t.danger || '#f87171', padding: '8px 16px', cursor: 'pointer', fontSize: '12px', fontFamily: F, fontWeight: 600 }}>Delete</button>
+              <button onClick={() => setDeleteConfirmEvent(null)} style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '20px', color: t.textMuted, padding: '7px 16px', cursor: 'pointer', fontSize: '11px', fontFamily: F }}>{lang === 'pt' ? 'Cancelar' : 'Cancel'}</button>
+              <button onClick={confirmDeleteEvent} style={{ background: t.danger, border: 'none', borderRadius: '20px', color: '#fff', padding: '7px 16px', cursor: 'pointer', fontSize: '11px', fontFamily: F, fontWeight: 700 }}>{lang === 'pt' ? 'Apagar' : 'Delete'}</button>
             </div>
           </div>
         </div>
@@ -219,8 +219,8 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate }) {
       {/* Event Modal */}
       {showModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
-          <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '10px', padding: '24px', width: '90%', maxWidth: '440px', maxHeight: '90vh', overflowY: 'auto' }}>
-            <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '16px' }}>{editEvent ? 'Edit Event' : 'New Event'}</div>
+          <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '14px', padding: '24px', width: '90%', maxWidth: '440px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '16px', color: t.text }}>{editEvent ? (lang === 'pt' ? 'Editar Evento' : 'Edit Event') : (lang === 'pt' ? 'Novo Evento' : 'New Event')}</div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div>
@@ -285,11 +285,11 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate }) {
 
             <div style={{ display: 'flex', gap: '8px', marginTop: '16px', justifyContent: 'space-between' }}>
               <div>
-                {editEvent && <button onClick={deleteEvent} style={{ background: 'transparent', border: `1px solid ${t.danger || '#c04444'}`, borderRadius: '4px', color: t.danger || '#c04444', padding: '7px 14px', cursor: 'pointer', fontSize: '11px', fontFamily: F }}>Delete</button>}
+                {editEvent && <button onClick={deleteEvent} style={{ background: 'transparent', border: `1px solid ${t.danger}`, borderRadius: '20px', color: t.danger, padding: '7px 14px', cursor: 'pointer', fontSize: '11px', fontFamily: F }}>{lang === 'pt' ? 'Apagar' : 'Delete'}</button>}
               </div>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button onClick={() => setShowModal(false)} style={btn(false)}>Cancelar</button>
-                <button onClick={saveEvent} disabled={saving || !form.title} style={{ background: saving ? t.surface : t.accent, border: 'none', borderRadius: '4px', color: theme === 'dark' ? '#000' : '#fff', padding: '7px 16px', cursor: saving ? 'not-allowed' : 'pointer', fontSize: '11px', fontFamily: F, fontWeight: 600 }}>
+                <button onClick={saveEvent} disabled={saving || !form.title} style={{ background: saving ? t.surface : t.accent, border: 'none', borderRadius: '20px', color: '#fff', padding: '7px 16px', cursor: saving ? 'not-allowed' : 'pointer', fontSize: '11px', fontFamily: F, fontWeight: 700 }}>
                   {saving ? 'Saving...' : 'Save'}
                 </button>
               </div>
@@ -301,8 +301,8 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate }) {
       {/* Category Modal */}
       {showCatModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
-          <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '10px', padding: '24px', width: '90%', maxWidth: '340px' }}>
-            <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '16px' }}>Nova Categoria</div>
+          <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '14px', padding: '24px', width: '90%', maxWidth: '340px' }}>
+            <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '16px', color: t.text }}>Nova Categoria</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <input value={catForm.name} onChange={e => setCatForm(p => ({ ...p, name: e.target.value }))} placeholder="Category name" style={inp} />
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -312,19 +312,25 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate }) {
             </div>
             <div style={{ display: 'flex', gap: '8px', marginTop: '16px', justifyContent: 'flex-end' }}>
               <button onClick={() => setShowCatModal(false)} style={btn(false)}>Cancelar</button>
-              <button onClick={saveCat} style={{ background: t.accent, border: 'none', borderRadius: '4px', color: theme === 'dark' ? '#000' : '#fff', padding: '7px 16px', cursor: 'pointer', fontSize: '11px', fontFamily: F, fontWeight: 600 }}>Guardar</button>
+              <button onClick={saveCat} style={{ background: t.accent, border: 'none', borderRadius: '20px', color: '#fff', padding: '7px 16px', cursor: 'pointer', fontSize: '11px', fontFamily: F, fontWeight: 700 }}>Guardar</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Header */}
-      <div style={{ background: '#1a2744', borderRadius: '10px 10px 0 0', padding: '12px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+      {/* Page header */}
+      <div style={{ marginBottom: '16px' }}>
+        <div style={{ fontSize: '9px', letterSpacing: '3px', color: t.accent, fontWeight: 700, marginBottom: '3px' }}>CALENDAR</div>
+        <div style={{ fontSize: '11px', color: t.textMuted }}>{lang === 'pt' ? 'Calendário de competições e treinos' : 'Competition and training schedule'}</div>
+      </div>
+
+      {/* Cal toolbar */}
+      <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '14px 14px 0 0', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           {view === 'month' && <>
-            <button onClick={() => setCurrentDate(new Date(year, month - 1, 1))} style={{ background: 'transparent', border: 'none', color: '#52E8A0', cursor: 'pointer', fontSize: '20px', lineHeight: 1, padding: '0 4px' }}>‹</button>
-            <div style={{ fontSize: '16px', fontWeight: 700, color: '#fff', minWidth: '160px' }}>{MONTHS[month]} {year}</div>
-            <button onClick={() => setCurrentDate(new Date(year, month + 1, 1))} style={{ background: 'transparent', border: 'none', color: '#52E8A0', cursor: 'pointer', fontSize: '20px', lineHeight: 1, padding: '0 4px' }}>›</button>
+            <button onClick={() => setCurrentDate(new Date(year, month - 1, 1))} style={{ background: 'transparent', border: 'none', color: t.accent, cursor: 'pointer', fontSize: '20px', lineHeight: 1, padding: '0 4px' }}>‹</button>
+            <div style={{ fontSize: '15px', fontWeight: 700, color: t.text, minWidth: '160px' }}>{MONTHS[month]} {year}</div>
+            <button onClick={() => setCurrentDate(new Date(year, month + 1, 1))} style={{ background: 'transparent', border: 'none', color: t.accent, cursor: 'pointer', fontSize: '20px', lineHeight: 1, padding: '0 4px' }}>›</button>
           </>}
           {view === 'week' && (() => {
             const days = getWeekDays()
@@ -333,31 +339,34 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate }) {
               ? `${s.getDate()}–${e.getDate()} ${MONTHS[s.getMonth()]} ${s.getFullYear()}`
               : `${s.getDate()} ${MONTHS[s.getMonth()].slice(0,3)} – ${e.getDate()} ${MONTHS[e.getMonth()].slice(0,3)} ${e.getFullYear()}`
             return <>
-              <button onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate() - 7); setCurrentDate(d) }} style={{ background: 'transparent', border: 'none', color: '#52E8A0', cursor: 'pointer', fontSize: '20px', lineHeight: 1, padding: '0 4px' }}>‹</button>
-              <div style={{ fontSize: '15px', fontWeight: 700, color: '#fff', minWidth: '200px' }}>{label}</div>
-              <button onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate() + 7); setCurrentDate(d) }} style={{ background: 'transparent', border: 'none', color: '#52E8A0', cursor: 'pointer', fontSize: '20px', lineHeight: 1, padding: '0 4px' }}>›</button>
+              <button onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate() - 7); setCurrentDate(d) }} style={{ background: 'transparent', border: 'none', color: t.accent, cursor: 'pointer', fontSize: '20px', lineHeight: 1, padding: '0 4px' }}>‹</button>
+              <div style={{ fontSize: '14px', fontWeight: 700, color: t.text, minWidth: '200px' }}>{label}</div>
+              <button onClick={() => { const d = new Date(currentDate); d.setDate(d.getDate() + 7); setCurrentDate(d) }} style={{ background: 'transparent', border: 'none', color: t.accent, cursor: 'pointer', fontSize: '20px', lineHeight: 1, padding: '0 4px' }}>›</button>
             </>
           })()}
-          {view === 'year' && <div style={{ fontSize: '16px', fontWeight: 700, color: '#fff' }}>Ano {year}</div>}
+          {view === 'year' && <div style={{ fontSize: '15px', fontWeight: 700, color: t.text }}>Ano {year}</div>}
         </div>
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
-          <button onClick={() => switchView('week')} style={{ background: view === 'week' ? '#243560' : 'transparent', border: '0.5px solid #2e4a6a', borderRadius: '6px', color: view === 'week' ? '#fff' : '#8aaed4', padding: '5px 12px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 600 }}>Week</button>
-          <button onClick={() => switchView('month')} style={{ background: view === 'month' ? '#243560' : 'transparent', border: '0.5px solid #2e4a6a', borderRadius: '6px', color: view === 'month' ? '#fff' : '#8aaed4', padding: '5px 12px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 600 }}>Month</button>
-          <button onClick={() => switchView('year')} style={{ background: view === 'year' ? '#243560' : 'transparent', border: '0.5px solid #2e4a6a', borderRadius: '6px', color: view === 'year' ? '#fff' : '#8aaed4', padding: '5px 12px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 600 }}>Annual</button>
-          <div style={{ width: '1px', height: '14px', background: '#2e4a6a' }}></div>
+          {(['week', 'month', 'year']).map(v => (
+            <button key={v} onClick={() => switchView(v)}
+              style={{ background: view === v ? t.accent + '18' : 'transparent', border: `1px solid ${view === v ? t.accent : t.border}`, borderRadius: '20px', color: view === v ? t.accent : t.textMuted, padding: '4px 12px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: view === v ? 700 : 500 }}>
+              {v === 'week' ? (lang === 'pt' ? 'Semana' : 'Week') : v === 'month' ? (lang === 'pt' ? 'Mês' : 'Month') : (lang === 'pt' ? 'Anual' : 'Annual')}
+            </button>
+          ))}
+          <div style={{ width: '1px', height: '14px', background: t.border }}></div>
           {[['events', lang==='pt'?'Eventos':'Events', '#378ADD'], ['golf', 'Golf', '#22c55e'], ['gym', lang==='pt'?'Ginásio':'Gym', '#f97316']].map(([key, label, color]) => (
             <button key={key} onClick={() => setCalFilters(p => ({ ...p, [key]: !p[key] }))}
-              style={{ background: calFilters[key] ? color + '33' : 'transparent', border: `0.5px solid ${calFilters[key] ? color : '#2e4a6a'}`, borderRadius: '6px', color: calFilters[key] ? color : '#8aaed4', padding: '5px 10px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 600 }}>
+              style={{ background: calFilters[key] ? color + '22' : 'transparent', border: `1px solid ${calFilters[key] ? color : t.border}`, borderRadius: '20px', color: calFilters[key] ? color : t.textMuted, padding: '4px 10px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: calFilters[key] ? 700 : 500 }}>
               {label}
             </button>
           ))}
-          <button onClick={() => setShowCatModal(true)} style={{ background: 'transparent', border: '0.5px solid #2e4a6a', borderRadius: '6px', color: '#8aaed4', padding: '5px 12px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 600 }}>+ Cat</button>
-          <button onClick={() => openNew()} style={{ background: '#52E8A0', border: 'none', borderRadius: '6px', color: '#0a2a1a', padding: '5px 14px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 700 }}>+ Evento</button>
+          <button onClick={() => setShowCatModal(true)} style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '20px', color: t.textMuted, padding: '4px 12px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 500 }}>+ Cat</button>
+          <button onClick={() => openNew()} style={{ background: t.accent, border: 'none', borderRadius: '20px', color: '#fff', padding: '4px 14px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 700 }}>+ Evento</button>
         </div>
       </div>
 
       {/* Legend */}
-      <div style={{ display: 'flex', gap: '14px', padding: '8px 18px', background: t.surface, borderBottom: `0.5px solid ${t.border}`, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: '14px', padding: '8px 16px', background: t.surface, borderTop: `1px solid ${t.border}`, borderBottom: `1px solid ${t.border}`, flexWrap: 'wrap' }}>
         {categories.map(c => (
           <div key={c.name} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '9px', color: t.textMuted, fontWeight: 500 }}>
             <div style={{ width: '12px', height: '3px', borderRadius: '2px', background: c.color }}></div>
@@ -442,7 +451,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate }) {
             {Array.from({ length: 12 }, (_, m) => {
               const monthEvents = events.filter(e => e.start_date?.startsWith(`${year}-${String(m+1).padStart(2,'0')}`))
               return (
-                <div key={m} style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '6px', padding: '12px' }}>
+                <div key={m} style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '14px', padding: '12px' }}>
                   <div style={{ fontSize: '12px', letterSpacing: '2px', color: t.textMuted, marginBottom: '10px', textTransform: 'uppercase', fontWeight: 600 }}>{MONTHS[m]}</div>
                   {monthEvents.length === 0
                     ? <div style={{ fontSize: '11px', color: t.textFaint }}>Sem eventos</div>
@@ -465,24 +474,24 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate }) {
           <div style={{ marginTop: '16px' }}>
             <div style={{ fontSize: '9px', letterSpacing: '3px', color: t.textMuted, marginBottom: '10px', fontWeight: 600 }}>SEASON OVERVIEW</div>
             <div className="cal-year-stats">
-              <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+              <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '14px', padding: '12px', textAlign: 'center' }}>
                 <div style={{ fontSize: '9px', letterSpacing: '2px', color: t.textMuted, marginBottom: '6px', fontWeight: 600 }}>CONFIRMED</div>
                 <div style={{ fontSize: '24px', fontWeight: 800, color: t.accentLight }}>{confirmed}</div>
               </div>
-              <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+              <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '14px', padding: '12px', textAlign: 'center' }}>
                 <div style={{ fontSize: '9px', letterSpacing: '2px', color: t.textMuted, marginBottom: '6px', fontWeight: 600 }}>OPTIONAL</div>
                 <div style={{ fontSize: '24px', fontWeight: 800, color: t.textMuted }}>{optional}</div>
               </div>
-              <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+              <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '14px', padding: '12px', textAlign: 'center' }}>
                 <div style={{ fontSize: '9px', letterSpacing: '2px', color: t.textMuted, marginBottom: '6px', fontWeight: 600 }}>TOTAL EVENTS</div>
                 <div style={{ fontSize: '24px', fontWeight: 800, color: t.text }}>{yearEvents.length}</div>
               </div>
-              <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+              <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '14px', padding: '12px', textAlign: 'center' }}>
                 <div style={{ fontSize: '9px', letterSpacing: '2px', color: t.textMuted, marginBottom: '6px', fontWeight: 600 }}>COMP DAYS</div>
                 <div style={{ fontSize: '24px', fontWeight: 800, color: '#f59e0b' }}>{yearEvents.filter(e => e.status !== 'cancelled').reduce((acc, e) => { if (!e.start_date) return acc; const s = new Date(e.start_date); const en = new Date(e.end_date || e.start_date); return acc + Math.round((en - s) / 86400000) + 1 }, 0)}</div>
               </div>
             </div>
-            <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '8px', padding: '14px' }}>
+            <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '14px', padding: '14px' }}>
               <div style={{ fontSize: '9px', letterSpacing: '2px', color: t.textMuted, marginBottom: '12px', fontWeight: 600 }}>BY CATEGORY</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {Object.entries(yearEvents.reduce((acc, e) => { const cat = e.category || 'Other'; if (!acc[cat]) acc[cat] = { count: 0, color: e.color || t.accent, days: 0 }; acc[cat].count++; if (e.start_date) { const s = new Date(e.start_date); const en = new Date(e.end_date || e.start_date); acc[cat].days += Math.round((en - s) / 86400000) + 1 } return acc }, {})).sort((a, b) => b[1].count - a[1].count).map(([cat, data]) => (

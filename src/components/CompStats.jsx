@@ -542,19 +542,20 @@ export default function CompStats({ theme, t, user }) {
       )}
 
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
         <div>
-          <div style={{ fontSize: '10px', letterSpacing: '3px', color: t.accent, marginBottom: '3px', fontWeight: 600 }}>COMPETITION</div>
-          <div style={{ fontSize: '18px', fontWeight: 800 }}>Competition Stats</div>
+          <div style={{ fontSize: '9px', letterSpacing: '3px', color: t.accent, marginBottom: '3px', fontWeight: 700 }}>COMPETITIONS</div>
+          <div style={{ fontSize: '20px', fontWeight: 800, color: t.text, lineHeight: 1.1 }}>Histórico Competitivo</div>
+          <div style={{ fontSize: '11px', color: t.textMuted, marginTop: '3px' }}>Tournament history and statistics</div>
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ display: 'flex', gap: '6px' }}>
           <button onClick={() => { setSettingsTab('fields'); setShowSettings(true) }}
-            style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '8px', color: t.textMuted, padding: '8px 14px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', fontFamily: F }}>
-            ⚙ Configure
+            style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '20px', color: t.textMuted, padding: '5px 14px', fontSize: '11px', fontWeight: 500, cursor: 'pointer', fontFamily: F }}>
+            Configurar
           </button>
           <button onClick={openNew}
-            style={{ background: 'transparent', border: `1px solid ${t.accent}`, borderRadius: '8px', color: t.accent, padding: '8px 16px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: F }}>
-            + Add Stats
+            style={{ background: 'transparent', border: `1px solid ${t.accent}`, borderRadius: '20px', color: t.accent, padding: '5px 14px', fontSize: '11px', fontWeight: 700, cursor: 'pointer', fontFamily: F }}>
+            + Adicionar Stats
           </button>
         </div>
       </div>
@@ -565,11 +566,12 @@ export default function CompStats({ theme, t, user }) {
           {summaryCards.map(c => {
             const { value, unit, color } = computeCard(c)
             return (
-              <div key={c.id} style={{ ...card, padding: '12px 14px', textAlign: 'center' }}>
-                <div style={{ fontSize: '9px', letterSpacing: '2px', color: t.textMuted, marginBottom: '6px', fontWeight: 600 }}>{c.label}</div>
-                <div style={{ fontSize: '26px', fontWeight: 800, color, lineHeight: 1 }}>
-                  {value}<span style={{ fontSize: '11px', color: t.textMuted, marginLeft: '3px' }}>{unit}</span>
+              <div key={c.id} style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '14px', padding: '14px 16px' }}>
+                <div style={{ fontSize: '8px', letterSpacing: '2px', color: t.textMuted, marginBottom: '8px', fontWeight: 700, textTransform: 'uppercase' }}>{c.label}</div>
+                <div style={{ fontSize: '28px', fontWeight: 900, color, lineHeight: 1 }}>
+                  {value}
                 </div>
+                {unit && <div style={{ fontSize: '10px', color: t.textMuted, marginTop: '2px' }}>{unit}</div>}
               </div>
             )
           })}
@@ -578,24 +580,24 @@ export default function CompStats({ theme, t, user }) {
 
       {/* Stats Table */}
       {loading ? (
-        <div style={{ padding: '40px', textAlign: 'center', color: t.textMuted }}>Loading...</div>
+        <div style={{ padding: '40px', textAlign: 'center', color: t.textMuted, fontSize: '13px' }}>A carregar...</div>
       ) : stats.length === 0 ? (
-        <div style={{ ...card, textAlign: 'center', padding: '48px' }}>
-          <div style={{ fontSize: '14px', color: t.textMuted, marginBottom: '16px' }}>No competition stats yet.</div>
+        <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '14px', textAlign: 'center', padding: '48px 24px' }}>
+          <div style={{ fontSize: '13px', color: t.textMuted, marginBottom: '16px' }}>Sem stats de competição ainda.</div>
           <button onClick={openNew}
-            style={{ background: t.accent, border: 'none', borderRadius: '8px', color: theme === 'dark' ? '#000' : '#fff', padding: '10px 24px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', fontFamily: F }}>
-            Add First Competition
+            style={{ background: 'transparent', border: `1px solid ${t.accent}`, borderRadius: '20px', color: t.accent, padding: '6px 20px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: F }}>
+            Adicionar Primeira Competição
           </button>
         </div>
       ) : (
-        <div style={{ overflowX: 'auto', border: `1px solid ${t.border}`, borderRadius: '10px' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', minWidth: '500px' }}>
+        <div style={{ overflowX: 'auto', border: `1px solid ${t.border}`, borderRadius: '14px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', minWidth: '500px' }}>
             <thead>
               <tr style={{ background: t.surface }}>
-                <th style={{ padding: '10px 14px', textAlign: 'left', color: t.textMuted, fontWeight: 600, fontSize: '10px', letterSpacing: '2px', borderBottom: `1px solid ${t.border}` }}>COMPETITION</th>
-                <th style={{ padding: '10px 8px', textAlign: 'center', color: t.textMuted, fontWeight: 600, fontSize: '10px', borderBottom: `1px solid ${t.border}` }}>DATE</th>
+                <th style={{ padding: '10px 16px', textAlign: 'left', color: t.textMuted, fontWeight: 700, fontSize: '9px', letterSpacing: '2px', borderBottom: `1px solid ${t.border}` }}>COMPETIÇÃO</th>
+                <th style={{ padding: '10px 10px', textAlign: 'left', color: t.textMuted, fontWeight: 700, fontSize: '9px', letterSpacing: '1px', borderBottom: `1px solid ${t.border}`, whiteSpace: 'nowrap' }}>DATA</th>
                 {tableFields.map(f => (
-                  <th key={f.id} style={{ padding: '10px 8px', textAlign: 'center', color: t.textMuted, fontWeight: 600, fontSize: '10px', borderBottom: `1px solid ${t.border}`, whiteSpace: 'nowrap' }}>
+                  <th key={f.id} style={{ padding: '10px 10px', textAlign: 'center', color: t.textMuted, fontWeight: 700, fontSize: '9px', letterSpacing: '1px', borderBottom: `1px solid ${t.border}`, whiteSpace: 'nowrap' }}>
                     {f.label.toUpperCase()}{f.unit ? ` (${f.unit})` : ''}
                   </th>
                 ))}
@@ -603,30 +605,30 @@ export default function CompStats({ theme, t, user }) {
               </tr>
             </thead>
             <tbody>
-              {stats.map(stat => (
-                <tr key={stat.id} style={{ borderTop: `1px solid ${t.border}` }}>
-                  <td style={{ padding: '10px 14px', color: t.accent, fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}
-                    onClick={() => setDetailStat(stat)}>{stat.event_name}</td>
-                  <td style={{ padding: '10px 8px', textAlign: 'center', color: t.textMuted, whiteSpace: 'nowrap' }}>{stat.event_date}</td>
+              {stats.map((stat, rowIdx) => (
+                <tr key={stat.id} style={{ borderTop: `1px solid ${t.border}`, background: rowIdx % 2 === 0 ? 'transparent' : t.bg + '55' }}>
+                  <td style={{ padding: '10px 16px', fontWeight: 600, cursor: 'pointer', color: t.text }}
+                    onClick={() => setDetailStat(stat)}>
+                    <span style={{ color: t.accent }}>{stat.event_name}</span>
+                  </td>
+                  <td style={{ padding: '10px 10px', color: t.textMuted, whiteSpace: 'nowrap', fontSize: '11px' }}>{stat.event_date}</td>
                   {tableFields.map(f => {
                     const val = stat.values?.[f.id]
                     const best = getBest(f.id)
                     const isBest = val !== undefined && val !== '' && parseFloat(val) === best
                     return (
-                      <td key={f.id} style={{ padding: '10px 8px', textAlign: 'center', color: isBest ? '#52E8A0' : val ? t.accentLight : t.textFaint, fontWeight: isBest ? 800 : val ? 600 : 400 }}>
-                        {val ? `${val}${f.unit}` : '·'}
-                        {isBest && <span style={{ fontSize: '8px', marginLeft: '2px' }}>★</span>}
+                      <td key={f.id} style={{ padding: '10px 10px', textAlign: 'center', color: isBest ? t.success : val ? t.text : t.textFaint, fontWeight: isBest ? 800 : val ? 600 : 400, fontSize: isBest ? '13px' : '12px' }}>
+                        {val ? `${val}${f.unit || ''}` : '—'}
+                        {isBest && <span style={{ fontSize: '8px', marginLeft: '3px', color: t.success }}>★</span>}
                       </td>
                     )
                   })}
                   <td style={{ padding: '10px 8px', textAlign: 'center' }}>
-                    <button onClick={e => { e.stopPropagation(); openEdit(stat) }} title="Edit"
-                      style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '5px', color: t.textMuted, cursor: 'pointer', padding: '4px 6px', display: 'inline-flex', alignItems: 'center', lineHeight: 1 }}
+                    <button onClick={e => { e.stopPropagation(); openEdit(stat) }} title="Editar"
+                      style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '6px', color: t.textMuted, cursor: 'pointer', padding: '4px 8px', fontSize: '10px', fontFamily: F }}
                       onMouseEnter={e => { e.currentTarget.style.borderColor = t.accent; e.currentTarget.style.color = t.accent }}
                       onMouseLeave={e => { e.currentTarget.style.borderColor = t.border; e.currentTarget.style.color = t.textMuted }}>
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                        <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
-                      </svg>
+                      Editar
                     </button>
                   </td>
                 </tr>
