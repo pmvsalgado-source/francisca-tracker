@@ -803,30 +803,45 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
     return d
   })
 
+  // Returns all non-rest sessions for a date from every plan type (golf + gym).
+  // Matches by exact week_start so today's plans are never missed by range overlap logic.
+  const getPlansForDate = (plans, dateStr) => {
+    const d = new Date(dateStr + 'T12:00:00')
+    const dow = d.getDay()
+    const mon = new Date(d); mon.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1))
+    const ws = mon.toISOString().split('T')[0]
+    const dayIdx = dow === 0 ? 6 : dow - 1
+    const sessions = []
+    plans.filter(p => p.week_start === ws).forEach(plan => {
+      const days = Array.isArray(plan.days) ? plan.days : []
+      const day = days[dayIdx] || {}
+      ;(Array.isArray(day.sessions) ? day.sessions : []).forEach(s => {
+        if (!s.isRest) sessions.push({ ...s, _plan_type: plan.plan_type || 'golf' })
+      })
+    })
+    return sessions
+  }
+
   // Today's checklist: plan sessions + calendar events
   const todayDayIndex = todayDate.getDay() === 0 ? 6 : todayDate.getDay() - 1
-  const todayPlanDay = currentPlan?.days && Array.isArray(currentPlan.days)
-    ? currentPlan.days[todayDayIndex]
-    : null
+  const todayPlanSessions = getPlansForDate(trainingPlans, todayStr)
   const todayCalEvents = events.filter(e => e.start_date <= todayStr && (e.end_date || e.start_date) >= todayStr)
 
   const tomorrowDate = new Date(todayDate); tomorrowDate.setDate(todayDate.getDate() + 1)
   const tomorrowStr = tomorrowDate.toISOString().split('T')[0]
   const tomorrowDayIndex = tomorrowDate.getDay() === 0 ? 6 : tomorrowDate.getDay() - 1
-  const tomorrowPlan = trainingPlans.find(p => p.week_start <= tomorrowStr && p.week_end >= tomorrowStr)
-  const tomorrowPlanDay = tomorrowPlan?.days && Array.isArray(tomorrowPlan.days) ? tomorrowPlan.days[tomorrowDayIndex] : null
+  const tomorrowPlanSessions = getPlansForDate(trainingPlans, tomorrowStr)
   const tomorrowCalEvents = events.filter(e => e.start_date <= tomorrowStr && (e.end_date || e.start_date) >= tomorrowStr)
 
   const todayTasks = (() => {
     const tasks = []
-    todayPlanDay?.sessions?.forEach(session => {
-      if (session.isRest) return
+    todayPlanSessions.forEach(session => {
       const isCoach = session.session_type === 'coach'
-      const type = currentPlan?.plan_type === 'gym' ? 'Ginásio' : 'Golf'
+      const type = session._plan_type === 'gym' ? 'Ginásio' : 'Golf'
       tasks.push({
         label: isCoach ? `Treino com Coach — ${type}` : `Treino ${type}`,
         detail: session.cat || session.name || '',
-        color: currentPlan?.plan_type === 'gym' ? '#52E8A0' : '#378ADD',
+        color: session._plan_type === 'gym' ? '#52E8A0' : '#378ADD',
       })
     })
     todayCalEvents.forEach(e => {
@@ -848,11 +863,10 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
 
   const tomorrowTasks = (() => {
     const tasks = []
-    tomorrowPlanDay?.sessions?.forEach(session => {
-      if (session.isRest) return
+    tomorrowPlanSessions.forEach(session => {
       const isCoach = session.session_type === 'coach'
-      const type = tomorrowPlan?.plan_type === 'gym' ? 'Ginásio' : 'Golf'
-      tasks.push({ label: isCoach ? `Coach — ${type}` : `Treino ${type}`, detail: session.cat || session.name || '', color: tomorrowPlan?.plan_type === 'gym' ? '#52E8A0' : '#378ADD' })
+      const type = session._plan_type === 'gym' ? 'Ginásio' : 'Golf'
+      tasks.push({ label: isCoach ? `Coach — ${type}` : `Treino ${type}`, detail: session.cat || session.name || '', color: session._plan_type === 'gym' ? '#52E8A0' : '#378ADD' })
     })
     tomorrowCalEvents.forEach(e => {
       const isComp = isCompetition(e)
