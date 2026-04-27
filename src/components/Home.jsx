@@ -321,10 +321,8 @@ const COMP_PERIOD_OPTIONS = [
   { key: 'all', label: 'Tudo' },
 ]
 
-export default function Home({ theme, t, onNavigate, onRegister, user, profile, lang = 'en' }) {
+export default function Home({ theme, t, onNavigate, onRegister, user, profile, lang = 'en', events = [], trainingPlans = [] }) {
   const [entries, setEntries] = useState([])
-  const [events, setEvents] = useState([])
-  const [trainingPlans, setTrainingPlans] = useState([])
   const [compStats, setCompStats] = useState([])
   const [period, setPeriod] = useState('30d')
   const [compPeriod, setCompPeriod] = useState('all')
@@ -346,8 +344,6 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
 
   useEffect(() => {
     supabase.from('entries').select('*').order('entry_date', { ascending: true }).then(({ data }) => setEntries(data || []))
-    supabase.from('events').select('*').order('start_date').then(({ data }) => setEvents(data || []))
-    supabase.from('training_plans').select('*').order('week_start', { ascending: false }).then(({ data }) => setTrainingPlans(data || []))
     supabase.from('competition_stats').select('*').order('event_date', { ascending: false }).then(({ data }) => setCompStats(data || []))
     supabase.from('comp_config').select('*').order('sort_order', { ascending: true }).then(({ data }) => { if (data?.length) setCompConfig(data) })
     if (user?.id) {

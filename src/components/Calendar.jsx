@@ -12,10 +12,9 @@ const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','A
 const WEEKDAYS = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom']
 const STATUS = ['confirmed','optional','cancelled']
 
-export default function Calendar({ theme, t, user, lang = 'en', onNavigate }) {
+export default function Calendar({ theme, t, user, lang = 'en', onNavigate, events = [], trainingPlans = [], onEventsChanged }) {
   const [view, setView] = useState('month')
   const [currentDate, setCurrentDate] = useState(new Date(2026, 3, 1))
-  const [events, setEvents] = useState([])
   const [categories, setCategories] = useState(DEFAULT_CATEGORIES)
   const [showModal, setShowModal] = useState(false)
   const [showCatModal, setShowCatModal] = useState(false)
@@ -25,24 +24,13 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate }) {
   const [saving, setSaving] = useState(false)
   const [deleteConfirmEvent, setDeleteConfirmEvent] = useState(null)
   const [calFilters, setCalFilters] = useState({ events: true, golf: true, gym: true })
-  const [trainingPlans, setTrainingPlans] = useState([])
-
-  const fetchEvents = useCallback(async () => {
-    const { data } = await supabase.from('events').select('*').order('start_date')
-    setEvents(data || [])
-  }, [])
 
   const fetchCategories = useCallback(async () => {
     const { data } = await supabase.from('event_categories').select('*')
     if (data && data.length > 0) setCategories(data)
   }, [])
 
-  const fetchTrainingPlans = useCallback(async () => {
-    const { data } = await supabase.from('training_plans').select('*').order('week_start', { ascending: false }).limit(8)
-    setTrainingPlans(data || [])
-  }, [])
-
-  useEffect(() => { fetchEvents(); fetchCategories(); fetchTrainingPlans() }, [fetchEvents, fetchCategories, fetchTrainingPlans])
+  useEffect(() => { fetchCategories() }, [fetchCategories])
 
   const openNew = (date) => {
     const d = date || new Date().toISOString().split('T')[0]
@@ -67,7 +55,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate }) {
     }
     setSaving(false)
     setShowModal(false)
-    fetchEvents()
+    onEventsChanged?.()
   }
 
   const deleteEvent = async () => {
@@ -79,7 +67,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate }) {
     await supabase.from('events').delete().eq('id', deleteConfirmEvent.id)
     setDeleteConfirmEvent(null)
     setShowModal(false)
-    fetchEvents()
+    onEventsChanged?.()
   }
 
   const saveCat = async () => {

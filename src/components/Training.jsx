@@ -166,7 +166,7 @@ const fmtMins = (m) => {
   return `~${Math.floor(r/60)}h${r%60>0?` ${r%60}min`:''}`
 }
 
-export default function Training({ theme, t, user, lang = 'en', events = [], focusDate = null, onFocusConsumed }) {
+export default function Training({ theme, t, user, lang = 'en', events = [], focusDate = null, onFocusConsumed, onPlansChanged }) {
   const [subTab, setSubTab] = useState('plan')
   const [plans, setPlans] = useState([])
   const [loading, setLoading] = useState(true)
@@ -198,7 +198,6 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
   // Track Progress filters
   const [progressType, setProgressType] = useState('all')
   const [progressPeriod, setProgressPeriod] = useState('all')
-  const [eventsData, setEventsData] = useState([])
   const [wizardSessionTypes, setWizardSessionTypes] = useState({})
   const [templates, setTemplates] = useState([])
   const [wizardTemplateName, setWizardTemplateName] = useState('')
@@ -247,9 +246,6 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
     setTemplates(data||[])
   }, [])
   useEffect(() => { fetchTemplates() }, [fetchTemplates])
-  useEffect(() => {
-    supabase.from('events').select('id,title,category,start_date,end_date').then(({data})=>setEventsData(data||[]))
-  }, [])
 
   useEffect(() => {
     supabase.from('periodization_overrides').select('*').then(({ data, error }) => {
@@ -284,14 +280,14 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
     const ws = new Date(weekStart+'T12:00:00')
     const d = new Date(ws); d.setDate(ws.getDate() + dayIdx)
     const dateStr = d.toISOString().split('T')[0]
-    return eventsData.some(e => dateStr >= e.start_date && dateStr <= (e.end_date || e.start_date))
+    return events.some(e => dateStr >= e.start_date && dateStr <= (e.end_date || e.start_date))
   }
 
   const dateHasComp = (dateStr) =>
-    eventsData.some(e => dateStr >= e.start_date && dateStr <= (e.end_date || e.start_date))
+    events.some(e => dateStr >= e.start_date && dateStr <= (e.end_date || e.start_date))
 
   const compOnDate = (dateStr) =>
-    eventsData.find(e => dateStr >= e.start_date && dateStr <= (e.end_date || e.start_date))
+    events.find(e => dateStr >= e.start_date && dateStr <= (e.end_date || e.start_date))
 
   const savePlan = async (newDays, type, ws=weekStart) => {
     setSaving(true)
@@ -301,6 +297,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
     else await supabase.from('training_plans').insert({...payload, created_by:email, status:'active', title:`${type==='golf'?'Golf':'Gym'} Plan`})
     setSaving(false)
     fetchPlans()
+    onPlansChanged?.()
   }
 
   const datesInRange = (() => {
@@ -532,6 +529,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
     setSavingFree(false)
     setShowFreeSession(false)
     fetchPlans()
+    onPlansChanged?.()
   }
 
   const cats    = wizardType==='golf' ? GOLF_CATS : GYM_CATS
@@ -862,7 +860,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
       return weeks
     })()
     const wizardWeekStarts = Object.keys(chipsByWeek)
-    const { phases: weekPhases, alerts: weekAlerts } = computeAllPhases(wizardWeekStarts, eventsData)
+    const { phases: weekPhases, alerts: weekAlerts } = computeAllPhases(wizardWeekStarts, events)
 
     return (
       <div style={{fontFamily:F,color:t.text}}>
@@ -1487,7 +1485,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
       {/* ── RECORD WHAT YOU DID ── */}
       {subTab==='log' && (() => {
         const allKnownWeeks = [...new Set(plans.map(p=>p.week_start).concat([weekStart]))].sort()
-        const { phases: logPhases } = computeAllPhases(allKnownWeeks, eventsData)
+        const { phases: logPhases } = computeAllPhases(allKnownWeeks, events)
         const logPhase = logPhases[weekStart] ? PHASES[logPhases[weekStart]] : null
         return (
         <div>
@@ -1915,13 +1913,13 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
         const currentWs = currentWsDate.toISOString().split('T')[0]
         const addWeeks = (ws, n) => { const d=new Date(ws+'T12:00:00'); d.setDate(d.getDate()+n*7); return d.toISOString().split('T')[0] }
         const allWeeks = Array.from({length:24}, (_,i) => addWeeks(currentWs, i-4))
-        const {phases: autoPhases, alerts: autoAlerts} = computeAllPhases(allWeeks, eventsData)
+        const {phases: autoPhases, alerts: autoAlerts} = computeAllPhases(allWeeks, events)
         const resolvedPhases = {}
         allWeeks.forEach(ws => { resolvedPhases[ws] = phaseOverrides[ws] || autoPhases[ws] || 'acumulacao' })
         const mesociclos = []
         for (let i=0; i<allWeeks.length; i+=4) mesociclos.push(allWeeks.slice(i, i+4))
         const isCompEvent = (e) => (e.category||'').toLowerCase().includes('competi') || (e.title||'').toLowerCase().includes('torneio')
-        const comps = eventsData.filter(isCompEvent)
+        const comps = events.filter(isCompEvent)
         const getWeekComps = (ws) => {
           const wsMs = new Date(ws+'T12:00:00').getTime(), weMs = wsMs+6*86400000
           return comps.filter(c=>{ const cs=new Date(c.start_date+'T12:00:00').getTime(),ce=c.end_date?new Date(c.end_date+'T12:00:00').getTime():cs; return cs<=weMs&&ce>=wsMs })
@@ -1933,7 +1931,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
 
         const currentPhId = resolvedPhases[currentWs]
         const currentPh = PHASES[currentPhId] || PHASES.acumulacao
-        const currentSummary = getPhaseSummary(currentWs, eventsData, currentPhId)
+        const currentSummary = getPhaseSummary(currentWs, events, currentPhId)
 
         return (
           <div>

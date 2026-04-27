@@ -79,7 +79,7 @@ function SparkChart({ data, metricId, unit, target, theme, t }) {
   return <canvas ref={canvasRef} style={{ width: '100%', height: '220px', display: 'block' }} />
 }
 
-export default function Performance({ theme, t, user, lang = 'en', initialTab = 'focus' }) {
+export default function Performance({ theme, t, user, lang = 'en', initialTab = 'focus', trainingPlans = [] }) {
   // Normalise: evolution tab no longer exists as separate — map it to focus
   const [subTab, setSubTab] = useState(initialTab === 'evolution' ? 'focus' : initialTab)
   const [entries, setEntries] = useState([])
@@ -95,7 +95,6 @@ export default function Performance({ theme, t, user, lang = 'en', initialTab = 
   const [savingKpis, setSavingKpis] = useState(false)
   const [kpiMsg, setKpiMsg] = useState('')
   const [saveError, setSaveError] = useState('')
-  const [trainingPlans, setTrainingPlans] = useState([])
   const [goalsError, setGoalsError] = useState(false)
 
   const F = "'Inter', system-ui, sans-serif"
@@ -131,10 +130,6 @@ export default function Performance({ theme, t, user, lang = 'en', initialTab = 
 
   useEffect(() => { fetchMetrics(); fetchEntries() }, [fetchMetrics, fetchEntries])
 
-  useEffect(() => {
-    supabase.from('training_plans').select('*').order('week_start', { ascending: false }).limit(8)
-      .then(({ data }) => setTrainingPlans(data || []))
-  }, [])
 
   const saveEntry = async () => {
     setSaving(true); setSaveError('')

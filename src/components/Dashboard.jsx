@@ -382,6 +382,18 @@ export default function Dashboard({ user }) {
 
   useEffect(() => { fetchMetrics(); fetchEntries() }, [fetchMetrics, fetchEntries])
 
+  const [events, setEvents] = useState([])
+  const [trainingPlans, setTrainingPlans] = useState([])
+  const fetchEvents = useCallback(async () => {
+    const { data } = await supabase.from('events').select('*').order('start_date')
+    setEvents(data || [])
+  }, [])
+  const fetchTrainingPlans = useCallback(async () => {
+    const { data } = await supabase.from('training_plans').select('*').order('week_start', { ascending: false })
+    setTrainingPlans(data || [])
+  }, [])
+  useEffect(() => { fetchEvents(); fetchTrainingPlans() }, [fetchEvents, fetchTrainingPlans])
+
   useEffect(() => {
     const { data } = supabase.storage.from('avatars').getPublicUrl(user.id + '.jpg')
     if (data?.publicUrl) {
@@ -796,9 +808,9 @@ export default function Dashboard({ user }) {
       <div className="pad" style={{ paddingTop: '20px' }}>
         {loading && <div style={{ padding: '60px', textAlign: 'center', color: t.textMuted, fontSize: '14px' }}>{s.loading}</div>}
 
-        {!loading && view === 'performance' && <Performance theme={theme} t={t} user={user} lang={lang} initialTab={perfTab} />}
+        {!loading && view === 'performance' && <Performance theme={theme} t={t} user={user} lang={lang} initialTab={perfTab} trainingPlans={trainingPlans} />}
 
-        {!loading && view === 'home' && <Home theme={theme} t={t} onNavigate={v => setView(v)} onRegister={() => setShowRegister(true)} user={user} profile={profile} lang={lang} />}
+        {!loading && view === 'home' && <Home theme={theme} t={t} onNavigate={v => setView(v)} onRegister={() => setShowRegister(true)} user={user} profile={profile} lang={lang} events={events} trainingPlans={trainingPlans} />}
 
         {!loading && view === 'history' && (
           <div>
@@ -861,9 +873,9 @@ export default function Dashboard({ user }) {
         )}
 
         {!loading && view === 'goals' && <Goals theme={theme} t={t} user={user} />}
-        {!loading && view === 'training' && <Training theme={theme} t={t} user={user} lang={lang} focusDate={trainingFocusDate} onFocusConsumed={() => setTrainingFocusDate(null)} />}
-        {!loading && view === 'competition' && <CompStats theme={theme} t={t} user={user} />}
-        {!loading && view === 'calendar' && <Calendar theme={theme} t={t} user={user} lang={lang} onNavigate={(v, opts) => { if (opts?.date) setTrainingFocusDate(opts.date); setView(v) }} />}
+        {!loading && view === 'training' && <Training theme={theme} t={t} user={user} lang={lang} focusDate={trainingFocusDate} onFocusConsumed={() => setTrainingFocusDate(null)} events={events} onPlansChanged={fetchTrainingPlans} />}
+        {!loading && view === 'competition' && <CompStats theme={theme} t={t} user={user} events={events} />}
+        {!loading && view === 'calendar' && <Calendar theme={theme} t={t} user={user} lang={lang} onNavigate={(v, opts) => { if (opts?.date) setTrainingFocusDate(opts.date); setView(v) }} events={events} trainingPlans={trainingPlans} onEventsChanged={fetchEvents} />}
 
                 {!loading && view === 'chat' && <Chat theme={theme} t={t} user={user} profile={profile} lang={lang} />}
         {!loading && view === 'hcpwagr' && <HcpWagr theme={theme} t={t} user={user} />}

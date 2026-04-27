@@ -21,9 +21,8 @@ const DEFAULT_SUMMARY_CARDS = [
   { id: 'top10', type: 'top10', label: 'TOP 10s' },
 ]
 
-export default function CompStats({ theme, t, user }) {
+export default function CompStats({ theme, t, user, events = [] }) {
   const [stats, setStats] = useState([])
-  const [events, setEvents] = useState([])
   const [loading, setLoading] = useState(true)
 
   // Config
@@ -57,12 +56,8 @@ export default function CompStats({ theme, t, user }) {
   // ── Fetch ──────────────────────────────────────────────────────────────────
   const fetchData = useCallback(async () => {
     setLoading(true)
-    const [statsRes, eventsRes] = await Promise.all([
-      supabase.from('competition_stats').select('*').order('event_date', { ascending: false }),
-      supabase.from('events').select('*').order('start_date', { ascending: false }),
-    ])
-    setStats(statsRes.data || [])
-    setEvents(eventsRes.data || [])
+    const { data } = await supabase.from('competition_stats').select('*').order('event_date', { ascending: false })
+    setStats(data || [])
     setLoading(false)
   }, [])
 
