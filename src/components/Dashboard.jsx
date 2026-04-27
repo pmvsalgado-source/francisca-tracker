@@ -24,7 +24,7 @@ const DEFAULT_METRICS = [
 // All UI strings in both languages
 const STRINGS = {
   en: {
-    nav: ['home','Overview','performance','Current Priorities','training','Training Plan','calendar','Calendar','competition','Competitions & Stats','chat','Chat','hcpwagr','HCP & WAGR','backoffice','Admin'],
+    nav: ['home','Overview','performance','Performance','training','Plan','calendar','Calendar','competition','Competitions','chat','Chat / Team','backoffice','Admin'],
     registerBtn: '+ Register Performance',
     menu: {
       home: 'Home', editProfile: 'Edit Profile', team: 'Team', manageKpis: 'Edit Priorities',
@@ -64,7 +64,7 @@ const STRINGS = {
     langModal: { title: 'Language', cancel: 'Cancel' },
   },
   pt: {
-    nav: ['home','Visão Geral','performance','Prioridades Atuais','training','Plano de Treinos','calendar','Calendário','competition','Competições & Stats','chat','Chat','hcpwagr','HCP & WAGR','backoffice','Admin'],
+    nav: ['home','Overview','performance','Performance','training','Plan','calendar','Calendário','competition','Competições','chat','Chat / Team','backoffice','Admin'],
     registerBtn: '+ Registar Performance',
     menu: {
       home: 'Início', editProfile: 'Editar Perfil', team: 'Equipa', manageKpis: 'Editar Prioridades',

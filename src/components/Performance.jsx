@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import Goals from './Goals'
+import HcpWagr from './HcpWagr'
 
 const DEFAULT_METRICS = [
   { id: 'swing_speed', label: 'Velocidade de Swing', unit: 'mph', category: 'golfe', target: 95 },
@@ -234,9 +235,9 @@ export default function Performance({ theme, t, user, lang = 'en', initialTab = 
     return Math.floor((new Date() - new Date(last.entry_date + 'T12:00:00')) / 86400000)
   })()
 
-  // 3 tabs (evolution merged into focus)
   const subTabs = [
     [lang === 'pt' ? 'Prioridades' : 'Priorities', 'focus'],
+    ['HCP & WAGR', 'hcpwagr'],
     [lang === 'pt' ? 'Registar' : 'Register', 'register'],
     [lang === 'pt' ? 'Editar KPIs' : 'Edit KPIs', 'kpis'],
   ]
@@ -264,7 +265,13 @@ export default function Performance({ theme, t, user, lang = 'en', initialTab = 
         </div>
       )}
 
-      {/* Sub-nav — 3 tabs */}
+      {/* Tab header */}
+      <div style={{ marginBottom: '20px' }}>
+        <div style={{ fontSize: '9px', letterSpacing: '3px', color: t.accent, fontWeight: 700, marginBottom: '3px' }}>PERFORMANCE</div>
+        <div style={{ fontSize: '11px', color: t.textMuted }}>{lang === 'pt' ? 'Evolução, métricas e objetivos' : 'Evolution, metrics and goals'}</div>
+      </div>
+
+      {/* Sub-nav */}
       <div style={{ display: 'flex', gap: '6px', marginBottom: '20px', flexWrap: 'wrap' }}>
         {subTabs.map(([lbl, key]) => (
           <button key={key} onClick={() => setSubTab(key)} style={{ ...btn(subTab === key), borderRadius: '20px', padding: '6px 18px' }}>{lbl}</button>
@@ -580,6 +587,10 @@ export default function Performance({ theme, t, user, lang = 'en', initialTab = 
           </div>
         </div>
       )}
+
+      {/* ── HCP & WAGR ── */}
+      {subTab === 'hcpwagr' && <HcpWagr theme={theme} t={t} user={user} />}
+
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import Goals from './Goals'
 
 const COACH_GOLF = 'pmvsalgado@gmail.com'
 const COACH_GYM  = 'pmvsalgado@gmail.com'
@@ -647,13 +648,16 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
   const typeColor = wizardType==='golf' ? golfColor : gymColor
 
   const subLabels = [
-    { key:'plan', role:'COACH', label:'Set the Plan',
+    { key:'plan', role:'COACH', label: lang==='pt' ? 'Plano Semanal' : 'Weekly Plan',
       icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
       bg:'#E6F1FB', color:'#185FA5' },
-    { key:'log', role:'ATHLETE', label:'Record What You Did',
+    { key:'priorities', role:'ATHLETE', label: lang==='pt' ? 'Prioridades' : 'Priorities',
+      icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>,
+      bg:'#fdf4ff', color:'#7e22ce' },
+    { key:'log', role:'ATHLETE', label: lang==='pt' ? 'Registar Treino' : 'Log Session',
       icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>,
       bg:'#EAF3DE', color:'#27500A' },
-    { key:'progress', role:'', label:'Track Progress',
+    { key:'progress', role:'', label: lang==='pt' ? 'Progresso' : 'Progress',
       icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>,
       bg:t.navActive||'#f5f5f5', color:t.textMuted },
     { key:'periodizacao', role:'COACH', label:'Periodização',
@@ -1223,7 +1227,13 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
         </div>
       )}
 
-      {/* ── 3 TABS — bigger ── */}
+      {/* Tab header */}
+      <div style={{ marginBottom:'20px' }}>
+        <div style={{ fontSize:'9px', letterSpacing:'3px', color:golfColor, fontWeight:700, marginBottom:'3px' }}>PLAN</div>
+        <div style={{ fontSize:'11px', color:t.textMuted }}>{lang==='pt' ? 'Plano de treino, prioridades e periodização' : 'Training plan, priorities and periodisation'}</div>
+      </div>
+
+      {/* ── SUB-TABS ── */}
       <div style={{display:'flex',gap:'8px',marginBottom:'24px',flexWrap:'wrap'}}>
         {subLabels.map(({key,role,label,icon,bg,color})=>{
           const active = subTab===key
@@ -1828,6 +1838,17 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
           </div>
         )
       })()}
+
+      {/* ── PRIORIDADES ── */}
+      {subTab==='priorities' && (
+        <div>
+          <div style={{ marginBottom:'20px' }}>
+            <div style={{ fontSize:'9px', letterSpacing:'3px', color:'#7e22ce', fontWeight:700, marginBottom:'2px' }}>PLAN · PRIORIDADES</div>
+            <div style={{ fontSize:'13px', color:t.textMuted }}>Objetivos de performance e progresso por KPI</div>
+          </div>
+          <Goals theme={theme} t={t} user={user} />
+        </div>
+      )}
 
       {/* ── PERIODIZAÇÃO ── */}
       {subTab==='periodizacao' && (() => {
