@@ -1,8 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 
-// Role names that grant backoffice access — must match values stored in profiles.role.
-const COACH_ROLES = ['Golf Coach', 'Putting Coach', 'Strength & Conditioning Coach']
+import { COACH_ROLES } from '../constants/roles'
 
 export default function Backoffice({ theme, t, user, userRole = '' }) {
   const [section, setSection] = useState('performance')

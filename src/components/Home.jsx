@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { findCurrentPlan } from '../lib/trainingPlanUtils'
 import { supabase } from '../lib/supabase'
 import { calcCurrentPhase, isCompetition, getUpcomingCompetitions } from '../lib/periodization'
 import { getPlansForDate } from '../lib/trainingUtils'
@@ -348,7 +349,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
     supabase.from('competition_stats').select('*').order('event_date', { ascending: false }).then(({ data }) => setCompStats(data || [])).catch(console.error)
     supabase.from('comp_config').select('*').order('sort_order', { ascending: true }).then(({ data }) => { if (data?.length) setCompConfig(data) }).catch(console.error)
     if (user?.id) {
-      supabase.from('wagr_history').select('*').eq('user_id', user.id).then(({ data }) => setWagrHistory(data || []))
+      supabase.from('wagr_history').select('*').eq('user_id', user.id).then(({ data }) => setWagrHistory(data || [])).catch(console.error)
       supabase.from('profiles').select('hcp,wagr,prev_hcp,prev_wagr,athlete_club,category,fed,fed_num,home_kpi_order,home_stat_prefs').eq('id', user.id).single()
         .then(({ data }) => {
           if (data) {
@@ -504,7 +505,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
     }
     return sessions
   }
-  const currentPlan = trainingPlans.find(p => p.week_start <= weekStartStr && p.week_end >= weekStartStr) || trainingPlans[0]
+  const currentPlan = findCurrentPlan(trainingPlans, weekStartStr)
   const weekSessions = getWeekSessions(currentPlan)
 
   const hcpDelta = athlete.prev_hcp && athlete.hcp && athlete.hcp !== '—'

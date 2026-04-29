@@ -3,8 +3,7 @@ import { supabase } from '../lib/supabase'
 import { isCompetition } from '../lib/periodization'
 import Goals from './Goals'
 
-// Role names that grant coach access — must match values stored in profiles.role.
-const COACH_ROLES = ['Golf Coach', 'Putting Coach', 'Strength & Conditioning Coach']
+import { COACH_ROLES } from '../constants/roles'
 
 const GOLF_CATS = ['Driving Range', 'Jogo Curto', 'Putt', 'Bunker', 'Campo']
 const GYM_CATS  = ['Pernas', 'Potência', 'Core', 'Braços', 'Mobilidade', 'Cardio', 'Prevenção']

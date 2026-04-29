@@ -1,15 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
-
-const DEFAULT_METRICS = [
-  { id: 'swing_speed', label: 'Swing Speed', unit: 'mph' },
-  { id: 'smash_factor', label: 'Smash Factor', unit: '' },
-  { id: 'carry', label: 'Carry Driver', unit: 'm' },
-  { id: 'stack_speed', label: 'The Stack', unit: 'mph' },
-  { id: 'deadlift', label: 'Trap Bar Deadlift', unit: 'kg' },
-  { id: 'medball', label: 'Medicine Ball Throw', unit: 'm' },
-  { id: 'thoracic', label: 'Thoracic Mobility', unit: '°' },
-]
+import { DEFAULT_METRICS } from '../constants/metrics'
 
 function GoalChart({ entries, goal, theme, t }) {
   const canvasRef = useRef(null)

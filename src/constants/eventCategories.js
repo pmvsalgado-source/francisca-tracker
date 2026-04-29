@@ -45,5 +45,4 @@ export function categoryColor(categoryName) {
   return found?.color || '#6b7280'
 }
 
-// Role names that represent coach/admin access (must match profiles.role values).
-export const COACH_ROLES = ['Golf Coach', 'Putting Coach', 'Strength & Conditioning Coach']
+// Coach roles have been moved to src/constants/roles.js

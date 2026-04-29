@@ -11,15 +11,8 @@ import Backoffice from './Backoffice'
 import HcpWagr from './HcpWagr'
 import { supabase } from '../lib/supabase'
 
-const DEFAULT_METRICS = [
-  { id: 'swing_speed', label: 'Velocidade de Swing', unit: 'mph', category: 'golfe', target: 95 },
-  { id: 'smash_factor', label: 'Smash Factor', unit: '', category: 'golfe', target: 1.48 },
-  { id: 'carry', label: 'Carry Médio Driver', unit: 'm', category: 'golfe', target: null },
-  { id: 'stack_speed', label: 'The Stack', unit: 'mph', category: 'golfe', target: null },
-  { id: 'deadlift', label: 'Trap Bar Deadlift', unit: 'kg', category: 'ginasio', target: null },
-  { id: 'medball', label: 'Medicine Ball Throw', unit: 'm', category: 'ginasio', target: null },
-  { id: 'thoracic', label: 'Mobilidade Torácica', unit: '°', category: 'ginasio', target: null },
-]
+import { DEFAULT_METRICS } from '../constants/metrics'
+import { COACH_ROLES } from '../constants/roles'
 
 // All UI strings in both languages
 const STRINGS = {
@@ -104,9 +97,6 @@ const STRINGS = {
     langModal: { title: 'Idioma', cancel: 'Cancelar' },
   },
 }
-
-// Role names that grant coach/admin access — must match values stored in profiles.role.
-const COACH_ROLES = ['Golf Coach', 'Putting Coach', 'Strength & Conditioning Coach']
 
 const dark = {
   bg: '#080808', surface: '#0d0d0d', border: '#282828',
@@ -291,6 +281,7 @@ export default function Dashboard({ user }) {
   const [view, setView] = useState('home')
   const [trainingFocusDate, setTrainingFocusDate] = useState(null)
   const [calendarInitSchedule, setCalendarInitSchedule] = useState(null)
+  const clearCalendarInitSchedule = useCallback(() => setCalendarInitSchedule(null), [])
   const [entries, setEntries] = useState([])
   const [metrics, setMetrics] = useState(DEFAULT_METRICS)
   const [form, setForm] = useState({ date: new Date().toISOString().split('T')[0], values: {}, notes: '' })
@@ -898,7 +889,7 @@ export default function Dashboard({ user }) {
         {!loading && view === 'goals' && <Goals theme={theme} t={t} user={user} />}
         {!loading && view === 'training' && <Training theme={theme} t={t} user={user} userRole={profile.role} lang={lang} focusDate={trainingFocusDate} onFocusConsumed={() => setTrainingFocusDate(null)} events={events} onPlansChanged={fetchTrainingPlans} />}
         {!loading && view === 'competition' && <CompStats theme={theme} t={t} user={user} events={events} />}
-        {!loading && view === 'calendar' && <Calendar theme={theme} t={t} user={user} lang={lang} onNavigate={(v, opts) => navigateToView(v, opts)} events={events} trainingPlans={trainingPlans} onEventsChanged={fetchEvents} initScheduleType={calendarInitSchedule} onInitConsumed={() => setCalendarInitSchedule(null)} />}
+        {!loading && view === 'calendar' && <Calendar theme={theme} t={t} user={user} lang={lang} onNavigate={(v, opts) => navigateToView(v, opts)} events={events} trainingPlans={trainingPlans} onEventsChanged={fetchEvents} initScheduleType={calendarInitSchedule} onInitConsumed={clearCalendarInitSchedule} />}
 
                 {!loading && view === 'chat' && <Chat theme={theme} t={t} user={user} profile={profile} lang={lang} />}
         {!loading && view === 'hcpwagr' && <HcpWagr theme={theme} t={t} user={user} />}

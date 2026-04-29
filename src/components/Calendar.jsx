@@ -43,7 +43,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
     setShowTypeModal(true)
   }
 
-  const selectScheduleType = (type, date) => {
+  const selectScheduleType = useCallback((type, date) => {
     setShowTypeModal(false)
     setEditEvent(null)
     setScheduleType(type.id)
@@ -59,13 +59,13 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
       fez_campo: type.id === 'campo',
     })
     setShowModal(true)
-  }
+  }, [pendingDate, today])
 
   useEffect(() => {
     if (!initScheduleType) return
     const type = SCHEDULE_TYPES.find(s => s.id === initScheduleType)
     if (type) { selectScheduleType(type, today); onInitConsumed?.() }
-  }, [initScheduleType]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [initScheduleType, selectScheduleType, today, onInitConsumed])
 
   const openDayDetail = (dateStr) => {
     setDayDetailDate(dateStr)

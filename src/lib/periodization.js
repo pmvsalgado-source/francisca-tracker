@@ -13,14 +13,38 @@ export const PHASE_COLORS = {
 }
 
 export const PHASE_FOCUS = {
-  PEAK:                 'Zero mudanças. Executar o plano.',
-  AFINACAO:             'Putting · ritmo · confiança',
-  DESENVOLVIMENTO:      'Transferência para performance',
-  DESENVOLVIMENTO_LIGHT:'Estimular sem fadiga',
-  ACUMULACAO:           'Volume · base física e técnica',
-  MANUTENCAO_B2B:       'Manutenção · recuperação ativa',
-  DESCARGA:             'Reduzir carga · recuperar',
-  DESCANSO:             'Pausa total',
+  PEAK: `Competir fresca e confiante, sem mudar nada.
+Trabalhar putting, wedges e rotina com pouco volume.
+Fazer apenas ativação leve, mobilidade e core.
+Evitar treino pesado, muitas bolas e mudanças técnicas.`,
+  AFINACAO: `Afinar ritmo, distâncias e confiança.
+Trabalhar jogo curto, distâncias e rotina consistente.
+Manter ginásio leve com mobilidade e alguma velocidade.
+Evitar sessões longas, carga alta e técnica nova.`,
+  DESENVOLVIMENTO_LIGHT: `Melhorar sem acumular fadiga.
+Trabalhar técnica leve, wedges, putting e controlo.
+Fazer ginásio moderado com força leve e mobilidade.
+Evitar volume excessivo e carga pesada.`,
+  DESENVOLVIMENTO: `Evoluir com treino forte e objetivo claro.
+Trabalhar no range com alvo, feedback e velocidade.
+Fazer ginásio completo com força, potência e velocidade.
+Evitar bater bolas sem plano.`,
+  ACUMULACAO: `Construir base técnica e física.
+Treinar com volume, repetição e foco na técnica.
+Fazer ginásio com carga e progressão de força.
+Evitar focar apenas em score.`,
+  MANUTENCAO_B2B: `Recuperar mantendo boas sensações de jogo.
+Fazer sessões curtas com putting, wedges e ritmo.
+Manter ginásio leve com mobilidade e ativação.
+Evitar carga física e técnica nova.`,
+  DESCARGA: `Baixar carga e recuperar.
+Treinar pouco, com foco em ritmo e contacto.
+Fazer apenas mobilidade e recuperação.
+Evitar intensidade alta e volume.`,
+  DESCANSO: `Recuperar totalmente corpo e mente.
+Não é necessário treinar.
+Dar descanso completo ao corpo.
+Evitar treinar por obrigação.`,
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -278,6 +302,8 @@ export function calcWeekPhase(weekStart, events) {
     reason = 'Sem competições no calendário'
   }
 
+  const heroCopy = (PHASE_FOCUS[phase] || '').split('\n').map(s => s.trim()).filter(Boolean)
+
   return {
     phase,
     reason,
@@ -285,7 +311,9 @@ export function calcWeekPhase(weekStart, events) {
     daysSincePreviousCompetition,
     restAlert,
     restAlertLevel,
-    recommendedTrainingFocus: PHASE_FOCUS[phase],
+    recommendedTrainingFocus: heroCopy.slice(1).join('\n'),
+    heroLead: heroCopy[0] || '',
+    heroGuidance: heroCopy.slice(1).join('\n'),
     phaseColor: PHASE_COLORS[phase],
   }
 }
