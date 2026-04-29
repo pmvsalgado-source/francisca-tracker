@@ -344,9 +344,9 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   const [athleteSaving, setAthleteSaving] = useState(false)
 
   useEffect(() => {
-    supabase.from('entries').select('*').order('entry_date', { ascending: true }).then(({ data }) => setEntries(data || []))
-    supabase.from('competition_stats').select('*').order('event_date', { ascending: false }).then(({ data }) => setCompStats(data || []))
-    supabase.from('comp_config').select('*').order('sort_order', { ascending: true }).then(({ data }) => { if (data?.length) setCompConfig(data) })
+    supabase.from('entries').select('*').order('entry_date', { ascending: true }).then(({ data }) => setEntries(data || [])).catch(console.error)
+    supabase.from('competition_stats').select('*').order('event_date', { ascending: false }).then(({ data }) => setCompStats(data || [])).catch(console.error)
+    supabase.from('comp_config').select('*').order('sort_order', { ascending: true }).then(({ data }) => { if (data?.length) setCompConfig(data) }).catch(console.error)
     if (user?.id) {
       supabase.from('wagr_history').select('*').eq('user_id', user.id).then(({ data }) => setWagrHistory(data || []))
       supabase.from('profiles').select('hcp,wagr,prev_hcp,prev_wagr,athlete_club,category,fed,fed_num,home_kpi_order,home_stat_prefs').eq('id', user.id).single()
@@ -375,37 +375,53 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   }, [user])
 
   useEffect(() => {
-    supabase.from('goals').select('*').order('created_at', { ascending: false }).then(({ data }) => setGoals(data || []))
+    supabase.from('goals').select('*').order('created_at', { ascending: false }).then(({ data }) => setGoals(data || [])).catch(console.error)
   }, [])
 
   const saveAthlete = async () => {
     if (!user?.id) return
     setAthleteSaving(true)
-    const toVal = (v) => (v && v !== '—' ? v : null)
-    const updatePayload = {
-      hcp: toVal(athleteForm.hcp),
-      wagr: toVal(athleteForm.wagr),
-      athlete_club: athleteForm.club,
-      category: athleteForm.category,
-      fed: athleteForm.fed,
-      fed_num: athleteForm.fed_num,
+    try {
+      const toVal = (v) => (v && v !== '—' ? v : null)
+      const updatePayload = {
+        hcp: toVal(athleteForm.hcp),
+        wagr: toVal(athleteForm.wagr),
+        athlete_club: athleteForm.club,
+        category: athleteForm.category,
+        fed: athleteForm.fed,
+        fed_num: athleteForm.fed_num,
+      }
+      if (athlete.hcp !== athleteForm.hcp && toVal(athlete.hcp)) updatePayload.prev_hcp = toVal(athlete.hcp)
+      if (athlete.wagr !== athleteForm.wagr && toVal(athlete.wagr)) updatePayload.prev_wagr = toVal(athlete.wagr)
+      const { error } = await supabase.from('profiles').update(updatePayload).eq('id', user.id)
+      if (error) throw error
+      setAthlete(athleteForm); setEditingAthlete(false)
+    } catch (err) {
+      console.error('saveAthlete:', err)
+    } finally {
+      setAthleteSaving(false)
     }
-    if (athlete.hcp !== athleteForm.hcp && toVal(athlete.hcp)) updatePayload.prev_hcp = toVal(athlete.hcp)
-    if (athlete.wagr !== athleteForm.wagr && toVal(athlete.wagr)) updatePayload.prev_wagr = toVal(athlete.wagr)
-    await supabase.from('profiles').update(updatePayload).eq('id', user.id)
-    setAthlete(athleteForm); setAthleteSaving(false); setEditingAthlete(false)
   }
 
   const saveKpiPrefs = async (order) => {
     if (!user?.id) return
     setSavingPrefs(true)
-    await supabase.from('profiles').update({ home_kpi_order: JSON.stringify(order) }).eq('id', user.id)
-    setSavingPrefs(false)
+    try {
+      await supabase.from('profiles').update({ home_kpi_order: JSON.stringify(order) }).eq('id', user.id)
+    } catch (err) {
+      console.error('saveKpiPrefs:', err)
+    } finally {
+      setSavingPrefs(false)
+    }
   }
 
   const saveStatPrefs = async (keys) => {
     if (!user?.id) return
-    await supabase.from('profiles').update({ home_stat_prefs: JSON.stringify(keys) }).eq('id', user.id)
+    try {
+      await supabase.from('profiles').update({ home_stat_prefs: JSON.stringify(keys) }).eq('id', user.id)
+    } catch (err) {
+      console.error('saveStatPrefs:', err)
+    }
   }
 
   const periodStart = (() => {
@@ -744,32 +760,92 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   const activeStatKeys = statPrefs || DEFAULT_STAT_KEYS
   const activeStats = ALL_STATS.filter(s => activeStatKeys.includes(s.k))
 
-  // ── New computed values for Option-B layout ───────────────────────────────
+  // New computed values for Option-B layout
 
   const phaseInfo = calcCurrentPhase(events)
-
-  const HERO_SITUACAO = {
-    PEAK:                  'Vais competir esta semana.',
-    MANUTENCAO_B2B:        'Duas competições em 7 dias.',
-    AFINACAO:              'Competição em menos de 7 dias.',
-    DESENVOLVIMENTO_LIGHT: 'Competição a 1–2 semanas.',
-    DESENVOLVIMENTO:       'Janela de trabalho — 2–3 semanas.',
-    ACUMULACAO:            'Fase de volume — mais de 3 semanas.',
-    DESCARGA:              'Bloco intenso recente.',
-    DESCANSO:              'Sem competições próximas.',
+  const currentPhase = {
+    name: phaseInfo.phase.replace(/_/g, ' '),
+    situation: phaseInfo.heroLead || phaseInfo.reason,
+    todayFocus: phaseInfo.heroGuidance || phaseInfo.recommendedTrainingFocus,
   }
-  const HERO_REGRA = {
-    PEAK:                  'Não mudes nada. Faz o que já sabes.',
-    MANUTENCAO_B2B:        'Mantém o ritmo. Protege o corpo.',
-    AFINACAO:              'Afinar. Confiar. Nada de novo.',
-    DESENVOLVIMENTO_LIGHT: 'Estimula sem cansar.',
-    DESENVOLVIMENTO:       'Construir. Técnica e velocidade.',
-    ACUMULACAO:            'Acumula. Esta é a base da temporada.',
-    DESCARGA:              'Reduz carga. Não forçes.',
-    DESCANSO:              'Pausa total.',
+  const heroGuidanceLines = String(phaseInfo.heroGuidance || phaseInfo.recommendedTrainingFocus || '')
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean)
+  const heroMainLine = heroGuidanceLines[0] || currentPhase.situation || ''
+  const heroWeekLines = heroGuidanceLines.slice(1, 4)
+  const heroTextColor = ['AFINACAO', 'DESCANSO'].includes(phaseInfo.phase) ? '#111827' : '#ffffff'
+  const premiumCard = {
+    background: theme === 'dark'
+      ? 'linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.025))'
+      : 'linear-gradient(180deg, #ffffff 0%, #fbfcff 100%)',
+    border: `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.13)' : 'rgba(15,23,42,0.075)'}`,
+    boxShadow: theme === 'dark' ? '0 22px 54px rgba(0,0,0,0.38)' : '0 22px 54px rgba(15,23,42,0.09)',
   }
+  const sectionTitleStyle = {
+    fontSize:'11px',
+    letterSpacing:'2.4px',
+    color:t.textMuted,
+    fontWeight:950,
+    marginBottom:'16px',
+    textTransform:'uppercase',
+  }
+  const sessionGroups = session => {
+    const items = Array.isArray(session.tasks) && session.tasks.length
+      ? session.tasks
+      : Array.isArray(session.raw?.items) ? session.raw.items : []
+    const title = String(session.title || '').toLowerCase()
+    return [...new Set(
+      items
+        .map(item => item.cat || item.category || item.group)
+        .filter(Boolean)
+        .filter(cat => cat !== 'Descanso')
+        .filter(cat => String(cat).toLowerCase() !== title)
+    )]
+  }
+  const sessionDisplayTitle = session => session.type === 'gym' ? 'Ginásio' : 'Golfe'
+  const sessionFocusItems = session => {
+    const display = sessionDisplayTitle(session).toLowerCase()
+    const title = String(session.title || '').trim()
+    const titleLower = title.toLowerCase()
+    const titleAsTheme = title && !['golf', 'golfe', 'treino', 'ginásio', 'ginasio'].includes(titleLower) && titleLower !== display
+      ? [title]
+      : []
+    return [...new Set([...titleAsTheme, ...sessionGroups(session)])]
+  }
+  const sessionMeta = session => [
+    session.duration ? `${session.duration} min` : null,
+    ...sessionFocusItems(session),
+  ].filter(Boolean).join(' · ')
+  const planSessionLabel = session => {
+    const title = sessionDisplayTitle(session)
+    const focus = sessionFocusItems(session)
+    return focus.length ? `${title} — ${focus.join(' • ')}` : title
+  }
+  const TargetIcon = ({ color = 'currentColor' }) => (
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+      <circle cx="8" cy="8" r="5.5" fill="none" stroke={color} strokeWidth="1.4" />
+      <circle cx="8" cy="8" r="2.1" fill="none" stroke={color} strokeWidth="1.4" />
+      <path d="M8 1.5v3M8 11.5v3M1.5 8h3M11.5 8h3" stroke={color} strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  )
+  const DumbbellIcon = ({ color = 'currentColor' }) => (
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+      <path d="M4 5v6M12 5v6M5.5 6.5h5M2.5 6v4M13.5 6v4" stroke={color} strokeWidth="1.4" strokeLinecap="round" />
+      <rect x="1.5" y="5.2" width="1.4" height="5.6" rx="0.5" fill={color} />
+      <rect x="3.3" y="4.2" width="1.2" height="7.6" rx="0.5" fill={color} opacity="0.88" />
+      <rect x="11.5" y="4.2" width="1.2" height="7.6" rx="0.5" fill={color} opacity="0.88" />
+      <rect x="13.1" y="5.2" width="1.4" height="5.6" rx="0.5" fill={color} />
+    </svg>
+  )
+  const AlertIcon = ({ color = 'currentColor' }) => (
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+      <path d="M8 2.2 14 13H2L8 2.2Z" fill="none" stroke={color} strokeWidth="1.4" strokeLinejoin="round" />
+      <path d="M8 6v3.2M8 10.8h.01" stroke={color} strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  )
 
-  // 7-day week (Mon–Sun starting from weekStartDate)
+  // 7-day week (Mon-Sun starting from weekStartDate)
   const weekDays = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(weekStartDate)
     d.setDate(weekStartDate.getDate() + i)
@@ -832,7 +908,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   // Normalise a raw date value to 'YYYY-MM-DD' (handles full timestamps)
   const normDate = raw => { if (!raw) return ''; const m = String(raw).match(/^(\d{4}-\d{2}-\d{2})/); return m ? m[1] : '' }
 
-  // Next competition — use normDate so timestamp-format start_dates compare correctly
+  // Next competition - use normDate so timestamp-format start_dates compare correctly
   const nextCompetition = events
     .filter(e => isCompetition(e) && normDate(e.start_date || e.date || e.start) >= todayStr && !['cancelled','cancelado'].includes(e.status || ''))
     .sort((a, b) => normDate(a.start_date || a.date || a.start).localeCompare(normDate(b.start_date || b.date || b.start)))[0] || null
@@ -845,11 +921,11 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
     todayStr, 4
   )
 
-  // Performance snapshot — HCP · WAGR · Vel. Swing
+  // Performance snapshot - HCP · WAGR · Vel. Swing
   const snapshotKpis = (() => {
     const kpis = []
 
-    // HCP (lower = better, so ↓ is good)
+    // HCP (lower = better, so down is good)
     if (athlete.hcp && athlete.hcp !== '—') {
       const hcpVal = parseFloat(athlete.hcp)
       const hcpPrev = athlete.prev_hcp ? parseFloat(athlete.prev_hcp) : null
@@ -862,7 +938,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
       })
     }
 
-    // WAGR from wagr_history (lower rank = better, so ↓ rank is good)
+    // WAGR from wagr_history (lower rank = better, so down rank is good)
     if (wagrRank != null) {
       const diff = wagrDeltaH ?? 0
       kpis.push({
@@ -891,7 +967,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
     return kpis.slice(0, 3)
   })()
 
-  // Recovery status — derived from past events, no dedicated data model
+  // Recovery status - derived from past events, no dedicated data model
   const RECOVERY_TYPES = [
     { key: 'massage', label: 'Massagem',     keywords: ['massagem', 'massage', 'reiki'] },
     { key: 'physio',  label: 'Fisioterapia', keywords: ['fisio', 'physio'] },
@@ -912,15 +988,19 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
     return { ...type, lastDateStr, daysSince, alert: daysSince === null || daysSince > 25 }
   })
 
-  // Agenda items — real scheduled sessions only (max 3)
+  // Agenda items - real scheduled sessions only (max 3)
   const agendaItems = (() => {
     const items = []
     if (nextGolfCoachDate) items.push({ label: 'Coach · Golf',     date: nextGolfCoachDate, color: '#378ADD' })
     if (nextGymCoachDate)  items.push({ label: 'Coach · Ginásio',  date: nextGymCoachDate,  color: '#52E8A0' })
     const coachDates = new Set([nextGolfCoachDate, nextGymCoachDate].filter(Boolean))
     if (nextTrainingDate && !coachDates.has(nextTrainingDate)) {
-      const plan = trainingPlans.find(p => p.week_start <= nextTrainingDate && p.week_end >= nextTrainingDate)
-      items.push({ label: plan?.plan_type === 'gym' ? 'Treino Ginásio' : 'Treino Golf', date: nextTrainingDate, color: plan?.plan_type === 'gym' ? '#52E8A0' : '#378ADD' })
+      const sessions = getPlansForDate(trainingPlans, nextTrainingDate)
+      const first = sessions[0]
+      const label = sessions.length
+        ? sessions.map(planSessionLabel).join(' • ')
+        : 'Treino'
+      items.push({ label, date: nextTrainingDate, color: first?.type === 'gym' ? '#52E8A0' : '#378ADD' })
     }
     return items.sort((a, b) => a.date.localeCompare(b.date)).slice(0, 3)
   })()
@@ -940,35 +1020,162 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
     : '#52E8A0'
   const alertBorder = phaseInfo.restAlert ? alertColor : t.border
 
-  // Day labels Mon–Sun
+  // Day labels Mon-Sun
   const DAY_LABELS = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom']
 
+  const weekCard = (
+    <div style={{ ...premiumCard, borderRadius:'24px', padding:'22px 24px' }}>
+      <div style={sectionTitleStyle}>ESTA SEMANA</div>
+      <div style={{ marginBottom:'10px', paddingBottom:'8px', borderBottom:`1px solid ${t.border}` }}>
+        <div style={{ display:'flex', alignItems:'baseline', gap:'8px', flexWrap:'wrap', marginBottom:'6px' }}>
+          <div style={{ fontSize:'9px', letterSpacing:'1.8px', fontWeight:900, textTransform:'uppercase', color:t.textMuted, background:t.bg, padding:'2px 7px', borderRadius:'999px', flexShrink:0 }}>
+            {currentPhase.name}
+          </div>
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:'6px', alignItems:'stretch' }}>
+          {String(phaseInfo.heroGuidance || phaseInfo.recommendedTrainingFocus || '').split('\n').filter(Boolean).slice(0, 3).map((line, idx) => {
+            const Icon = idx === 0 ? TargetIcon : idx === 1 ? DumbbellIcon : AlertIcon
+            return (
+              <div key={idx} style={{ display:'flex', alignItems:'flex-start', gap:'6px', minWidth:0, lineHeight:1.05 }}>
+                <div style={{ flex:'0 0 auto', color:t.textMuted, marginTop:'1px' }}>
+                  <Icon color={t.textMuted} />
+                </div>
+                <div style={{
+                  fontSize:'10px',
+                  fontWeight:500,
+                  lineHeight:1.1,
+                  color: t.textMuted,
+                  overflow:'hidden',
+                  whiteSpace:'normal',
+                  wordBreak:'break-word',
+                  overflowWrap:'anywhere',
+                  paddingTop:'1px',
+                }}>
+                  {line}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+      <div style={{ display:'flex', flexDirection:'column', gap:'4px' }}>
+        {weekDays.map((day, i) => {
+          const ds = day.toISOString().split('T')[0]
+          const dayEvts = events.filter(e => {
+            const start = normDate(e.start_date || e.date || e.start)
+            const end = normDate(e.end_date || e.end) || start
+            return start <= ds && end >= ds
+          })
+          const isToday = ds === todayStr
+          const isPast  = ds < todayStr
+          const compEvts = dayEvts.filter(isCompetition)
+          const golfEvts = dayEvts.filter(e => { const c = (e.category||'').toLowerCase(); return !isCompetition(e) && (c.includes('treino') || c.includes('training') || c.includes('camp')) })
+          const gymEvts  = dayEvts.filter(e => (e.category||'').toLowerCase().includes('gym'))
+          const daySessions = getPlansForDate(trainingPlans, ds)
+          const dayItems = [
+            ...compEvts.map(e => ({ label: e.title?.slice(0, 30) || 'Competição', color:'#ef4444', weight:850, view:'competition', title:'Abrir competição' })),
+            ...golfEvts.map(e => ({ label: e.title?.slice(0, 30) || 'Golf', color:'#378ADD', weight:760, view:'calendar', opts:{ date:ds }, title:'Abrir calendário' })),
+            ...gymEvts.map(e => ({ label: e.title?.slice(0, 30) || 'Ginásio', color:'#52E8A0', weight:760, view:'calendar', opts:{ date:ds }, title:'Abrir calendário' })),
+            ...daySessions.map(session => ({
+              label: planSessionLabel(session),
+              color: session.type === 'gym' ? '#52E8A0' : '#378ADD',
+              weight:720,
+              view:'training',
+              opts:{ date:ds },
+              title:'Abrir plano',
+            })),
+          ]
+
+          const firstItem = dayItems[0]
+          const label = firstItem ? firstItem.label : (isPast ? '' : '—')
+          const dot = firstItem?.color || null
+
+          return (
+            <div key={i} style={{ display:'flex', alignItems:'center', gap:'12px', padding:'10px 10px', borderRadius:'12px', background:isToday ? `${t.accent}14` : compEvts.length ? '#ef44440d' : 'transparent', border:isToday ? `1px solid ${t.accent}33` : compEvts.length ? '1px solid #ef444422' : '1px solid transparent', opacity: isPast && !isToday ? 0.46 : 1 }}>
+              <div style={{ width:'34px', fontSize:'12px', color: isToday ? t.accent : t.textMuted, fontWeight: isToday ? 900 : 750, flexShrink:0 }}>
+                {DAY_LABELS[i]}
+              </div>
+              {dot && <div style={{ width:compEvts.length?'9px':'7px', height:compEvts.length?'9px':'7px', borderRadius:'50%', background:dot, flexShrink:0, boxShadow:`0 0 0 4px ${dot}18` }} />}
+              {!dot && <div style={{ width:'7px', height:'7px', flexShrink:0 }} />}
+              <div style={{ flex:1, display:'flex', alignItems:'center', gap:'6px', overflow:'hidden', whiteSpace:'nowrap' }}>
+                {dayItems.length ? dayItems.map((item, idx) => (
+                  <button key={`${item.label}-${idx}`} type="button" onClick={() => onNavigate && onNavigate(item.view, item.opts)} title={item.title} style={{
+                    display:'inline-flex',
+                    alignItems:'center',
+                    maxWidth: idx === 0 ? '52%' : '34%',
+                    minWidth:0,
+                    padding:'3px 8px',
+                    borderRadius:'999px',
+                    background:`${item.color}12`,
+                    border:`1px solid ${item.color}26`,
+                    color: isToday ? t.text : item.color,
+                    fontSize:'12px',
+                    fontWeight:item.weight,
+                    overflow:'hidden',
+                    textOverflow:'ellipsis',
+                    whiteSpace:'nowrap',
+                    flexShrink:1,
+                    cursor:'pointer',
+                    fontFamily:F,
+                  }}>
+                    {item.label}
+                  </button>
+                )) : (
+                  <span style={{ color:t.textFaint, fontSize:'14px', fontWeight:500 }}>{label || '—'}</span>
+                )}
+              </div>
+              {isToday && <div style={{ fontSize:'9px', letterSpacing:'1px', color:t.accent, fontWeight:900, background:t.accentBg||t.bg, padding:'3px 8px', borderRadius:'999px', flexShrink:0, textTransform:'uppercase' }}>Hoje</div>}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
   return (
-    <div style={{ fontFamily: F, color: t.text }}>
+    <div style={{
+      fontFamily: F,
+      color: t.text,
+      minHeight:'100%',
+      background: theme === 'dark' ? t.bg : 'radial-gradient(circle at 8% 0%, rgba(239,68,68,0.08) 0, transparent 28%), linear-gradient(180deg, #f8fafc 0%, #edf2f7 100%)',
+    }}>
       <style>{`
         *{box-sizing:border-box}
+        .hm-page-shell{
+          width:100%;
+          max-width:1380px;
+          margin:0 auto;
+          padding:28px 34px 40px;
+        }
         .hm2-grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
         .hm-athlete-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
-        .hm-hoje-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-        .hm-row2{display:grid;grid-template-columns:2fr 280px;gap:12px;margin-bottom:12px;align-items:start}
-        .hm-row3{display:grid;grid-template-columns:1fr 280px;gap:12px;align-items:start}
-        .hm-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px}
+        .hm-hoje-row{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,0.92fr);gap:18px;align-items:stretch}
+        .hm-row2{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(320px,0.75fr);gap:26px;margin-bottom:8px;align-items:start}
+        .hm-row3{display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start}
+        .hm-card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:20px 22px}
         .hm-section-label{font-size:9px;letter-spacing:2px;font-weight:700;margin-bottom:10px;text-transform:uppercase}
         .hm-divider{border:none;border-top:1px solid var(--border);margin:10px 0}
+        .hm-row2 > div, .hm-hoje-row > div{min-width:0}
+        @media(max-width:1180px){
+          .hm-row2{grid-template-columns:1fr}
+        }
         @media(max-width:768px){
+          .hm-page-shell{padding:16px 14px 28px}
           .hm2-grid3{grid-template-columns:1fr 1fr}
           .hm-athlete-grid{grid-template-columns:repeat(2,1fr)}
           .hm-row2{grid-template-columns:1fr}
           .hm-row3{grid-template-columns:1fr}
         }
+        @media(max-width:700px){
+          .hm-hoje-row{grid-template-columns:1fr}
+        }
         @media(max-width:480px){
           .hm2-grid3{grid-template-columns:1fr}
           .hm-athlete-grid{grid-template-columns:1fr}
-          .hm-hoje-row{grid-template-columns:1fr}
         }
       `}</style>
 
-      {/* ── KPI MODAL (preserved) ── */}
+      <div className="hm-page-shell">
+      {/* KPI MODAL (preserved) */}
       {kpiModal && (
         <div style={{ position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:300,padding:'20px' }}
           onClick={e => { if (e.target===e.currentTarget) setKpiModal(null) }}>
@@ -1022,10 +1229,10 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
         </div>
       )}
 
-      {/* ── 1. HEADER ── */}
-      <div style={{ marginBottom:'14px' }}>
+      {/* 1. HEADER */}
+      <div style={{ marginBottom:'8px' }}>
         {editingAthlete ? (
-          <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'12px', padding:'16px' }}>
+          <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'12px', padding:'12px 14px' }}>
             <div className="hm-athlete-grid">
               {[['hcp','Handicap'],['wagr','WAGR'],['club','Clube'],['category','Categoria'],['fed','Federação'],['fed_num','Nº Federado']].map(([k,l]) => (
                 <div key={k}>
@@ -1040,159 +1247,218 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
             </div>
           </div>
         ) : (
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'12px', flexWrap:'wrap' }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'10px', flexWrap:'wrap' }}>
             {/* Name + HCP + WAGR */}
-            <div style={{ display:'flex', alignItems:'center', gap:'20px', flexWrap:'wrap' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:'14px', flexWrap:'wrap' }}>
               <div>
-                <div style={{ fontSize:'9px', letterSpacing:'3px', color:'#378ADD', fontWeight:700, marginBottom:'2px' }}>PERFORMANCE · GOLF</div>
-                <div style={{ fontSize:'20px', fontWeight:800, color:t.text, lineHeight:1 }}>{profile?.name || 'Francisca Salgado'}</div>
+                <div style={{ fontSize:'8px', letterSpacing:'2.4px', color:'#378ADD', fontWeight:700, marginBottom:'1px' }}>PERFORMANCE · GOLF</div>
+                <div style={{ fontSize:'18px', fontWeight:800, color:t.text, lineHeight:1 }}>{profile?.name || 'Francisca Salgado'}</div>
               </div>
-              <div style={{ display:'flex', gap:'16px' }}>
+              <div style={{ display:'flex', gap:'12px' }}>
                 <div style={{ textAlign:'center' }}>
-                  <div style={{ fontSize:'8px', letterSpacing:'1px', color:'#378ADD', fontWeight:700, marginBottom:'2px' }}>HCP</div>
-                  <div style={{ fontSize:'20px', fontWeight:900, color:t.text, lineHeight:1 }}>{athlete.hcp || '—'}</div>
+                  <div style={{ fontSize:'7px', letterSpacing:'1px', color:'#378ADD', fontWeight:700, marginBottom:'1px' }}>HCP</div>
+                  <div style={{ fontSize:'18px', fontWeight:900, color:t.text, lineHeight:1 }}>{athlete.hcp || '—'}</div>
                   {hcpDelta && <div style={{ fontSize:'10px', color:parseFloat(hcpDelta)<0?'#52E8A0':'#f87171', marginTop:'1px' }}>{parseFloat(hcpDelta)<0?'▼':'▲'} {Math.abs(parseFloat(hcpDelta))}</div>}
                 </div>
                 <div style={{ textAlign:'center' }}>
-                  <div style={{ fontSize:'8px', letterSpacing:'1px', color:'#52E8A0', fontWeight:700, marginBottom:'2px' }}>WAGR</div>
-                  <div style={{ fontSize:'20px', fontWeight:900, color:t.text, lineHeight:1 }}>{displayWagr}</div>
+                  <div style={{ fontSize:'7px', letterSpacing:'1px', color:'#52E8A0', fontWeight:700, marginBottom:'1px' }}>WAGR</div>
+                  <div style={{ fontSize:'18px', fontWeight:900, color:t.text, lineHeight:1 }}>{displayWagr}</div>
                   {displayWagrDelta != null && <div style={{ fontSize:'10px', color:displayWagrDelta<0?'#52E8A0':'#f87171', marginTop:'1px' }}>{displayWagrDelta<0?'▼':'▲'} {Math.abs(displayWagrDelta)}</div>}
                 </div>
               </div>
             </div>
             {/* Action buttons */}
             <div style={{ display:'flex', gap:'6px', alignItems:'center' }}>
-              <button style={{ background:'transparent', border:`1px solid ${t.border}`, borderRadius:'8px', color:t.textMuted, padding:'6px 10px', cursor:'default', fontSize:'14px', lineHeight:1 }} title="Notificações (em breve)">🔔</button>
-              <button onClick={() => { setAthleteForm({...athlete}); setEditingAthlete(true) }} style={{ background:'transparent', border:`1px solid ${t.border}`, borderRadius:'8px', color:t.textMuted, padding:'6px 10px', cursor:'pointer', fontSize:'14px', lineHeight:1 }} title="Editar perfil">⚙</button>
+              <button style={{ background:'transparent', border:`1px solid ${t.border}`, borderRadius:'8px', color:t.textMuted, padding:'4px 8px', cursor:'default', fontSize:'13px', lineHeight:1 }} title="Notifica��es (em breve)">??</button>
+              <button onClick={() => { setAthleteForm({...athlete}); setEditingAthlete(true) }} style={{ background:'transparent', border:`1px solid ${t.border}`, borderRadius:'8px', color:t.textMuted, padding:'4px 8px', cursor:'pointer', fontSize:'13px', lineHeight:1 }} title="Editar perfil">?</button>
             </div>
           </div>
         )}
       </div>
 
-      {/* ── HERO — inline compact ── */}
-      <div style={{ display:'flex', alignItems:'center', gap:'10px', padding:'8px 14px', borderRadius:'10px', background:`${phaseInfo.phaseColor}22`, border:`1px solid ${phaseInfo.phaseColor}44`, marginBottom:'12px' }}>
-        <div style={{ width:'8px', height:'8px', borderRadius:'50%', background:phaseInfo.phaseColor, flexShrink:0 }} />
-        <div style={{ flex:1, minWidth:0 }}>
-          <span style={{ fontSize:'12px', fontWeight:700, color:t.text }}>
-            {HERO_SITUACAO[phaseInfo.phase] || phaseInfo.phase.replace(/_/g,' ')}
-          </span>
-          {phaseInfo.recommendedTrainingFocus && (
-            <span style={{ fontSize:'11px', color:t.textMuted, marginLeft:'10px' }}>
-              {phaseInfo.recommendedTrainingFocus}
-            </span>
+      {/* HERO - desktop performance */}
+      <div style={{
+        width:'100%',
+        minHeight:'172px',
+        display:'grid',
+        gridTemplateColumns:'minmax(0, 1.15fr) minmax(360px, 0.85fr)',
+        alignItems:'stretch',
+        gap:'22px',
+        padding:'26px',
+        marginBottom:'24px',
+        borderRadius:'30px',
+        color:heroTextColor,
+        background:`linear-gradient(135deg, ${phaseInfo.phaseColor} 0%, ${phaseInfo.phaseColor}e8 48%, ${phaseInfo.phaseColor}b8 100%)`,
+        boxShadow:`0 28px 70px ${phaseInfo.phaseColor}26`,
+        overflow:'hidden',
+        position:'relative',
+      }}>
+        <div style={{ position:'absolute', left:'-80px', top:'-130px', width:'300px', height:'300px', borderRadius:'50%', background:'rgba(255,255,255,0.10)' }} />
+        <div style={{ position:'absolute', right:'-90px', top:'-120px', width:'310px', height:'310px', borderRadius:'50%', background:'rgba(255,255,255,0.14)' }} />
+        <div style={{ position:'absolute', right:'220px', bottom:'-110px', width:'230px', height:'230px', borderRadius:'50%', background:'rgba(255,255,255,0.07)' }} />
+
+        <div style={{ position:'relative', zIndex:1, display:'flex', flexDirection:'column', justifyContent:'center', minWidth:0 }}>
+          <div style={{ fontSize:'clamp(44px, 5.3vw, 78px)', fontWeight:980, lineHeight:0.86, letterSpacing:'-0.07em', textTransform:'uppercase' }}>
+            {currentPhase.name}
+          </div>
+          {heroMainLine && (
+            <div style={{ maxWidth:'680px', marginTop:'18px', fontSize:'clamp(17px, 1.65vw, 24px)', fontWeight:850, lineHeight:1.16, opacity:0.98 }}>
+              {heroMainLine}
+            </div>
           )}
         </div>
-        <div style={{ fontSize:'8px', letterSpacing:'1.5px', color:phaseInfo.phaseColor, fontWeight:700, flexShrink:0, textTransform:'uppercase' }}>
-          {phaseInfo.phase.replace(/_/g,' ')}
+
+        <div style={{ position:'relative', zIndex:1, borderRadius:'24px', background:'rgba(255,255,255,0.15)', border:'1px solid rgba(255,255,255,0.22)', boxShadow:'inset 0 1px 0 rgba(255,255,255,0.18)', padding:'17px 18px', display:'flex', flexDirection:'column', justifyContent:'center', minWidth:0 }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'12px', marginBottom:'13px' }}>
+            <div style={{ fontSize:'10px', letterSpacing:'2.2px', fontWeight:950, textTransform:'uppercase', opacity:0.88 }}>ESTA SEMANA</div>
+            <div style={{ width:'38px', height:'38px', borderRadius:'50%', background:'rgba(255,255,255,0.92)', color:phaseInfo.phaseColor, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'18px', fontWeight:950, flexShrink:0 }}>
+              ⛳
+            </div>
+          </div>
+          <div style={{ display:'flex', flexDirection:'column', gap:'10px' }}>
+            {heroWeekLines.map((line, idx) => {
+              const Icon = idx === 0 ? TargetIcon : idx === 1 ? DumbbellIcon : AlertIcon
+              return (
+                <div key={idx} style={{ display:'flex', alignItems:'flex-start', gap:'10px', minWidth:0 }}>
+                  <div style={{ width:'25px', height:'25px', borderRadius:'50%', background:'rgba(255,255,255,0.18)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, marginTop:'-2px' }}>
+                    <Icon color={heroTextColor} />
+                  </div>
+                  <div style={{ fontSize:'13px', fontWeight:720, lineHeight:1.22, color:heroTextColor, opacity: idx === 2 ? 0.94 : 0.98 }}>
+                    {line}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </div>
       </div>
 
-      {/* ── ROW 2: HOJE & AMANHÃ | PRÓXIMA COMPETIÇÃO ── */}
+      {/* ROW 2: HOJE & AMANHÃ | PRÓXIMA COMPETIÇÃO */}
       <div className="hm-row2">
 
+        <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
         {/* HOJE + AMANHÃ */}
         <div className="hm-hoje-row">
 
           {/* HOJE */}
-          <div style={{ background:t.surface, border:`1.5px solid ${t.accent}44`, borderRadius:'14px', padding:'16px 18px' }}>
-            <div style={{ marginBottom:'10px' }}>
-              <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.accent, fontWeight:700 }}>HOJE</div>
-              <div style={{ fontSize:'11px', color:t.textMuted, marginTop:'1px' }}>
-                {todayDate.toLocaleDateString('pt-PT', { weekday:'long', day:'2-digit', month:'short' })}
+          <div style={{ ...premiumCard, border:`1.5px solid ${t.accent}66`, borderRadius:'24px', padding:'22px 24px', position:'relative', overflow:'hidden', alignSelf:'stretch', minHeight:'190px' }}>
+            <div style={{ position:'absolute', top:0, left:0, right:0, height:'3px', background:t.accent }} />
+            <div style={{ marginBottom:'8px', display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:'12px' }}>
+              <div>
+                <div style={{ fontSize:'12px', letterSpacing:'2.4px', color:t.accent, fontWeight:900 }}>HOJE</div>
+                <div style={{ fontSize:'13px', color:t.textMuted, marginTop:'3px', fontWeight:600 }}>
+                  {todayDate.toLocaleDateString('pt-PT', { weekday:'long', day:'2-digit', month:'2-digit' })}
+                </div>
               </div>
+              {todayPlanSessions.length > 0 && (
+                <div style={{ fontSize:'11px', color:t.accent, background:t.accentBg||`${t.accent}18`, border:`1px solid ${t.accent}33`, borderRadius:'999px', padding:'4px 9px', fontWeight:800, whiteSpace:'nowrap' }}>
+                  {todayPlanSessions.length} {todayPlanSessions.length === 1 ? 'sessão hoje' : 'sessões hoje'}
+                </div>
+              )}
             </div>
             {todayPlanSessions.length === 0 ? (
               <div>
-                <div style={{ fontSize:'12px', color:t.textMuted, fontWeight:500, marginBottom:'3px' }}>Sem plano definido pelo coach</div>
-                <div style={{ fontSize:'11px', color:t.textFaint, fontStyle:'italic' }}>A aguardar planeamento</div>
+                <div style={{ fontSize:'17px', color:t.text, fontWeight:800, marginBottom:'5px' }}>Plano ainda não definido</div>
+                <div style={{ fontSize:'13px', color:t.textMuted, fontWeight:500 }}>A aguardar planeamento do coach</div>
               </div>
             ) : (
               <div style={{ display:'flex', flexDirection:'column', gap:'8px' }}>
                 {todayPlanSessions.map((session, i) => (
-                  <div key={i}>
-                    <div style={{ fontSize:'12px', fontWeight:600, color: session.type==='gym' ? '#52E8A0' : '#378ADD' }}>
-                      {session.title}
+                  <div key={i} style={{ paddingLeft:'11px', borderLeft:`3px solid ${session.type==='gym' ? '#52E8A0' : '#378ADD'}` }}>
+                    <div style={{ fontSize:'16px', fontWeight:850, color:t.text, lineHeight:1.2 }}>
+                      {sessionDisplayTitle(session)}
                     </div>
-                    {(session.duration || session.notes) && (
-                      <div style={{ fontSize:'10px', color:t.textMuted, marginTop:'2px', lineHeight:1.3 }}>
-                        {[session.duration ? `${session.duration} min` : null, session.notes].filter(Boolean).join(' · ')}
+                    {(session.duration || sessionFocusItems(session).length > 0) && (
+                      <div style={{ fontSize:'13px', color:t.textMuted, marginTop:'4px', lineHeight:1.35, fontWeight:500 }}>
+                        {sessionMeta(session)}
                       </div>
                     )}
                   </div>
                 ))}
                 <button onClick={() => onNavigate('training', { date: todayStr })}
-                  style={{ fontSize:'10px', color:t.accent, background:'transparent', border:`1px solid ${t.accent}44`, borderRadius:'5px', cursor:'pointer', padding:'3px 10px', fontFamily:F, fontWeight:600, marginTop:'2px', display:'inline-block' }}>
+                  style={{ fontSize:'12px', color:'#fff', background:t.accent, border:'none', borderRadius:'8px', cursor:'pointer', padding:'7px 13px', fontFamily:F, fontWeight:800, marginTop:'2px', display:'inline-block', alignSelf:'flex-start', boxShadow:`0 8px 18px ${t.accent}33` }}>
                   → Ver plano
                 </button>
               </div>
             )}
           </div>
-
           {/* AMANHÃ */}
-          <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'14px', padding:'16px 18px' }}>
-            <div style={{ marginBottom:'10px' }}>
-              <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:700 }}>AMANHÃ</div>
-              <div style={{ fontSize:'11px', color:t.textMuted, marginTop:'1px' }}>
-                {tomorrowDate.toLocaleDateString('pt-PT', { weekday:'long', day:'2-digit', month:'short' })}
+          <div style={{ ...premiumCard, borderRadius:'24px', padding:'22px 24px', opacity:0.96, alignSelf:'stretch', minHeight:'190px' }}>
+            <div style={{ marginBottom:'8px', display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:'12px' }}>
+              <div>
+                <div style={{ fontSize:'12px', letterSpacing:'2.4px', color:t.textMuted, fontWeight:900 }}>AMANHÃ</div>
+                <div style={{ fontSize:'13px', color:t.textMuted, marginTop:'3px', fontWeight:600 }}>
+                  {tomorrowDate.toLocaleDateString('pt-PT', { weekday:'long', day:'2-digit', month:'2-digit' })}
+                </div>
               </div>
+              {tomorrowPlanSessions.length > 0 && (
+                <div style={{ fontSize:'11px', color:t.textMuted, background:t.bg, border:`1px solid ${t.border}`, borderRadius:'999px', padding:'4px 9px', fontWeight:800, whiteSpace:'nowrap' }}>
+                  {tomorrowPlanSessions.length} {tomorrowPlanSessions.length === 1 ? 'sessão amanhã' : 'sessões amanhã'}
+                </div>
+              )}
             </div>
             {tomorrowPlanSessions.length === 0 ? (
               <div>
-                <div style={{ fontSize:'12px', color:t.textMuted, fontWeight:500, marginBottom:'3px' }}>Sem plano definido pelo coach</div>
-                <div style={{ fontSize:'11px', color:t.textFaint, fontStyle:'italic' }}>A aguardar planeamento</div>
+                <div style={{ fontSize:'16px', color:t.text, fontWeight:800, marginBottom:'5px' }}>Plano ainda não definido</div>
+                <div style={{ fontSize:'13px', color:t.textMuted, fontWeight:500 }}>A aguardar planeamento do coach</div>
               </div>
             ) : (
               <div style={{ display:'flex', flexDirection:'column', gap:'8px' }}>
                 {tomorrowPlanSessions.map((session, i) => (
-                  <div key={i}>
-                    <div style={{ fontSize:'12px', fontWeight:600, color: session.type==='gym' ? '#52E8A0' : '#378ADD' }}>
-                      {session.title}
+                  <div key={i} style={{ paddingLeft:'11px', borderLeft:`3px solid ${session.type==='gym' ? '#52E8A0' : '#378ADD'}` }}>
+                    <div style={{ fontSize:'15px', fontWeight:800, color:t.text, lineHeight:1.2 }}>
+                      {sessionDisplayTitle(session)}
                     </div>
-                    {(session.duration || session.notes) && (
-                      <div style={{ fontSize:'10px', color:t.textMuted, marginTop:'2px', lineHeight:1.3 }}>
-                        {[session.duration ? `${session.duration} min` : null, session.notes].filter(Boolean).join(' · ')}
+                    {(session.duration || sessionFocusItems(session).length > 0) && (
+                      <div style={{ fontSize:'13px', color:t.textMuted, marginTop:'4px', lineHeight:1.35, fontWeight:500 }}>
+                        {sessionMeta(session)}
                       </div>
                     )}
                   </div>
                 ))}
                 <button onClick={() => onNavigate('training', { date: tomorrowStr })}
-                  style={{ fontSize:'10px', color:t.textMuted, background:'transparent', border:`1px solid ${t.border}`, borderRadius:'5px', cursor:'pointer', padding:'3px 10px', fontFamily:F, fontWeight:600, marginTop:'2px', display:'inline-block' }}>
+                  style={{ fontSize:'12px', color:t.textMuted, background:'transparent', border:`1px solid ${t.border}`, borderRadius:'8px', cursor:'pointer', padding:'7px 13px', fontFamily:F, fontWeight:800, marginTop:'2px', display:'inline-block', alignSelf:'flex-start' }}>
                   → Ver plano
                 </button>
               </div>
             )}
           </div>
-
         </div>
 
+        {weekCard}
+        </div>
+
+        <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
         {/* PRÓXIMA COMPETIÇÃO */}
         {upcomingCompsAll.length > 0 ? (
-          <div style={{ background:t.surface, border:`1px solid ${daysToNextComp != null && daysToNextComp <= 7 ? '#ef444433' : t.border}`, borderRadius:'14px', padding:'16px' }}>
-            <div style={{ fontSize:'8px', letterSpacing:'2px', color:t.textMuted, fontWeight:700, marginBottom:'10px' }}>PRÓXIMA COMPETIÇÃO</div>
-            <div style={{ display:'flex', alignItems:'center', gap:'14px', marginBottom:'10px' }}>
-              <div style={{ textAlign:'center', flexShrink:0, lineHeight:1 }}>
-                <div style={{ fontSize:'42px', fontWeight:900, color: daysToNextComp != null && daysToNextComp <= 7 ? '#ef4444' : daysToNextComp != null && daysToNextComp <= 14 ? '#f59e0b' : '#378ADD', lineHeight:1 }}>
+          <div style={{ ...premiumCard, border:`1px solid ${daysToNextComp != null && daysToNextComp <= 7 ? '#ef444466' : '#f59e0b44'}`, borderRadius:'24px', padding:'22px', minHeight:'236px', position:'relative', overflow:'hidden' }}>
+            <div style={{ position:'absolute', inset:'0 auto 0 0', width:'4px', background: daysToNextComp != null && daysToNextComp <= 7 ? '#ef4444' : '#f59e0b' }} />
+            <div style={{ ...sectionTitleStyle, marginBottom:'12px', color: daysToNextComp != null && daysToNextComp <= 7 ? '#ef4444' : '#f59e0b' }}>PRÓXIMA COMPETIÇÃO</div>
+            <div style={{ display:'flex', flexDirection:'column', gap:'12px', marginBottom:'12px' }}>
+              <div style={{ textAlign:'left', lineHeight:1 }}>
+                <div style={{ fontSize:'56px', fontWeight:950, color: daysToNextComp != null && daysToNextComp <= 7 ? '#ef4444' : daysToNextComp != null && daysToNextComp <= 14 ? '#f59e0b' : '#378ADD', lineHeight:0.82, letterSpacing:'0' }}>
                   {daysToNextComp ?? '—'}
                 </div>
-                <div style={{ fontSize:'7px', letterSpacing:'1.5px', color:t.textMuted, fontWeight:700, marginTop:'2px' }}>DIAS</div>
+                <div style={{ fontSize:'10px', letterSpacing:'2px', color:t.textMuted, fontWeight:900, marginTop:'7px' }}>DIAS</div>
               </div>
               <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ fontSize:'13px', fontWeight:700, color:t.text, lineHeight:1.3, marginBottom:'3px' }}>{upcomingCompsAll[0].title}</div>
-                <div style={{ fontSize:'11px', color:t.textMuted }}>
+                <div style={{ fontSize:'17px', fontWeight:900, color:t.text, lineHeight:1.2, marginBottom:'5px' }}>{upcomingCompsAll[0].title}</div>
+                <div style={{ fontSize:'13px', color:t.textMuted, fontWeight:700 }}>
                   {formatDate(upcomingCompsAll[0].start_date)}
                   {upcomingCompsAll[0].end_date && upcomingCompsAll[0].end_date !== upcomingCompsAll[0].start_date ? ` — ${formatDate(upcomingCompsAll[0].end_date)}` : ''}
                 </div>
-                {upcomingCompsAll[0].location && <div style={{ fontSize:'10px', color:t.textFaint, marginTop:'2px' }}>📍 {upcomingCompsAll[0].location}</div>}
+                {upcomingCompsAll[0].location && <div style={{ fontSize:'12px', color:t.textFaint, marginTop:'4px' }}>📍 {upcomingCompsAll[0].location}</div>}
               </div>
             </div>
             {upcomingCompsAll.length > 1 && (
-              <div style={{ borderTop:`1px solid ${t.border}`, paddingTop:'8px', display:'flex', flexDirection:'column', gap:'5px' }}>
-                {upcomingCompsAll.slice(1).map((comp, i) => {
+              <div style={{ borderTop:`1px solid ${t.border}`, paddingTop:'10px', display:'flex', flexDirection:'column', gap:'7px' }}>
+                <div style={{ fontSize:'10px', letterSpacing:'1.4px', color:t.textFaint, fontWeight:800, textTransform:'uppercase' }}>Próximas</div>
+                {upcomingCompsAll.slice(1, 4).map((comp, i) => {
                   const d = Math.max(0, Math.ceil((new Date(normDate(comp.start_date) + 'T12:00:00') - new Date()) / 86400000))
                   return (
                     <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:'8px' }}>
-                      <div style={{ fontSize:'11px', color:t.textMuted, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1 }}>{comp.title}</div>
-                      <div style={{ fontSize:'10px', color:t.textFaint, flexShrink:0, fontWeight:600, background:t.bg, padding:'1px 7px', borderRadius:'10px' }}>{d}d</div>
+                      <div style={{ fontSize:'12px', color:t.textMuted, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1, fontWeight:650 }}>{comp.title}</div>
+                      <div style={{ fontSize:'11px', color:t.text, flexShrink:0, fontWeight:850, background:t.bg, padding:'2px 8px', borderRadius:'10px' }}>{d}d</div>
                     </div>
                   )
                 })}
@@ -1200,119 +1466,47 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
             )}
           </div>
         ) : (
-          <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'14px', padding:'16px' }}>
-            <div style={{ fontSize:'8px', letterSpacing:'2px', color:t.textMuted, fontWeight:700, marginBottom:'8px' }}>PRÓXIMA COMPETIÇÃO</div>
-            <div style={{ fontSize:'12px', color:t.textMuted, fontStyle:'italic' }}>Sem competições agendadas</div>
+          <div style={{ ...premiumCard, borderRadius:'24px', padding:'22px' }}>
+            <div style={sectionTitleStyle}>PRÓXIMA COMPETIÇÃO</div>
+            <div style={{ fontSize:'14px', color:t.textMuted, fontWeight:650 }}>Sem competições agendadas</div>
           </div>
         )}
 
-      </div>
-
-      {/* ── ROW 3: ESTA SEMANA | AGENDA & RECOVERY ── */}
-      <div className="hm-row3">
-
-        {/* ESTA SEMANA */}
-        <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'14px', padding:'16px 18px' }}>
-          <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:700, marginBottom:'12px' }}>ESTA SEMANA</div>
-          <div style={{ display:'flex', flexDirection:'column' }}>
-            {weekDays.map((day, i) => {
-              const ds = day.toISOString().split('T')[0]
-              const dayEvts = events.filter(e => e.start_date <= ds && (e.end_date || e.start_date) >= ds)
-              const isToday = ds === todayStr
-              const isPast  = ds < todayStr
-              const compEvts = dayEvts.filter(isCompetition)
-              const golfEvts = dayEvts.filter(e => { const c = (e.category||'').toLowerCase(); return !isCompetition(e) && (c.includes('treino') || c.includes('training') || c.includes('camp')) })
-              const gymEvts  = dayEvts.filter(e => (e.category||'').toLowerCase().includes('gym'))
-
-              let label = isPast ? '' : '—'
-              let labelColor = t.textFaint
-              let dot = null
-              if (compEvts.length) {
-                label = compEvts[0].title?.slice(0, 30) || 'Competição'
-                labelColor = '#ef4444'
-                dot = '#ef4444'
-              } else if (golfEvts.length) {
-                label = golfEvts[0].title?.slice(0, 30) || 'Golf'
-                labelColor = '#378ADD'
-                dot = '#378ADD'
-              } else if (gymEvts.length) {
-                label = gymEvts[0].title?.slice(0, 30) || 'Ginásio'
-                labelColor = '#52E8A0'
-                dot = '#52E8A0'
-              } else {
-                const daySessions = getPlansForDate(trainingPlans, ds)
-                if (daySessions.length) {
-                  const first = daySessions[0]
-                  const planType = first.type === 'gym' ? 'Ginásio' : 'Campo'
-                  label = first.title ? `${planType} — ${first.title}` : planType
-                  labelColor = first.type === 'gym' ? '#52E8A0' : '#378ADD'
-                  dot = labelColor
-                }
-              }
-
-              return (
-                <div key={i} style={{ display:'flex', alignItems:'center', gap:'12px', padding:'7px 0', borderBottom: i < 6 ? `1px solid ${t.border}` : 'none', opacity: isPast && !isToday ? 0.45 : 1 }}>
-                  <div style={{ width:'30px', fontSize:'11px', color: isToday ? t.accent : t.textMuted, fontWeight: isToday ? 800 : 500, flexShrink:0 }}>
-                    {DAY_LABELS[i]}
-                  </div>
-                  {dot && <div style={{ width:'6px', height:'6px', borderRadius:'50%', background:dot, flexShrink:0 }} />}
-                  {!dot && <div style={{ width:'6px', height:'6px', flexShrink:0 }} />}
-                  <div style={{ flex:1, fontSize:'12px', color: isToday ? t.text : label ? labelColor : t.textFaint, fontWeight: isToday ? 600 : label ? 500 : 400, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                    {label || '—'}
-                  </div>
-                  {isToday && <div style={{ fontSize:'8px', letterSpacing:'1px', color:t.accent, fontWeight:700, background:t.accentBg||t.bg, padding:'1px 6px', borderRadius:'8px', flexShrink:0 }}>hoje</div>}
-                </div>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* AGENDA & RECOVERY */}
-        <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'14px', padding:'16px' }}>
-          <div style={{ fontSize:'9px', letterSpacing:'2px', color:t.textMuted, fontWeight:700, marginBottom:'14px' }}>AGENDA & RECOVERY</div>
+        {/* AGENDA */}
+        <div style={{ ...premiumCard, borderRadius:'24px', padding:'20px 22px' }}>
+          <div style={sectionTitleStyle}>AGENDA</div>
 
           {agendaItems.length > 0 && (
-            <div style={{ marginBottom:'14px' }}>
-              <div style={{ fontSize:'8px', letterSpacing:'1.5px', color:t.textMuted, fontWeight:700, marginBottom:'8px' }}>AGENDA</div>
-              {['#378ADD','#52E8A0'].map(color => {
-                const group = agendaItems.filter(a => a.color === color)
-                if (!group.length) return null
-                const groupLabel = color === '#378ADD' ? 'Golf' : 'S&C'
+            <div style={{ marginBottom:'10px', display:'flex', flexDirection:'column', gap:'3px' }}>
+              {agendaItems.map((item, i) => {
+                const daysAway = Math.ceil((new Date(item.date + 'T12:00:00') - new Date()) / 86400000)
+                const dayLabel = daysAway <= 0 ? 'Hoje' : daysAway === 1 ? 'Amanhã' : `${daysAway}d`
                 return (
-                  <div key={color} style={{ marginBottom:'8px' }}>
-                    <div style={{ fontSize:'8px', letterSpacing:'1px', color, fontWeight:700, marginBottom:'4px' }}>{groupLabel}</div>
-                    {group.map((item, i) => {
-                      const daysAway = Math.ceil((new Date(item.date + 'T12:00:00') - new Date()) / 86400000)
-                      const dayLabel = daysAway <= 0 ? 'Hoje' : daysAway === 1 ? 'Amanhã' : `${daysAway}d`
-                      return (
-                        <div key={i} style={{ display:'flex', alignItems:'center', gap:'8px', padding:'3px 0' }}>
-                          <div style={{ width:'3px', height:'3px', borderRadius:'50%', background:color, flexShrink:0 }} />
-                          <div style={{ fontSize:'11px', color:t.text, flex:1 }}>{item.label}</div>
-                          <div style={{ fontSize:'10px', fontWeight:600, color: daysAway <= 1 ? color : t.textFaint }}>{dayLabel}</div>
-                        </div>
-                      )
-                    })}
+                  <div key={`${item.label}-${item.date}-${i}`} style={{ display:'flex', alignItems:'center', gap:'9px', padding:'3px 0' }}>
+                    <div style={{ width:'6px', height:'6px', borderRadius:'50%', background:item.color, flexShrink:0, boxShadow:`0 0 0 4px ${item.color}16` }} />
+                    <div style={{ fontSize:'13px', color:t.text, flex:1, fontWeight:700 }}>{item.label}</div>
+                    <div style={{ fontSize:'11px', fontWeight:850, color: daysAway <= 1 ? item.color : t.textMuted }}>{dayLabel}</div>
                   </div>
                 )
               })}
             </div>
           )}
 
-          <div style={{ marginBottom: coachReminders.length > 0 ? '12px' : '0' }}>
-            <div style={{ fontSize:'8px', letterSpacing:'1.5px', color:t.textMuted, fontWeight:700, marginBottom:'6px' }}>RECOVERY</div>
-            <div style={{ display:'flex', flexDirection:'column', gap:'5px' }}>
+          <div style={{ marginBottom: coachReminders.length > 0 ? '8px' : '0', paddingTop:agendaItems.length > 0 ? '8px' : '0', borderTop:agendaItems.length > 0 ? `1px solid ${t.border}` : 'none' }}>
+            <div style={{ fontSize:'10px', letterSpacing:'1.4px', color:'#f59e0b', fontWeight:900, marginBottom:'5px', textTransform:'uppercase' }}>Recovery & Mental</div>
+            <div style={{ display:'flex', flexDirection:'column', gap:'3px' }}>
               {recoveryStatus.map((r, i) => (
-                <div key={i} style={{ display:'flex', alignItems:'center', gap:'8px' }}>
-                  <div style={{ fontSize:'10px', flex:1, minWidth:0 }}>
-                    <span style={{ color: r.alert ? '#f59e0b' : t.textFaint, marginRight:'4px' }}>{r.alert ? '⚠' : '·'}</span>
-                    <span style={{ color: r.alert ? t.text : t.textMuted, fontWeight: r.alert ? 600 : 400 }}>{r.label}</span>
-                    <span style={{ color:t.textFaint, fontSize:'9px', marginLeft:'4px' }}>
+                <div key={i} style={{ display:'flex', alignItems:'center', gap:'8px', padding:'3px 0' }}>
+                  <div style={{ fontSize:'12px', flex:1, minWidth:0 }}>
+                    <span style={{ color:'#f59e0b', marginRight:'6px' }}>{r.alert ? '⚠' : '·'}</span>
+                    <span style={{ color:t.textMuted, fontWeight: r.alert ? 750 : 600 }}>{r.label}</span>
+                    <span style={{ color:t.textFaint, fontSize:'11px', marginLeft:'5px', fontWeight:650 }}>
                       {r.daysSince === null ? 'Sem registo' : `${r.daysSince}d`}
                     </span>
                   </div>
                   {r.alert && (
-                    <button onClick={() => onNavigate && onNavigate('calendar')}
-                      style={{ background:'transparent', border:`1px solid ${t.border}`, borderRadius:'5px', color:t.textFaint, padding:'2px 6px', fontSize:'9px', cursor:'pointer', fontFamily:F, fontWeight:600, whiteSpace:'nowrap', flexShrink:0 }}>
+                    <button onClick={() => onNavigate && onNavigate('calendar', { scheduleType: r.key === 'massage' ? 'massagem' : r.key === 'physio' ? 'fisio' : 'mental_coach' })}
+                      style={{ background:theme === 'dark' ? 'rgba(245,158,11,0.08)' : '#fff7ed', border:'1px solid #f59e0b33', borderRadius:'7px', color:'#b45309', padding:'3px 8px', fontSize:'10px', cursor:'pointer', fontFamily:F, fontWeight:800, whiteSpace:'nowrap', flexShrink:0 }}>
                       Agendar
                     </button>
                   )}
@@ -1322,15 +1516,15 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
           </div>
 
           {coachReminders.length > 0 && (
-            <div style={{ paddingTop:'10px', borderTop:`1px solid ${t.border}` }}>
-              <div style={{ fontSize:'8px', letterSpacing:'1.5px', color:t.textFaint, fontWeight:700, marginBottom:'6px' }}>COACH REMINDERS</div>
-              <div style={{ display:'flex', flexDirection:'column', gap:'5px' }}>
+            <div style={{ paddingTop:'7px', borderTop:`1px solid ${t.border}` }}>
+              <div style={{ fontSize:'9px', letterSpacing:'1.4px', color:t.textFaint, fontWeight:850, marginBottom:'5px', textTransform:'uppercase' }}>Planeamento</div>
+              <div style={{ display:'flex', flexDirection:'column', gap:'4px' }}>
                 {coachReminders.map((r, i) => (
                   <div key={i} style={{ display:'flex', alignItems:'center', gap:'8px' }}>
-                    <span style={{ fontSize:'10px', color:t.textFaint }}>⚠</span>
-                    <span style={{ fontSize:'11px', color:t.textFaint, flex:1 }}>{r.label}</span>
+                    <span style={{ fontSize:'10px', color:'#f59e0b' }}>•</span>
+                    <span style={{ fontSize:'12px', color:t.textMuted, flex:1, fontWeight:650 }}>{r.label}</span>
                     <button onClick={() => onNavigate && onNavigate('training')}
-                      style={{ background:'transparent', border:`1px solid ${t.border}`, borderRadius:'5px', color:t.textFaint, padding:'2px 8px', fontSize:'9px', cursor:'pointer', fontFamily:F, fontWeight:600, whiteSpace:'nowrap', flexShrink:0 }}>
+                      style={{ background:'transparent', border:`1px solid ${t.border}`, borderRadius:'7px', color:t.textMuted, padding:'3px 8px', fontSize:'10px', cursor:'pointer', fontFamily:F, fontWeight:750, whiteSpace:'nowrap', flexShrink:0 }}>
                       Ver plano
                     </button>
                   </div>
@@ -1340,6 +1534,8 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
           )}
         </div>
 
+        </div>
+      </div>
       </div>
     </div>
   )

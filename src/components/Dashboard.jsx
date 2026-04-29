@@ -105,6 +105,9 @@ const STRINGS = {
   },
 }
 
+// Role names that grant coach/admin access — must match values stored in profiles.role.
+const COACH_ROLES = ['Golf Coach', 'Putting Coach', 'Strength & Conditioning Coach']
+
 const dark = {
   bg: '#080808', surface: '#0d0d0d', border: '#282828',
   accent: '#52E8A0', accentLight: '#ffffff', accentBg: '#0d1a12',
@@ -287,6 +290,7 @@ export default function Dashboard({ user }) {
   const t = theme === 'dark' ? dark : light
   const [view, setView] = useState('home')
   const [trainingFocusDate, setTrainingFocusDate] = useState(null)
+  const [calendarInitSchedule, setCalendarInitSchedule] = useState(null)
   const [entries, setEntries] = useState([])
   const [metrics, setMetrics] = useState(DEFAULT_METRICS)
   const [form, setForm] = useState({ date: new Date().toISOString().split('T')[0], values: {}, notes: '' })
@@ -343,6 +347,22 @@ export default function Dashboard({ user }) {
     return () => document.removeEventListener('mousedown', h)
   }, [])
 
+  useEffect(() => {
+    window.history.replaceState({ appView: 'home' }, '')
+    const handlePop = (e) => {
+      if (e.state?.appView) setView(e.state.appView)
+    }
+    window.addEventListener('popstate', handlePop)
+    return () => window.removeEventListener('popstate', handlePop)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const navigateToView = useCallback((v, opts) => {
+    if (opts?.date) setTrainingFocusDate(opts.date)
+    if (opts?.scheduleType) setCalendarInitSchedule(opts.scheduleType)
+    setView(v)
+    window.history.pushState({ appView: v }, '')
+  }, [])
+
   const fetchMetrics = useCallback(async () => {
     try {
       const { data, error } = await supabase.from('metrics').select('*').order('sort_order', { ascending: true })
@@ -375,6 +395,8 @@ export default function Dashboard({ user }) {
 
   const fetchEntries = useCallback(async () => {
     setLoading(true)
+    // RLS in Supabase must restrict entries to the authenticated user; no client-side filter added
+    // because entries are keyed by entry_date+metric_id (not user_id) in the current schema.
     const { data } = await supabase.from('entries').select('*').order('entry_date', { ascending: true })
     setEntries(data || [])
     setLoading(false)
@@ -503,6 +525,7 @@ export default function Dashboard({ user }) {
   })
   const card = { background: t.surface, border: `1px solid ${t.border}`, borderRadius: '10px', padding: '14px 16px' }
   const inp = { background: t.bg, border: `1px solid ${t.border}`, borderRadius: '6px', color: t.text, padding: '7px 10px', fontSize: '13px', fontFamily: F, outline: 'none', width: '100%', boxSizing: 'border-box' }
+  const isAdmin = COACH_ROLES.includes(profile.role)
   const displayName = profile.name || user.email.split('@')[0]
   const initials = displayName.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
 
@@ -510,7 +533,7 @@ export default function Dashboard({ user }) {
   const navItems = []
   for (let i = 0; i < s.nav.length; i += 2) {
     const key = s.nav[i]
-    if (key === 'backoffice' && (user?.email || '').toLowerCase() !== 'pmvsalgado@gmail.com') continue
+    if (key === 'backoffice' && !isAdmin) continue
     navItems.push([key, s.nav[i + 1]])
   }
 
@@ -752,7 +775,7 @@ export default function Dashboard({ user }) {
       <div style={{ background: t.navBg, borderBottom: `1px solid ${t.navBg}` }} className="pad">
         <div style={{ display: 'flex', overflowX: 'auto' }}>
           {navItems.map(([v, lbl]) => (
-            <button key={v} className={`nav-tab${view === v ? ' active' : ''}`} onClick={() => { setView(v); if (v !== 'performance') setPerfTab('focus') }}>{lbl}</button>
+            <button key={v} className={`nav-tab${view === v ? ' active' : ''}`} onClick={() => { navigateToView(v); if (v !== 'performance') setPerfTab('focus') }}>{lbl}</button>
           ))}
         </div>
       </div>
@@ -810,7 +833,7 @@ export default function Dashboard({ user }) {
 
         {!loading && view === 'performance' && <Performance theme={theme} t={t} user={user} lang={lang} initialTab={perfTab} trainingPlans={trainingPlans} />}
 
-        {!loading && view === 'home' && <Home theme={theme} t={t} onNavigate={(v, opts) => { if (opts?.date) setTrainingFocusDate(opts.date); setView(v) }} onRegister={() => setShowRegister(true)} user={user} profile={profile} lang={lang} events={events} trainingPlans={trainingPlans} />}
+        {!loading && view === 'home' && <Home theme={theme} t={t} onNavigate={(v, opts) => navigateToView(v, opts)} onRegister={() => setShowRegister(true)} user={user} profile={profile} lang={lang} events={events} trainingPlans={trainingPlans} />}
 
         {!loading && view === 'history' && (
           <div>
@@ -873,14 +896,14 @@ export default function Dashboard({ user }) {
         )}
 
         {!loading && view === 'goals' && <Goals theme={theme} t={t} user={user} />}
-        {!loading && view === 'training' && <Training theme={theme} t={t} user={user} lang={lang} focusDate={trainingFocusDate} onFocusConsumed={() => setTrainingFocusDate(null)} events={events} onPlansChanged={fetchTrainingPlans} />}
+        {!loading && view === 'training' && <Training theme={theme} t={t} user={user} userRole={profile.role} lang={lang} focusDate={trainingFocusDate} onFocusConsumed={() => setTrainingFocusDate(null)} events={events} onPlansChanged={fetchTrainingPlans} />}
         {!loading && view === 'competition' && <CompStats theme={theme} t={t} user={user} events={events} />}
-        {!loading && view === 'calendar' && <Calendar theme={theme} t={t} user={user} lang={lang} onNavigate={(v, opts) => { if (opts?.date) setTrainingFocusDate(opts.date); setView(v) }} events={events} trainingPlans={trainingPlans} onEventsChanged={fetchEvents} />}
+        {!loading && view === 'calendar' && <Calendar theme={theme} t={t} user={user} lang={lang} onNavigate={(v, opts) => navigateToView(v, opts)} events={events} trainingPlans={trainingPlans} onEventsChanged={fetchEvents} initScheduleType={calendarInitSchedule} onInitConsumed={() => setCalendarInitSchedule(null)} />}
 
                 {!loading && view === 'chat' && <Chat theme={theme} t={t} user={user} profile={profile} lang={lang} />}
         {!loading && view === 'hcpwagr' && <HcpWagr theme={theme} t={t} user={user} />}
         {!loading && view === 'microcycles' && <Microcycles theme={theme} t={t} user={user} lang={lang} />}
-        {!loading && view === 'backoffice' && <Backoffice theme={theme} t={t} user={user} />}
+        {!loading && view === 'backoffice' && <Backoffice theme={theme} t={t} user={user} userRole={profile.role} />}
 
 
       </div>

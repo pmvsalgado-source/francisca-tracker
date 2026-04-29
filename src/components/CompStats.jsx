@@ -30,6 +30,7 @@ export default function CompStats({ theme, t, user, events = [] }) {
   const [visibleColumns, setVisibleColumns] = useState(DEFAULT_STAT_FIELDS.map(f => f.id))
   const [summaryCards, setSummaryCards] = useState(DEFAULT_SUMMARY_CARDS)
   const [configId, setConfigId] = useState(null)
+  const [timeFilter, setTimeFilter] = useState('all')
 
   // Modals
   const [showModal, setShowModal] = useState(false)
@@ -56,30 +57,57 @@ export default function CompStats({ theme, t, user, events = [] }) {
   // ── Fetch ──────────────────────────────────────────────────────────────────
   const fetchData = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase.from('competition_stats').select('*').order('event_date', { ascending: false })
-    setStats(data || [])
-    setLoading(false)
+    try {
+      // RLS in Supabase should restrict competition_stats to the authenticated user.
+      const { data, error } = await supabase.from('competition_stats').select('*').order('event_date', { ascending: false })
+      if (error) throw error
+      setStats(data || [])
+    } catch (err) {
+      console.error('fetchData:', err)
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   const fetchConfig = useCallback(async () => {
-    const { data } = await supabase.from('comp_config').select('*').limit(1).maybeSingle()
-    if (data) {
-      setConfigId(data.id)
-      if (data.stat_fields?.length) setStatFields(data.stat_fields)
-      if (data.visible_columns?.length) setVisibleColumns(data.visible_columns)
-      if (data.summary_cards?.length) setSummaryCards(data.summary_cards)
+    try {
+      const { data, error } = await supabase.from('comp_config').select('*').limit(1).maybeSingle()
+      if (error) throw error
+      if (data) {
+        setConfigId(data.id)
+        if (data.stat_fields?.length) setStatFields(data.stat_fields)
+        if (data.visible_columns?.length) setVisibleColumns(data.visible_columns)
+        if (data.summary_cards?.length) setSummaryCards(data.summary_cards)
+      }
+    } catch (err) {
+      console.error('fetchConfig:', err)
     }
   }, [])
 
   useEffect(() => { fetchData(); fetchConfig() }, [fetchData, fetchConfig])
 
+  const currentYear = String(new Date().getFullYear())
+  const currentMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
+  const filteredStats = stats.filter(stat => {
+    if (!stat.event_date) return false
+    if (timeFilter === 'year') return stat.event_date.startsWith(currentYear)
+    if (timeFilter === 'month') return stat.event_date.startsWith(currentMonth)
+    return true
+  })
+
   const persistConfig = async (fields, columns, cards) => {
-    const payload = { stat_fields: fields, visible_columns: columns, summary_cards: cards, updated_at: new Date().toISOString() }
-    if (configId) {
-      await supabase.from('comp_config').update(payload).eq('id', configId)
-    } else {
-      const { data } = await supabase.from('comp_config').insert(payload).select().maybeSingle()
-      if (data?.id) setConfigId(data.id)
+    try {
+      const payload = { stat_fields: fields, visible_columns: columns, summary_cards: cards, updated_at: new Date().toISOString() }
+      if (configId) {
+        const { error } = await supabase.from('comp_config').update(payload).eq('id', configId)
+        if (error) throw error
+      } else {
+        const { data, error } = await supabase.from('comp_config').insert(payload).select().maybeSingle()
+        if (error) throw error
+        if (data?.id) setConfigId(data.id)
+      }
+    } catch (err) {
+      console.error('persistConfig:', err)
     }
   }
 
@@ -146,9 +174,14 @@ export default function CompStats({ theme, t, user, events = [] }) {
 
   const confirmDelete = async () => {
     if (!deleteConfirm) return
-    await supabase.from('competition_stats').delete().eq('id', deleteConfirm.id)
-    setDeleteConfirm(null)
-    fetchData()
+    try {
+      const { error } = await supabase.from('competition_stats').delete().eq('id', deleteConfirm.id)
+      if (error) throw error
+      setDeleteConfirm(null)
+      fetchData()
+    } catch (err) {
+      console.error('confirmDelete:', err)
+    }
   }
 
   const selectEvent = (eventId) => {
@@ -215,7 +248,7 @@ export default function CompStats({ theme, t, user, events = [] }) {
   // ── Computed ───────────────────────────────────────────────────────────────
   const getBest = (fieldId) => {
     const field = statFields.find(f => f.id === fieldId)
-    const vals = stats.map(s => parseFloat(s.values?.[fieldId])).filter(v => !isNaN(v))
+    const vals = filteredStats.map(s => parseFloat(s.values?.[fieldId])).filter(v => !isNaN(v))
     if (!vals.length) return null
     return field?.lower_better ? Math.min(...vals) : Math.max(...vals)
   }
@@ -223,16 +256,16 @@ export default function CompStats({ theme, t, user, events = [] }) {
   const computeCard = (c) => {
     const field = statFields.find(f => f.id === c.fieldId)
     switch (c.type) {
-      case 'count':  return { value: stats.length, unit: '', color: t.accentLight }
-      case 'top10':  return { value: stats.filter(s => parseFloat(s.values?.position) <= 10).length, unit: '', color: '#f59e0b' }
+      case 'count':  return { value: filteredStats.length, unit: '', color: t.accentLight }
+      case 'top10':  return { value: filteredStats.filter(s => parseFloat(s.values?.position) <= 10).length, unit: '', color: '#f59e0b' }
       case 'best': {
-        const vals = stats.map(s => parseFloat(s.values?.[c.fieldId])).filter(v => !isNaN(v))
+        const vals = filteredStats.map(s => parseFloat(s.values?.[c.fieldId])).filter(v => !isNaN(v))
         if (!vals.length) return { value: '—', unit: '', color: '#52E8A0' }
         const best = field?.lower_better ? Math.min(...vals) : Math.max(...vals)
         return { value: c.fieldId === 'position' ? `#${best}` : best, unit: field?.unit || '', color: '#52E8A0' }
       }
       case 'avg': {
-        const vals = stats.map(s => parseFloat(s.values?.[c.fieldId])).filter(v => !isNaN(v))
+        const vals = filteredStats.map(s => parseFloat(s.values?.[c.fieldId])).filter(v => !isNaN(v))
         if (!vals.length) return { value: '—', unit: '', color: t.text }
         return { value: (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1), unit: field?.unit || '', color: t.text }
       }
@@ -555,8 +588,23 @@ export default function CompStats({ theme, t, user, events = [] }) {
         </div>
       </div>
 
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px', marginBottom: '14px' }}>
+        {[
+          { label: 'COMPETIÇÕES', value: filteredStats.length, color: t.text },
+          { label: 'MÉDIA SCORE', value: (() => { const vals = filteredStats.map(s => parseFloat(s.values?.score)).filter(v => !isNaN(v)); return vals.length ? (vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1) : '—' })(), color: t.accentLight },
+          { label: 'MELHOR POSIÇÃO', value: (() => { const vals = filteredStats.map(s => parseFloat(s.values?.position)).filter(v => !isNaN(v)); return vals.length ? `#${Math.min(...vals)}` : '—' })(), color: '#52E8A0' },
+          { label: 'TOP 10', value: filteredStats.filter(s => parseFloat(s.values?.position) <= 10).length, color: '#f59e0b' },
+          { label: 'MÉDIA GIR', value: (() => { const vals = filteredStats.map(s => parseFloat(s.values?.gir)).filter(v => !isNaN(v)); return vals.length ? `${(vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(1)}%` : '—' })(), color: t.text },
+        ].map(item => (
+          <div key={item.label} style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '14px', padding: '14px 16px' }}>
+            <div style={{ fontSize: '8px', letterSpacing: '2px', color: t.textMuted, marginBottom: '8px', fontWeight: 700, textTransform: 'uppercase' }}>{item.label}</div>
+            <div style={{ fontSize: '28px', fontWeight: 900, color: item.color, lineHeight: 1 }}>{item.value}</div>
+          </div>
+        ))}
+      </div>
+
       {/* Summary Cards */}
-      {stats.length > 0 && summaryCards.length > 0 && (
+      {filteredStats.length > 0 && summaryCards.length > 0 && (
         <div className="comp-cards">
           {summaryCards.map(c => {
             const { value, unit, color } = computeCard(c)
@@ -576,7 +624,7 @@ export default function CompStats({ theme, t, user, events = [] }) {
       {/* Stats Table */}
       {loading ? (
         <div style={{ padding: '40px', textAlign: 'center', color: t.textMuted, fontSize: '13px' }}>A carregar...</div>
-      ) : stats.length === 0 ? (
+      ) : filteredStats.length === 0 ? (
         <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '14px', textAlign: 'center', padding: '48px 24px' }}>
           <div style={{ fontSize: '13px', color: t.textMuted, marginBottom: '16px' }}>Sem stats de competição ainda.</div>
           <button onClick={openNew}
@@ -600,7 +648,7 @@ export default function CompStats({ theme, t, user, events = [] }) {
               </tr>
             </thead>
             <tbody>
-              {stats.map((stat, rowIdx) => (
+              {filteredStats.map((stat, rowIdx) => (
                 <tr key={stat.id} style={{ borderTop: `1px solid ${t.border}`, background: rowIdx % 2 === 0 ? 'transparent' : t.bg + '55' }}>
                   <td style={{ padding: '10px 16px', fontWeight: 600, cursor: 'pointer', color: t.text }}
                     onClick={() => setDetailStat(stat)}>
@@ -634,10 +682,10 @@ export default function CompStats({ theme, t, user, events = [] }) {
       )}
 
       {/* Notes */}
-      {stats.some(s => s.notes) && (
+      {filteredStats.some(s => s.notes) && (
         <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <div style={{ fontSize: '9px', letterSpacing: '3px', color: t.textMuted, fontWeight: 600, marginBottom: '4px' }}>NOTES</div>
-          {stats.filter(s => s.notes).map(stat => (
+          {filteredStats.filter(s => s.notes).map(stat => (
             <div key={stat.id} style={{ padding: '10px 14px', background: t.surface, border: `1px solid ${t.border}`, borderLeft: `3px solid ${t.accent}`, borderRadius: '6px' }}>
               <div style={{ fontSize: '11px', fontWeight: 700, color: t.textMuted, marginBottom: '4px' }}>{stat.event_name} · {stat.event_date}</div>
               <div style={{ fontSize: '13px', color: t.text, lineHeight: 1.6 }}>{stat.notes}</div>

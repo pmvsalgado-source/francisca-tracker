@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 
-const ADMIN_EMAIL = 'pmvsalgado@gmail.com'
+// Role names that grant backoffice access — must match values stored in profiles.role.
+const COACH_ROLES = ['Golf Coach', 'Putting Coach', 'Strength & Conditioning Coach']
 
-export default function Backoffice({ theme, t, user }) {
+export default function Backoffice({ theme, t, user, userRole = '' }) {
   const [section, setSection] = useState('performance')
   const [entries, setEntries] = useState([])
   const [users, setUsers] = useState([])
@@ -17,7 +18,7 @@ export default function Backoffice({ theme, t, user }) {
   const th = { padding: '10px 12px', textAlign: 'left', color: t.textMuted, fontWeight: 600, fontSize: '10px', letterSpacing: '2px', borderBottom: `1px solid ${t.border}`, whiteSpace: 'nowrap' }
   const td = { padding: '9px 12px', fontSize: '12px', color: t.text, borderBottom: `1px solid ${t.border}`, verticalAlign: 'top' }
 
-  if ((user?.email || '').toLowerCase() !== ADMIN_EMAIL) {
+  if (!COACH_ROLES.includes(userRole)) {
     return <div style={{ padding: '60px', textAlign: 'center', color: t.textMuted, fontFamily: F }}>Acesso restrito.</div>
   }
 
@@ -202,8 +203,8 @@ export default function Backoffice({ theme, t, user }) {
               <tbody>
                 {filtered(users, ['email']).map((u, i) => (
                   <tr key={i}>
-                    <td style={{ ...td, fontWeight: 600, color: u.email === ADMIN_EMAIL ? t.accent : t.text }}>
-                      {u.email} {u.email === ADMIN_EMAIL && <span style={{ fontSize: '9px', color: t.accent, marginLeft: '6px', letterSpacing: '1px' }}>ADMIN</span>}
+                    <td style={{ ...td, fontWeight: 600, color: t.text }}>
+                      {u.email}
                     </td>
                     <td style={{ ...td, color: t.textMuted }}>{u.lastSeen ? new Date(u.lastSeen).toLocaleString('pt-PT') : '—'}</td>
                   </tr>

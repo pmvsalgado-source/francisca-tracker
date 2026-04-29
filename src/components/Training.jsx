@@ -3,9 +3,8 @@ import { supabase } from '../lib/supabase'
 import { isCompetition } from '../lib/periodization'
 import Goals from './Goals'
 
-const COACH_GOLF = 'pmvsalgado@gmail.com'
-const COACH_GYM  = 'pmvsalgado@gmail.com'
-const ADMIN      = 'pmvsalgado@gmail.com'
+// Role names that grant coach access — must match values stored in profiles.role.
+const COACH_ROLES = ['Golf Coach', 'Putting Coach', 'Strength & Conditioning Coach']
 
 const GOLF_CATS = ['Driving Range', 'Jogo Curto', 'Putt', 'Bunker', 'Campo']
 const GYM_CATS  = ['Pernas', 'Potência', 'Core', 'Braços', 'Mobilidade', 'Cardio', 'Prevenção']
@@ -167,7 +166,497 @@ const fmtMins = (m) => {
   return `~${Math.floor(r/60)}h${r%60>0?` ${r%60}min`:''}`
 }
 
-export default function Training({ theme, t, user, lang = 'en', events = [], focusDate = null, onFocusConsumed, onPlansChanged }) {
+const DAILY_TEMPLATE_HEADERS = [
+  'Plan Name',
+  'Plan Type',
+  'Day Type',
+  'Session Type',
+  'Session Focus',
+  'Session Objective',
+  'General Observations',
+  'Exercise Order',
+  'Exercise Name',
+  'Exercise Category',
+  'Quantity',
+  'Sets',
+  'Reps',
+  'Load',
+  'Instructions',
+  'Notes',
+  'Is Rest',
+  'Date',
+]
+
+const xmlEscape = (value) =>
+  String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;')
+
+const colName = (index) => {
+  let n = index + 1
+  let name = ''
+  while (n > 0) {
+    const rem = (n - 1) % 26
+    name = String.fromCharCode(65 + rem) + name
+    n = Math.floor((n - 1) / 26)
+  }
+  return name
+}
+
+const utf8 = new TextEncoder()
+const utf8Decode = new TextDecoder()
+
+const makeCrcTable = () => {
+  const table = new Uint32Array(256)
+  for (let n = 0; n < 256; n++) {
+    let c = n
+    for (let k = 0; k < 8; k++) {
+      c = ((c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1)) >>> 0
+    }
+    table[n] = c >>> 0
+  }
+  return table
+}
+const CRC_TABLE = makeCrcTable()
+const crc32 = (bytes) => {
+  let crc = 0xffffffff
+  for (const b of bytes) crc = CRC_TABLE[(crc ^ b) & 0xff] ^ (crc >>> 8)
+  return (crc ^ 0xffffffff) >>> 0
+}
+const concatBytes = (parts) => {
+  const total = parts.reduce((n, part) => n + part.length, 0)
+  const out = new Uint8Array(total)
+  let offset = 0
+  parts.forEach(part => {
+    out.set(part, offset)
+    offset += part.length
+  })
+  return out
+}
+const u16 = (n) => {
+  const bytes = new Uint8Array(2)
+  new DataView(bytes.buffer).setUint16(0, n, true)
+  return bytes
+}
+const u32 = (n) => {
+  const bytes = new Uint8Array(4)
+  new DataView(bytes.buffer).setUint32(0, n >>> 0, true)
+  return bytes
+}
+const zipStore = (entries) => {
+  const localParts = []
+  const centralParts = []
+  let offset = 0
+
+  entries.forEach(entry => {
+    const nameBytes = utf8.encode(entry.name)
+    const dataBytes = entry.data instanceof Uint8Array ? entry.data : utf8.encode(entry.data)
+    const crc = crc32(dataBytes)
+    const size = dataBytes.length
+
+    const localHeader = concatBytes([
+      u32(0x04034b50),
+      u16(20),
+      u16(0),
+      u16(0),
+      u16(0),
+      u16(0),
+      u32(crc),
+      u32(size),
+      u32(size),
+      u16(nameBytes.length),
+      u16(0),
+    ])
+    localParts.push(localHeader, nameBytes, dataBytes)
+
+    const centralHeader = concatBytes([
+      u32(0x02014b50),
+      u16(20),
+      u16(20),
+      u16(0),
+      u16(0),
+      u16(0),
+      u16(0),
+      u32(crc),
+      u32(size),
+      u32(size),
+      u16(nameBytes.length),
+      u16(0),
+      u16(0),
+      u16(0),
+      u16(0),
+      u32(0),
+      u32(offset),
+    ])
+    centralParts.push(centralHeader, nameBytes)
+    offset += localHeader.length + nameBytes.length + dataBytes.length
+  })
+
+  const centralDir = concatBytes(centralParts)
+  const endRecord = concatBytes([
+    u32(0x06054b50),
+    u16(0),
+    u16(0),
+    u16(entries.length),
+    u16(entries.length),
+    u32(centralDir.length),
+    u32(localParts.reduce((n, p) => n + p.length, 0)),
+    u16(0),
+  ])
+  return concatBytes([...localParts, centralDir, endRecord])
+}
+
+const buildDailyTemplateWorkbook = (payload) => {
+  const rows = [
+    DAILY_TEMPLATE_HEADERS,
+    ...payload.rows.map((row, idx) => [
+      payload.planName || '',
+      payload.planType || '',
+      row.dayType || '',
+      row.sessionType || '',
+      payload.sessionFocus || '',
+      payload.sessionObjective || '',
+      payload.generalObservations || '',
+      idx + 1,
+      row.exerciseName || '',
+      row.exerciseCategory || '',
+      row.quantity || '',
+      row.sets || '',
+      row.reps || '',
+      row.load || '',
+      row.instructions || '',
+      row.notes || '',
+      row.isRest ? 'Yes' : 'No',
+      payload.date || '',
+    ]),
+  ]
+
+  if (rows.length === 1) {
+    rows.push([
+      payload.planName || '',
+      payload.planType || '',
+      payload.dayType || '',
+      payload.sessionType || '',
+      payload.sessionFocus || '',
+      payload.sessionObjective || '',
+      payload.generalObservations || '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      '',
+      payload.isRest ? 'Yes' : 'No',
+      payload.date || '',
+    ])
+  }
+
+  const sheetRows = rows.map((row, rowIdx) => {
+    const cells = row.map((value, colIdx) => {
+      const ref = `${colName(colIdx)}${rowIdx + 1}`
+      if (value === null || value === undefined || value === '') {
+        return ''
+      }
+      if (typeof value === 'number') {
+        return `<c r="${ref}"><v>${value}</v></c>`
+      }
+      return `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${xmlEscape(value)}</t></is></c>`
+    }).join('')
+    return `<row r="${rowIdx + 1}">${cells}</row>`
+  }).join('')
+
+  const sheetXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <sheetData>${sheetRows}</sheetData>
+</worksheet>`
+
+  return {
+    '[Content_Types].xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+</Types>`,
+    '_rels/.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`,
+    'xl/workbook.xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets>
+    <sheet name="Plan" sheetId="1" r:id="rId1"/>
+  </sheets>
+</workbook>`,
+    'xl/_rels/workbook.xml.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+</Relationships>`,
+    'xl/styles.xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <fonts count="1"><font><sz val="11"/><color theme="1"/><name val="Calibri"/><family val="2"/></font></fonts>
+  <fills count="1"><fill><patternFill patternType="none"/></fill></fills>
+  <borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
+  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+  <cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>
+  <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+</styleSheet>`,
+    'xl/worksheets/sheet1.xml': sheetXml,
+  }
+}
+
+const parseDailyTemplateXlsx = async (file) => {
+  const bytes = new Uint8Array(await file.arrayBuffer())
+  const entries = {}
+  let offset = 0
+  while (offset + 30 <= bytes.length) {
+    const sig = new DataView(bytes.buffer, bytes.byteOffset + offset, 4).getUint32(0, true)
+    if (sig !== 0x04034b50) break
+    const view = new DataView(bytes.buffer, bytes.byteOffset + offset, 30)
+    const method = view.getUint16(8, true)
+    const compressedSize = view.getUint32(18, true)
+    const nameLen = view.getUint16(26, true)
+    const extraLen = view.getUint16(28, true)
+    const nameStart = offset + 30
+    const dataStart = nameStart + nameLen + extraLen
+    const name = utf8Decode.decode(bytes.slice(nameStart, nameStart + nameLen))
+    const data = bytes.slice(dataStart, dataStart + compressedSize)
+    if (method !== 0) throw new Error('O ficheiro precisa de ser um template Excel exportado pela aplicação.')
+    entries[name] = utf8Decode.decode(data)
+    offset = dataStart + compressedSize
+  }
+
+  const sheetXml = entries['xl/worksheets/sheet1.xml']
+  if (!sheetXml) throw new Error('Ficheiro Excel inválido.')
+  const doc = new DOMParser().parseFromString(sheetXml, 'application/xml')
+  const rowNodes = [...doc.getElementsByTagName('row')]
+  const rows = rowNodes.map(row => {
+    const cells = [...row.getElementsByTagName('c')]
+    const out = {}
+    cells.forEach(cell => {
+      const ref = cell.getAttribute('r') || ''
+      const col = ref.replace(/\d+/g, '')
+      const vNode = cell.getElementsByTagName('v')[0]
+      const isNode = cell.getElementsByTagName('is')[0]
+      const tNode = isNode?.getElementsByTagName('t')[0]
+      out[col] = tNode?.textContent ?? vNode?.textContent ?? ''
+    })
+    return out
+  })
+
+  const headers = DAILY_TEMPLATE_HEADERS.reduce((acc, h, idx) => {
+    acc[h] = String.fromCharCode(65 + idx)
+    return acc
+  }, {})
+  const dataRows = rows.slice(1).map(row => {
+    const obj = {}
+    DAILY_TEMPLATE_HEADERS.forEach((h, idx) => {
+      obj[h] = row[String.fromCharCode(65 + idx)] || ''
+    })
+    return obj
+  }).filter(row => Object.values(row).some(v => String(v).trim() !== ''))
+
+  return dataRows
+}
+
+const buildDailyTemplateWorkbookV2 = (payload) => {
+  const rows = [
+    ['DAILY TRAINING PLAN TEMPLATE', payload.planName || ''],
+    ['How to use', 'Edit the exercise rows below, then import the file back into Training.'],
+    ['Plan name', payload.planName || ''],
+    ['Plan type', payload.planType || ''],
+    ['Date', payload.date || ''],
+    ['Day type', payload.dayType || ''],
+    ['Session type', payload.sessionType || ''],
+    ['Session focus', payload.sessionFocus || ''],
+    ['Session objective', payload.sessionObjective || ''],
+    ['General observations', payload.generalObservations || ''],
+    [''],
+    ['Exercises'],
+    DAILY_TEMPLATE_HEADERS,
+  ]
+
+  const exerciseRows = payload.rows.length > 0
+    ? payload.rows.map((row, idx) => [
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        idx + 1,
+        row.exerciseName || '',
+        row.exerciseCategory || '',
+        row.quantity || '',
+        row.sets || '',
+        row.reps || '',
+        row.load || '',
+        row.instructions || '',
+        row.notes || '',
+        row.isRest ? 'Yes' : 'No',
+        payload.date || '',
+      ])
+    : [[
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        payload.isRest ? 'Yes' : 'No',
+        payload.date || '',
+      ]]
+
+  rows.push(...exerciseRows)
+
+  const rowXml = rows.map((row, rowIdx) => {
+    const cells = row.map((value, colIdx) => {
+      if (value === null || value === undefined || value === '') return ''
+      const ref = `${colName(colIdx)}${rowIdx + 1}`
+      if (typeof value === 'number') return `<c r="${ref}"><v>${value}</v></c>`
+      return `<c r="${ref}" t="inlineStr"><is><t xml:space="preserve">${xmlEscape(value)}</t></is></c>`
+    }).join('')
+    return `<row r="${rowIdx + 1}">${cells}</row>`
+  }).join('')
+
+  const widths = [24, 42, 14, 16, 14, 14, 16, 12, 28, 20, 12, 10, 10, 10, 28, 22, 10, 14]
+  const cols = widths.map((w, idx) => `<col min="${idx + 1}" max="${idx + 1}" width="${w}" customWidth="1"/>`).join('')
+
+  const sheetXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <cols>${cols}</cols>
+  <sheetData>${rowXml}</sheetData>
+</worksheet>`
+
+  return {
+    '[Content_Types].xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+</Types>`,
+    '_rels/.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`,
+    'xl/workbook.xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets>
+    <sheet name="Daily Plan" sheetId="1" r:id="rId1"/>
+  </sheets>
+</workbook>`,
+    'xl/_rels/workbook.xml.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+</Relationships>`,
+    'xl/styles.xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <fonts count="1"><font><sz val="11"/><color theme="1"/><name val="Calibri"/><family val="2"/></font></fonts>
+  <fills count="1"><fill><patternFill patternType="none"/></fill></fills>
+  <borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
+  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+  <cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs>
+  <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+</styleSheet>`,
+    'xl/worksheets/sheet1.xml': sheetXml,
+  }
+}
+
+const parseDailyTemplateXlsxV2 = async (file) => {
+  const bytes = new Uint8Array(await file.arrayBuffer())
+  const entries = {}
+  let offset = 0
+  const inflateRaw = async (compressed) => {
+    if (typeof DecompressionStream === 'undefined') throw new Error('O navegador não suporta importação de Excel comprimido.')
+    const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream('deflate-raw'))
+    return new Uint8Array(await new Response(stream).arrayBuffer())
+  }
+  while (offset + 30 <= bytes.length) {
+    const sig = new DataView(bytes.buffer, bytes.byteOffset + offset, 4).getUint32(0, true)
+    if (sig !== 0x04034b50) break
+    const view = new DataView(bytes.buffer, bytes.byteOffset + offset, 30)
+    const method = view.getUint16(8, true)
+    const compressedSize = view.getUint32(18, true)
+    const nameLen = view.getUint16(26, true)
+    const extraLen = view.getUint16(28, true)
+    const nameStart = offset + 30
+    const dataStart = nameStart + nameLen + extraLen
+    const name = utf8Decode.decode(bytes.slice(nameStart, nameStart + nameLen))
+    const data = bytes.slice(dataStart, dataStart + compressedSize)
+    const payloadBytes = method === 0 ? data : method === 8 ? await inflateRaw(data) : null
+    if (!payloadBytes) throw new Error('Formato Excel não suportado.')
+    entries[name] = utf8Decode.decode(payloadBytes)
+    offset = dataStart + compressedSize
+  }
+
+  const sharedStrings = []
+  if (entries['xl/sharedStrings.xml']) {
+    const sharedDoc = new DOMParser().parseFromString(entries['xl/sharedStrings.xml'], 'application/xml')
+    ;[...sharedDoc.getElementsByTagName('si')].forEach(si => sharedStrings.push(si.textContent || ''))
+  }
+
+  const sheetXml = entries['xl/worksheets/sheet1.xml']
+  if (!sheetXml) throw new Error('Ficheiro Excel inválido.')
+  const doc = new DOMParser().parseFromString(sheetXml, 'application/xml')
+  const rowNodes = [...doc.getElementsByTagName('row')]
+  const rows = rowNodes.map(row => {
+    const cells = [...row.getElementsByTagName('c')]
+    const out = []
+    cells.forEach(cell => {
+      const ref = cell.getAttribute('r') || ''
+      const colLetters = ref.replace(/\d+/g, '')
+      const colIndex = colLetters.split('').reduce((acc, ch) => acc * 26 + ch.charCodeAt(0) - 64, 0) - 1
+      const t = cell.getAttribute('t')
+      const vNode = cell.getElementsByTagName('v')[0]
+      const isNode = cell.getElementsByTagName('is')[0]
+      const tNode = isNode?.getElementsByTagName('t')[0]
+      let value = tNode?.textContent ?? vNode?.textContent ?? ''
+      if (t === 's') value = sharedStrings[parseInt(value, 10)] || ''
+      if (t === 'b') value = value === '1' ? 'TRUE' : 'FALSE'
+      out[colIndex] = value
+    })
+    return out
+  })
+
+  const headerIndex = rows.findIndex(row => {
+    const values = (row || []).map(v => String(v || '').trim())
+    return values.includes('Plan Name') && values.includes('Exercise Name')
+  })
+  if (headerIndex < 0) throw new Error('Não encontrei a grelha do template Excel.')
+
+  const headers = rows[headerIndex].map(v => String(v || '').trim())
+  return rows.slice(headerIndex + 1)
+    .map(row => {
+      const obj = {}
+      headers.forEach((header, idx) => {
+        if (header) obj[header] = row?.[idx] ?? ''
+      })
+      return obj
+    })
+    .filter(row => Object.values(row).some(v => String(v).trim() !== ''))
+}
+
+export default function Training({ theme, t, user, userRole = '', lang = 'en', events = [], focusDate = null, onFocusConsumed, onPlansChanged }) {
   const [subTab, setSubTab] = useState('plan')
   const [plans, setPlans] = useState([])
   const [loading, setLoading] = useState(true)
@@ -178,13 +667,18 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
   const [wizard, setWizard] = useState(false)
   const [wizardStep, setWizardStep] = useState(1)
   const [wizardType, setWizardType] = useState('golf')
+  const [wizardPlanMode, setWizardPlanMode] = useState('week')
   const [wizardStartDate, setWizardStartDate] = useState('')
   const [wizardEndDate, setWizardEndDate] = useState('')
   const [wizardActiveDays, setWizardActiveDays] = useState([0,1,2,3,4,5,6])
   const [wizardDayPlans, setWizardDayPlans] = useState({})
   const [wizardSelectedChips, setWizardSelectedChips] = useState([])
+  const [wizardDaySource, setWizardDaySource] = useState('specific')
   const [wizardOpenCat, setWizardOpenCat] = useState(null)
   const [wizardNote, setWizardNote] = useState('')
+  const [wizardDailyTemplateName, setWizardDailyTemplateName] = useState('')
+  const [wizardDailyTemplateFocus, setWizardDailyTemplateFocus] = useState('')
+  const [wizardDailyTemplateObjective, setWizardDailyTemplateObjective] = useState('')
   const [wizardCustom, setWizardCustom] = useState({ name:'', cat:'', desc:'' })
   const [wizardUserLib, setWizardUserLib] = useState([])
   const [wizardError, setWizardError] = useState('')
@@ -192,7 +686,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
 
   const [tooltipId, setTooltipId] = useState(null)
   const [showFreeSession, setShowFreeSession] = useState(false)
-  const [freeSession, setFreeSession] = useState({ date:new Date().toISOString().split('T')[0], notes:'', score:'', holes:'' })
+  const [freeSession, setFreeSession] = useState({ date:new Date().toISOString().split('T')[0], course:'', notes:'', score:'', holes:'' })
   const [savingFree, setSavingFree] = useState(false)
   const [athleteNote, setAthleteNote] = useState('')
 
@@ -204,6 +698,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
   const [wizardTemplateName, setWizardTemplateName] = useState('')
   const [savingTemplate, setSavingTemplate] = useState(false)
   const [showSaveTemplate, setShowSaveTemplate] = useState(false)
+  const excelFileRef = useRef(null)
   const [showLegend, setShowLegend] = useState(false)
   const [phaseOverrides, setPhaseOverrides] = useState({})
   const [editingPhaseWs, setEditingPhaseWs] = useState(null)
@@ -303,6 +798,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
 
   const datesInRange = (() => {
     if (!wizardStartDate || !wizardEndDate) return []
+    if (wizardPlanMode === 'day') return [wizardStartDate]
     const start = new Date(wizardStartDate+'T12:00:00')
     const end   = new Date(wizardEndDate+'T12:00:00')
     if (end < start) return []
@@ -315,9 +811,22 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
     return dates
   })()
 
+  const dailyTemplates = templates.filter(tpl => {
+    const tplDays = (tpl.days || []).filter(d => d?.items?.length || d?.isRest)
+    const dayMetaKind = tplDays[0]?.meta?.kind || tpl.days?.[0]?.meta?.kind || null
+    return dayMetaKind === 'daily' || tpl.template_kind === 'daily' || tplDays.length === 1
+  })
+  const weeklyTemplates = templates.filter(tpl => {
+    const tplDays = (tpl.days || []).filter(d => d?.items?.length || d?.isRest)
+    const dayMetaKind = tplDays[0]?.meta?.kind || tpl.days?.[0]?.meta?.kind || null
+    return dayMetaKind !== 'daily' && tpl.template_kind !== 'daily' && tplDays.length !== 1
+  })
+
   const toggleChip = (dateStr) => {
     setWizardSelectedChips(prev =>
-      prev.includes(dateStr) ? prev.filter(d=>d!==dateStr) : [...prev, dateStr]
+      wizardPlanMode === 'day'
+        ? [dateStr]
+        : prev.includes(dateStr) ? prev.filter(d=>d!==dateStr) : [...prev, dateStr]
     )
   }
 
@@ -415,10 +924,44 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
     setWizardDayPlans(p=>({...p,[primaryChip]:items}))
   }
 
+  const applyTemplate = (tpl) => {
+    const tplDays = tpl?.days || []
+    const isDailyTpl = tpl.template_kind === 'daily' || tplDays.filter(d => d?.items?.length || d?.isRest).length <= 1
+    const newDayPlans = { ...wizardDayPlans }
+    const newSessionTypes = { ...wizardSessionTypes }
+    const targetDates = wizardSelectedChips.length > 0 ? wizardSelectedChips : datesInRange
+    if (isDailyTpl) {
+      const dayConfig = tplDays.find(d => d?.items?.length || d?.isRest) || tplDays[0] || {}
+      targetDates.forEach(ds => {
+        if (dayConfig?.isRest) newDayPlans[ds] = [{ id:'rest', name:'Descanso', cat:'Descanso', isRest:true }]
+        else if (dayConfig?.items?.length) {
+          newDayPlans[ds] = JSON.parse(JSON.stringify(dayConfig.items))
+          if (dayConfig.session_type) newSessionTypes[ds] = dayConfig.session_type
+        }
+      })
+    } else {
+      tplDays.forEach((dayConfig, dayIdx) => {
+        targetDates.forEach(ds => {
+          const d=new Date(ds+'T12:00:00'); const dow=d.getDay(); const di=dow===0?6:dow-1
+          if (di===dayIdx) {
+            if (dayConfig?.isRest) newDayPlans[ds] = [{id:'rest',name:'Descanso',cat:'Descanso',isRest:true}]
+            else if (dayConfig?.items?.length) {
+              newDayPlans[ds] = JSON.parse(JSON.stringify(dayConfig.items))
+              if (dayConfig.session_type) newSessionTypes[ds] = dayConfig.session_type
+            }
+          }
+        })
+      })
+    }
+    setWizardDayPlans(newDayPlans)
+    setWizardSessionTypes(newSessionTypes)
+    setWizardDaySource('specific')
+  }
+
   const copyToAllChips = () => {
     if (!primaryChip) return
     const src = wizardDayPlans[primaryChip] || []
-    const newPlans = {...wizardDayPlans}
+    const newPlans = { ...wizardDayPlans }
     datesInRange.forEach(ds => { newPlans[ds] = JSON.parse(JSON.stringify(src)) })
     setWizardDayPlans(newPlans)
   }
@@ -434,21 +977,6 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
   }
 
   const saveWizard = async () => {
-    // Validation: every day must have a session, rest, or competition
-    const missing = wizardSelectedChips.filter(ds => {
-      if (dateHasComp(ds)) return false
-      return (wizardDayPlans[ds] || []).length === 0
-    })
-    if (missing.length > 0) {
-      setWizardError(
-        `${missing.length} dia${missing.length>1?'s':''} sem sessão definida: ` +
-        missing.map(ds => {
-          const d = new Date(ds+'T12:00:00')
-          return `${DAYS_SHORT_PT[d.getDay()===0?6:d.getDay()-1]} ${d.getDate()}/${d.getMonth()+1}`
-        }).join(', ')
-      )
-      return
-    }
     const missingType = wizardSelectedChips.filter(ds => {
       if (dateHasComp(ds)) return false
       const items = wizardDayPlans[ds] || []
@@ -468,7 +996,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
     setWizardError('')
     setSaving(true)
     const weekMap = {}
-    datesInRange.forEach(dateStr => {
+    wizardSelectedChips.forEach(dateStr => {
       const d = new Date(dateStr+'T12:00:00')
       const dow = d.getDay()
       const monday = new Date(d)
@@ -524,7 +1052,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
     const newDays = JSON.parse(JSON.stringify(baseDays))
     if (!newDays[dayIdx]) newDays[dayIdx]={sessions:[]}
     if (!newDays[dayIdx].sessions) newDays[dayIdx].sessions=[]
-    newDays[dayIdx].sessions.push({ id:Date.now(), cat:'Campo', free:true, athlete:email, notes:freeSession.notes, score:freeSession.score, holes:freeSession.holes, items:[] })
+    newDays[dayIdx].sessions.push({ id:Date.now(), cat:'Campo', free:true, athlete:email, course:freeSession.course, notes:freeSession.notes, score:freeSession.score, holes:freeSession.holes, items:[] })
     if (existing) await supabase.from('training_plans').update({days:newDays,updated_at:new Date().toISOString(),updated_by:email}).eq('id',existing.id)
     else await supabase.from('training_plans').insert({week_start:weekStart,week_end:getWeekEnd(weekStart),plan_type:'golf',days:newDays,created_by:email,status:'active',title:'Golf Plan'})
     setSavingFree(false)
@@ -775,7 +1303,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
     }
   }
 
-  const applyTemplate = (tpl) => {
+  const applyWeeklyTemplate = (tpl) => {
     const newDayPlans={}, newSessionTypes={}
     ;(tpl.days||[]).forEach((dayConfig,dayIdx)=>{
       datesInRange.forEach(ds=>{
@@ -790,21 +1318,202 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
     setWizardSessionTypes(prev=>({...prev,...newSessionTypes}))
   }
 
-  const saveAsTemplate = async (name) => {
+  const saveAsWeeklyTemplate = async (name) => {
     if(!name.trim()) return
     setSavingTemplate(true)
-    const tplDays=Array(7).fill(null).map((_,dayIdx)=>{
-      const ds=datesInRange.find(d=>{ const dd=new Date(d+'T12:00:00'); const dow=dd.getDay(); return (dow===0?6:dow-1)===dayIdx })
-      if(!ds) return {items:[],session_type:null,isRest:false}
-      const items=wizardDayPlans[ds]||[]
-      if(items[0]?.isRest) return {items:[],session_type:null,isRest:true}
-      return {items,session_type:wizardSessionTypes[ds]||null,isRest:false}
-    })
-    await supabase.from('training_plan_templates').insert({name:name.trim(),plan_type:wizardType,days:tplDays,created_by:email,created_at:new Date().toISOString()})
-    setSavingTemplate(false)
+    try {
+      const tplDays=Array(7).fill(null).map((_,dayIdx)=>{
+        const ds=datesInRange.find(d=>{ const dd=new Date(d+'T12:00:00'); const dow=dd.getDay(); return (dow===0?6:dow-1)===dayIdx })
+        if(!ds) return {items:[],session_type:null,isRest:false}
+        const items=wizardDayPlans[ds]||[]
+        if(items[0]?.isRest) return {items:[],session_type:null,isRest:true}
+        return {items,session_type:wizardSessionTypes[ds]||null,isRest:false}
+      })
+      const { error } = await supabase.from('training_plan_templates').insert({
+        name:name.trim(),
+        plan_type:wizardType,
+        days:tplDays,
+        created_by:email,
+        created_at:new Date().toISOString()
+      })
+      if (error) throw error
+      setShowSaveTemplate(false)
+      setWizardTemplateName('')
+      fetchTemplates()
+    } catch (err) {
+      setWizardError(err?.message || 'Não foi possível guardar o template.')
+    } finally {
+      setSavingTemplate(false)
+    }
+  }
+
+  const saveAsDailyTemplate = async () => {
+    if (!primaryChip || !wizardDailyTemplateName.trim()) return
+    const items = wizardDayPlans[primaryChip] || []
+    if (!items.length || items[0]?.isRest) return
+    setSavingTemplate(true)
+    try {
+      const dayMeta = {
+        kind: 'daily',
+        planName: wizardDailyTemplateName.trim(),
+        sessionFocus: wizardDailyTemplateFocus.trim(),
+        sessionObjective: wizardDailyTemplateObjective.trim(),
+        generalObservations: wizardNote.trim(),
+        savedAt: new Date().toISOString(),
+      }
+      const dailyPayload = {
+        name: wizardDailyTemplateName.trim(),
+        plan_type: wizardType,
+        days: [{ items: JSON.parse(JSON.stringify(items)), session_type: wizardSessionTypes[primaryChip] || null, isRest: false, meta: dayMeta }],
+        created_by: email,
+        created_at: new Date().toISOString(),
+      }
+      const { error } = await supabase.from('training_plan_templates').insert(dailyPayload)
+      if (error) throw error
+      setShowSaveTemplate(false)
+      setWizardDailyTemplateName('')
+      setWizardDailyTemplateFocus('')
+      setWizardDailyTemplateObjective('')
+      fetchTemplates()
+      setWizardError('')
+    } catch (err) {
+      setWizardError(err?.message || 'Não foi possível guardar o template diário.')
+    } finally {
+      setSavingTemplate(false)
+    }
+  }
+
+  const extractDailyTemplateMeta = (tpl) => {
+    const day = (tpl.days || []).find(d => d?.items?.length || d?.isRest) || tpl.days?.[0] || {}
+    return day.meta || {}
+  }
+
+  const applyDailyTemplate = (tpl) => {
+    const day = (tpl.days || []).find(d => d?.items?.length || d?.isRest) || tpl.days?.[0]
+    if (!day) return
+    const items = day.isRest
+      ? [{ id:'rest', name:'Descanso', cat:'Descanso', isRest:true }]
+      : JSON.parse(JSON.stringify(day.items || []))
+    setWizardDayPlans(prev => ({ ...prev, [primaryChip]: items }))
+    setWizardSessionTypes(prev => ({ ...prev, [primaryChip]: day.session_type || prev[primaryChip] || null }))
+    const meta = day.meta || {}
+    setWizardDailyTemplateName(tpl.name || meta.planName || '')
+    setWizardDailyTemplateFocus(meta.sessionFocus || '')
+    setWizardDailyTemplateObjective(meta.sessionObjective || '')
+    setWizardNote(meta.generalObservations || '')
+    setWizardDaySource('saved')
     setShowSaveTemplate(false)
-    setWizardTemplateName('')
-    fetchTemplates()
+  }
+
+  const exportCurrentDayToExcel = async () => {
+    if (!primaryChip) {
+      setWizardError('Selecciona um dia para exportar.')
+      return
+    }
+    const items = wizardDayPlans[primaryChip] || []
+    const date = primaryChip
+    const isRest = items[0]?.isRest === true || items.length === 0
+    const rows = isRest
+      ? [{
+        dayType: 'Rest day',
+        sessionType: wizardSessionTypes[primaryChip] || '',
+        exerciseName: '',
+        exerciseCategory: '',
+        quantity: '',
+        sets: '',
+        reps: '',
+        load: '',
+        instructions: '',
+        notes: '',
+        isRest: true,
+      }]
+      : items.map((item, idx) => ({
+        dayType: wizardDaySource === 'saved' ? 'Saved plan' : 'Specific plan',
+        sessionType: wizardSessionTypes[primaryChip] || '',
+        exerciseName: item.name || item.exerciseName || '',
+        exerciseCategory: item.cat || '',
+        quantity: item.qty ?? item.default_qty ?? '',
+        sets: item.sets ?? item.default_sets ?? '',
+        reps: item.reps ?? item.default_reps ?? '',
+        load: item.load ?? '',
+        instructions: item.desc || item.instructions || '',
+        notes: item.notes || '',
+        isRest: !!item.isRest,
+        order: idx + 1,
+      }))
+
+    const workbook = buildDailyTemplateWorkbookV2({
+      planName: wizardDailyTemplateName || 'Plano Diário',
+      planType: wizardType,
+      dayType: isRest ? 'Rest day' : 'Training day',
+      sessionType: wizardSessionTypes[primaryChip] || (wizardDaySource === 'saved' ? 'Saved plan' : 'Specific plan'),
+      sessionFocus: wizardDailyTemplateFocus || '',
+      sessionObjective: wizardDailyTemplateObjective || '',
+      generalObservations: wizardNote || '',
+      date,
+      isRest,
+      rows,
+    })
+    const blob = new Blob([zipStore(Object.entries(workbook).map(([name, data]) => ({ name, data })))], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${(wizardDailyTemplateName || 'daily-plan').replace(/[^\w\-]+/g, '_')}.xlsx`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const importDailyPlanFromExcel = async (file) => {
+    if (!primaryChip) {
+      setWizardError('Selecciona um dia antes de importar o Excel.')
+      return
+    }
+    try {
+      const rows = await parseDailyTemplateXlsxV2(file)
+      if (!rows.length) throw new Error('O ficheiro não tem linhas de plano.')
+      const first = rows[0]
+      const importedPlanName = first['Plan Name'] || wizardDailyTemplateName || 'Plano Diário'
+      const importedType = first['Plan Type'] || wizardType
+      const importedSessionType = first['Session Type'] || ''
+      const importedFocus = first['Session Focus'] || ''
+      const importedObjective = first['Session Objective'] || ''
+      const importedNotes = first['General Observations'] || ''
+      const isRest = String(first['Is Rest']).toLowerCase() === 'yes'
+      const importedItems = isRest
+        ? [{ id:'rest', name:'Descanso', cat:'Descanso', isRest:true }]
+        : rows
+            .filter(row => String(row['Exercise Name'] || '').trim())
+            .map((row, idx) => ({
+              id: `imp_${Date.now()}_${idx}`,
+              name: row['Exercise Name'],
+              cat: row['Exercise Category'] || (wizardType === 'golf' ? 'Driving Range' : 'Pernas'),
+              qty: row['Quantity'] || '',
+              sets: row['Sets'] || '',
+              reps: row['Reps'] || '',
+              load: row['Load'] || '',
+              desc: row['Instructions'] || '',
+              notes: row['Notes'] || '',
+            }))
+
+      setWizardType(importedType === 'gym' ? 'gym' : 'golf')
+      setWizardPlanMode('day')
+      setWizardStartDate(first.Date || primaryChip)
+      setWizardEndDate(first.Date || primaryChip)
+      setWizardSelectedChips([primaryChip])
+      setWizardDaySource('specific')
+      setWizardDayPlans(prev => ({ ...prev, [primaryChip]: importedItems }))
+      setWizardSessionTypes(prev => ({ ...prev, [primaryChip]: importedSessionType === 'auto' || importedSessionType === 'Autónomo' ? 'auto' : importedSessionType === 'coach' || importedSessionType === 'Com Coach' ? 'coach' : prev[primaryChip] || null }))
+      setWizardDailyTemplateName(importedPlanName)
+      setWizardDailyTemplateFocus(importedFocus)
+      setWizardDailyTemplateObjective(importedObjective)
+      setWizardNote(importedNotes)
+      setShowSaveTemplate(false)
+      setWizardError('')
+    } catch (err) {
+      setWizardError(err?.message || 'Não foi possível importar o ficheiro Excel.')
+    }
   }
 
   const deleteTemplate = async (id) => {
@@ -835,6 +1544,34 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
     setPhaseOverrides(prev => { const next = { ...prev }; delete next[ws]; return next })
     setEditingPhaseWs(null)
   }
+  const resetWizard = () => {
+    setWizard(false)
+    setWizardStep(1)
+    setWizardPlanMode('week')
+    setWizardStartDate('')
+    setWizardEndDate('')
+    setWizardActiveDays([0,1,2,3,4,5,6])
+    setWizardDayPlans({})
+    setWizardSelectedChips([])
+    setWizardDaySource('specific')
+    setWizardOpenCat(null)
+    setWizardNote('')
+    setWizardDailyTemplateName('')
+    setWizardDailyTemplateFocus('')
+    setWizardDailyTemplateObjective('')
+    setWizardCustom({ name:'', cat:'', desc:'' })
+    setWizardUserLib([])
+    setWizardError('')
+    setShowSaveTemplate(false)
+    setWizardTemplateName('')
+  }
+
+  const startWizard = (type) => {
+    resetWizard()
+    setWizardType(type)
+    setWizard(true)
+  }
+
 
   // ── WIZARD ─────────────────────────────────────────────────────────────────
   if (wizard) {
@@ -900,15 +1637,15 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
             <div style={{fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginBottom:'18px'}}>PERÍODO DO PLANO</div>
 
             {/* Template selector */}
-            {templates.filter(tpl=>tpl.plan_type===wizardType).length > 0 && (
+            {weeklyTemplates.filter(tpl=>tpl.plan_type===wizardType).length > 0 && (
               <div style={{marginBottom:'20px'}}>
                 <div style={{fontSize:'9px',letterSpacing:'2px',color:typeColor,fontWeight:600,marginBottom:'10px'}}>TEMPLATES GUARDADOS</div>
                 <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
-                  {templates.filter(tpl=>tpl.plan_type===wizardType).map(tpl=>(
+                  {weeklyTemplates.filter(tpl=>tpl.plan_type===wizardType).map(tpl=>(
                     <div key={tpl.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',background:t.bg,border:`1px solid ${t.border}`,borderRadius:'8px',padding:'10px 14px'}}>
                       <div style={{fontSize:'13px',fontWeight:600,color:t.text}}>{tpl.name}</div>
                       <div style={{display:'flex',gap:'6px'}}>
-                        <button onClick={()=>applyTemplate(tpl)} title='Aplicar template'
+                        <button onClick={()=>applyWeeklyTemplate(tpl)} title='Aplicar template'
                           style={{background:typeColor,border:'none',borderRadius:'6px',color:'#fff',padding:'4px 10px',cursor:'pointer',fontSize:'11px',fontWeight:700,fontFamily:F}}>
                           Usar este Template
                         </button>
@@ -924,17 +1661,55 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
               </div>
             )}
 
-            {/* Dates stacked vertically */}
-            <div style={{display:'flex',flexDirection:'column',gap:'12px',marginBottom:'20px'}}>
-              <div>
-                <div style={{fontSize:'10px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginBottom:'6px'}}>DATA DE INÍCIO</div>
-                <input type='date' value={wizardStartDate} onChange={e=>setWizardStartDate(e.target.value)} style={{...inp,maxWidth:'200px'}}/>
-              </div>
-              <div>
-                <div style={{fontSize:'10px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginBottom:'6px'}}>DATA DE FIM</div>
-                <input type='date' value={wizardEndDate} onChange={e=>setWizardEndDate(e.target.value)} style={{...inp,maxWidth:'200px'}}/>
-              </div>
+            <div style={{display:'flex',gap:'6px',marginBottom:'14px'}}>
+              {[
+                { key:'day', label:'Day' },
+                { key:'week', label:'Week' },
+              ].map(opt => (
+                <button
+                  key={opt.key}
+                  onClick={() => {
+                    setWizardPlanMode(opt.key)
+                    setWizardSelectedChips([])
+                    setWizardDaySource('specific')
+                    if (opt.key === 'day' && wizardStartDate && !wizardEndDate) setWizardEndDate(wizardStartDate)
+                  }}
+                  style={{
+                    background: wizardPlanMode === opt.key ? typeColor + '18' : 'transparent',
+                    border: `1px solid ${wizardPlanMode === opt.key ? typeColor : t.border}`,
+                    borderRadius:'20px',
+                    color: wizardPlanMode === opt.key ? typeColor : t.textMuted,
+                    padding:'5px 12px',
+                    cursor:'pointer',
+                    fontSize:'11px',
+                    fontFamily:F,
+                    fontWeight:wizardPlanMode === opt.key ? 700 : 500,
+                  }}
+                >
+                  {opt.label}
+                </button>
+              ))}
             </div>
+
+            {wizardPlanMode === 'day' ? (
+              <div style={{display:'flex',flexDirection:'column',gap:'12px',marginBottom:'20px'}}>
+                <div>
+                  <div style={{fontSize:'10px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginBottom:'6px'}}>DATA</div>
+                  <input type='date' value={wizardStartDate} onChange={e=>{ setWizardStartDate(e.target.value); setWizardEndDate(e.target.value) }} style={{...inp,maxWidth:'200px'}}/>
+                </div>
+              </div>
+            ) : (
+              <div style={{display:'flex',flexDirection:'column',gap:'12px',marginBottom:'20px'}}>
+                <div>
+                  <div style={{fontSize:'10px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginBottom:'6px'}}>DATA DE INÍCIO</div>
+                  <input type='date' value={wizardStartDate} onChange={e=>setWizardStartDate(e.target.value)} style={{...inp,maxWidth:'200px'}}/>
+                </div>
+                <div>
+                  <div style={{fontSize:'10px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginBottom:'6px'}}>DATA DE FIM</div>
+                  <input type='date' value={wizardEndDate} onChange={e=>setWizardEndDate(e.target.value)} style={{...inp,maxWidth:'200px'}}/>
+                </div>
+              </div>
+            )}
 
             {wizardStartDate && wizardEndDate && datesInRange.length>0 && (
               <div style={{background:typeColor+'11',border:`1px solid ${typeColor}33`,borderRadius:'8px',padding:'10px 14px',marginBottom:'16px'}}>
@@ -959,7 +1734,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
               style={{background:datesInRange.length===0?t.border:typeColor,border:'none',borderRadius:'8px',
                 color:datesInRange.length===0?t.textMuted:'#fff',padding:'12px 24px',fontSize:'14px',
                 fontWeight:700,cursor:datesInRange.length===0?'not-allowed':'pointer',fontFamily:F,width:'100%'}}>
-              {datesInRange.length===0?'Define o período de treino':'Definir Sessões →'}
+              {datesInRange.length===0?'Define o período de treino':wizardPlanMode==='day'?'Definir Plano Diário →':'Definir Sessões →'}
             </button>
           </div>
         )}
@@ -967,283 +1742,335 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
         {/* ── STEP 2 ── */}
         {wizardStep===2 && (
           <div>
-            <div style={{...card,marginBottom:'16px',padding:'14px 16px'}}>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'10px'}}>
-                <div style={{fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600}}>
-                  DIAS DO PLANO — selecciona um ou mais para configurar
-                </div>
-                <button onClick={()=>setWizardStep(1)}
-                  style={{background:'transparent',border:'none',color:t.textMuted,cursor:'pointer',fontSize:'12px',fontFamily:F}}>
-                  ← Voltar
-                </button>
-              </div>
-              {Object.entries(chipsByWeek).map(([ws,dates])=>{
-                const ph = weekPhases[ws] ? PHASES[weekPhases[ws]] : null
-                const wa = weekAlerts[ws] || []
-                return (
-                <div key={ws} style={{marginBottom:'12px'}}>
-                  <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'5px',flexWrap:'wrap'}}>
-                    <div style={{fontSize:'9px',letterSpacing:'1px',color:t.textMuted,fontWeight:600}}>{formatWeek(ws)}</div>
-                    {ph && <div style={{padding:'2px 8px',borderRadius:'4px',fontSize:'8px',fontWeight:700,letterSpacing:'1px',color:ph.color,background:ph.bg}}>{ph.label}</div>}
-                    {wa.map((a,i)=><div key={i} style={{fontSize:'9px',color:a.icon==='🔴'?'#ef4444':'#f59e0b'}}>{a.icon} {a.text}</div>)}
+            {/* Phase alerts per week */}
+            {wizardWeekStarts.map(ws=>{
+              const phId = weekPhases[ws]; const ph = PHASES[phId]; const als = weekAlerts[ws]||[]
+              if (!ph) return null
+              return (
+                <div key={ws} style={{...card,marginBottom:'10px',borderLeft:`4px solid ${ph.color}`,background:ph.bg,padding:'10px 14px'}}>
+                  <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'4px'}}>
+                    <div style={{padding:'2px 8px',borderRadius:'4px',fontSize:'8px',fontWeight:700,letterSpacing:'1px',color:'#fff',background:ph.color}}>{ph.label}</div>
+                    <div style={{fontSize:'11px',color:ph.color,fontWeight:600}}>{ph.situacao}</div>
                   </div>
-                  <div style={{display:'flex',gap:'4px',flexWrap:'wrap'}}>
-                    {dates.map(ds=>{
-                      const d = new Date(ds+'T12:00:00')
-                      const dow = d.getDay(); const dayIdx = dow===0?6:dow-1
-                      const selected = wizardSelectedChips.includes(ds)
-                      const hasData  = chipHasData(ds)
-                      const isComp   = dateHasComp(ds)
+                  {als.map((a,i)=>(
+                    <div key={i} style={{fontSize:'10px',color:a.level==='red'?'#991b1b':'#854F0B',marginTop:'3px'}}>{a.icon} {a.text}</div>
+                  ))}
+                </div>
+              )
+            })}
+
+            {/* Competition warning */}
+            {datesInRange.some(ds=>dateHasComp(ds)) && (
+              <div style={{fontSize:'11px',color:'#854F0B',marginBottom:'10px',display:'flex',alignItems:'center',gap:'5px',padding:'6px 10px',background:'#FFF3CD',borderRadius:'6px',border:'1px solid #BA751744'}}>
+                🏆 Dias com competição não precisam de sessão de treino.
+              </div>
+            )}
+
+            {/* Chip grid — day selector */}
+            <div style={{...card,marginBottom:'14px',padding:'14px 16px'}}>
+              <div style={{fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginBottom:'10px'}}>
+                SELECCIONA OS DIAS A CONFIGURAR
+              </div>
+              {Object.entries(chipsByWeek).map(([ws, wDates])=>(
+                <div key={ws} style={{marginBottom:'10px'}}>
+                  <div style={{fontSize:'10px',color:t.textMuted,marginBottom:'6px',fontWeight:600}}>
+                    Semana de {new Date(ws+'T12:00:00').toLocaleDateString('pt-PT',{day:'2-digit',month:'short'})}
+                  </div>
+                  <div style={{display:'flex',flexWrap:'wrap',gap:'6px'}}>
+                    {wDates.map(ds=>{
+                      const d=new Date(ds+'T12:00:00')
+                      const dow=d.getDay(); const dayIdx=dow===0?6:dow-1
+                      const sel=wizardSelectedChips.includes(ds)
+                      const hasData=chipHasData(ds)
+                      const isComp=dateHasComp(ds)
                       return (
-                        <button key={ds} onClick={()=>toggleChip(ds)}
-                          style={{padding:'5px 10px',borderRadius:'8px',fontFamily:F,fontSize:'11px',fontWeight:selected?700:400,cursor:'pointer',
-                            border:`1px solid ${isComp?'#BA7517':selected?typeColor:hasData?typeColor+'55':t.border}`,
-                            background:isComp?'#FFF3CD':selected?typeColor:hasData?typeColor+'11':'transparent',
-                            color:isComp?'#854F0B':selected?'#fff':hasData?typeColor:t.textMuted,
-                            display:'flex',flexDirection:'column',alignItems:'center',gap:'1px',minWidth:0}}>
-                          <span>{DAYS_SHORT_PT[dayIdx]} {d.getDate()} {isComp?'🏆':!isComp&&hasData?'✓':selected?'✓':''}</span>
-                          {isComp && compOnDate(ds)?.title && (
-                            <span style={{fontSize:'7px',maxWidth:'68px',overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis',lineHeight:1.2,color:'#854F0B'}}>
-                              {compOnDate(ds).title}
-                            </span>
-                          )}
-                        </button>
+                        <div key={ds} onClick={()=>isComp?null:toggleChip(ds)}
+                          style={{padding:'7px 12px',borderRadius:'8px',cursor:isComp?'default':'pointer',minWidth:'52px',textAlign:'center',
+                            border:`2px solid ${isComp?'#BA751744':sel?typeColor:hasData?typeColor+'55':t.border}`,
+                            background:isComp?'#FFF3CD':sel?typeColor+'18':hasData?typeColor+'09':t.surface,
+                            opacity:isComp?0.7:1}}>
+                          <div style={{fontSize:'9px',letterSpacing:'1px',color:isComp?'#854F0B':sel?typeColor:t.textMuted,fontWeight:700}}>{DAYS_SHORT_PT[dayIdx]}</div>
+                          <div style={{fontSize:'15px',fontWeight:900,color:isComp?'#854F0B':sel?typeColor:t.text,lineHeight:1.2}}>{d.getDate()}</div>
+                          {isComp&&<div style={{fontSize:'8px',color:'#854F0B'}}>🏆</div>}
+                          {!isComp&&hasData&&!sel&&<div style={{width:'5px',height:'5px',borderRadius:'50%',background:typeColor,margin:'2px auto 0'}}/>}
+                          {!isComp&&sel&&<div style={{fontSize:'8px',color:typeColor,fontWeight:700}}>✓</div>}
+                        </div>
                       )
                     })}
                   </div>
                 </div>
-                )
-              })}
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:'6px',flexWrap:'wrap',gap:'6px'}}>
-                {wizardSelectedChips.length>1 ? (
-                  <div style={{fontSize:'11px',color:typeColor,fontWeight:600}}>
-                    {wizardSelectedChips.length} dias seleccionados
-                  </div>
-                ) : <div/>}
-                <div style={{display:'flex',gap:'6px'}}>
-                  <button onClick={()=>setWizardSelectedChips([...datesInRange])}
-                    style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'6px',color:t.textMuted,padding:'3px 8px',cursor:'pointer',fontSize:'10px',fontFamily:F}}>
-                    Seleccionar Todos
+              ))}
+              <div style={{display:'flex',gap:'8px',marginTop:'8px',flexWrap:'wrap'}}>
+                <button onClick={()=>setWizardSelectedChips(wizardPlanMode==='day' ? datesInRange.slice(0,1).filter(ds=>!dateHasComp(ds)) : datesInRange.filter(ds=>!dateHasComp(ds)))}
+                  style={{background:'transparent',border:`1px solid ${typeColor}`,borderRadius:'6px',color:typeColor,padding:'4px 10px',cursor:'pointer',fontSize:'11px',fontWeight:600,fontFamily:F}}>
+                  {wizardPlanMode==='day' ? 'Seleccionar dia' : 'Seleccionar todos'}
+                </button>
+                <button onClick={()=>setWizardSelectedChips([])}
+                  style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'6px',color:t.textMuted,padding:'4px 10px',cursor:'pointer',fontSize:'11px',fontFamily:F}}>
+                  Limpar
+                </button>
+                {wizardSelectedChips.length>0&&(
+                  <button onClick={markRestDay}
+                    style={{background:'transparent',border:'1px solid #f59e0b',borderRadius:'6px',color:'#f59e0b',padding:'4px 10px',cursor:'pointer',fontSize:'11px',fontFamily:F}}>
+                    😴 Marcar descanso
                   </button>
-                  <button onClick={()=>setWizardSelectedChips([])}
-                    style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'6px',color:t.textMuted,padding:'3px 8px',cursor:'pointer',fontSize:'10px',fontFamily:F}}>
-                    Limpar Selecção
+                )}
+                {wizardSelectedChips.length>0&&(
+                  <button onClick={clearRestDay}
+                    style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'6px',color:t.textMuted,padding:'4px 10px',cursor:'pointer',fontSize:'11px',fontFamily:F}}>
+                    ✕ Limpar dias
                   </button>
-                </div>
+                )}
               </div>
             </div>
 
-            {/* Competition day legend */}
-            {datesInRange.some(ds=>dateHasComp(ds)) && (
-              <div style={{fontSize:'11px',color:'#854F0B',marginBottom:'10px',display:'flex',alignItems:'center',gap:'5px'}}>
-                <span>🏆</span> Dias com competição marcada — não é necessário registar treino.
-              </div>
-            )}
-
-            {wizardSelectedChips.length===0 ? (
-              <div style={{...card,textAlign:'center',padding:'40px',color:t.textMuted,fontSize:'13px'}}>
-                Selecciona um ou mais dias acima para configurar a sessão
-              </div>
-            ) : (
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
-                {/* Left: library */}
-                <div>
-                  <div style={{...card,marginBottom:'10px',padding:'11px 14px'}}>
-                    {isRestDay ? (
-                      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-                        <div style={{fontSize:'13px',fontWeight:700,color:'#f59e0b'}}>Descanso marcado</div>
-                        <button onClick={clearRestDay}
-                          style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'6px',color:t.textMuted,padding:'4px 10px',cursor:'pointer',fontSize:'11px',fontFamily:F}}>
-                          Remover Descanso
-                        </button>
-                      </div>
-                    ) : (
-                      <button onClick={markRestDay}
-                        style={{width:'100%',background:'transparent',border:`1px dashed ${t.border}`,borderRadius:'8px',color:t.textMuted,padding:'8px',cursor:'pointer',fontSize:'12px',fontFamily:F}}>
-                        Marcar Descanso
-                      </button>
-                    )}
-                  </div>
-
-                  {!isRestDay && !dateHasComp(primaryChip) && (
-                    <div style={{...card,marginBottom:'10px',padding:'11px 14px'}}>
-                      <div style={{fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginBottom:'8px'}}>TIPO DE SESSÃO</div>
-                      <div style={{display:'flex',gap:'6px'}}>
-                        {[{v:'coach',l:'Com Coach'},{v:'auto',l:'Autónomo'}].map(opt=>{
-                          const active = wizardSelectedChips.length>0 && wizardSelectedChips.every(ds=>wizardSessionTypes[ds]===opt.v)
-                          return (
-                            <button key={opt.v}
-                              onClick={()=>setWizardSessionTypes(prev=>{ const next={...prev}; wizardSelectedChips.forEach(ds=>{ next[ds]=opt.v }); return next })}
-                              style={{flex:1,padding:'7px',borderRadius:'8px',fontFamily:F,fontSize:'12px',fontWeight:active?700:400,cursor:'pointer',
-                                border:`1px solid ${active?typeColor:t.border}`,
-                                background:active?typeColor+'18':'transparent',
-                                color:active?typeColor:t.textMuted}}>
-                              {opt.l}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  )}
-
-                  {!isRestDay && cats.map(cat=>{
-                    const catItems = allLib.filter(e=>e.cat===cat)
-                    const open = wizardOpenCat===cat
+            {/* Session type picker for selected chips */}
+            {wizardSelectedChips.length>0 && !isRestDay && (
+              <div style={{...card,marginBottom:'14px',padding:'14px 16px'}}>
+                <div style={{fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginBottom:'8px'}}>TIPO DE SESSÃO</div>
+                <div style={{display:'flex',gap:'8px'}}>
+                  {[{v:'coach',l:'Com Coach'},{v:'auto',l:'Autónomo'}].map(opt=>{
+                    const allMatch = wizardSelectedChips.every(ds=>wizardSessionTypes[ds]===opt.v)
                     return (
-                      <div key={cat} style={{...card,marginBottom:'8px',padding:0,overflow:'hidden'}}>
-                        <button onClick={()=>setWizardOpenCat(open?null:cat)}
-                          style={{width:'100%',display:'flex',justifyContent:'space-between',alignItems:'center',padding:'11px 14px',background:'transparent',border:'none',cursor:'pointer',fontFamily:F}}>
-                          <div style={{fontSize:'12px',fontWeight:600,color:t.text}}>{cat}</div>
-                          <div style={{display:'flex',alignItems:'center',gap:'6px'}}>
-                            <div style={{fontSize:'10px',color:t.textMuted}}>{catItems.filter(e=>isDrillSelected(e.id)).length}/{catItems.length}</div>
-                            <div style={{fontSize:'12px',color:t.textMuted}}>{open?'▲':'▼'}</div>
-                          </div>
-                        </button>
-                        {open && catItems.map(ex=>{
-                          const sel = isDrillSelected(ex.id)
-                          return (
-                            <div key={ex.id} onClick={()=>toggleDrill(ex)}
-                              style={{borderTop:`1px solid ${t.border}`,padding:'9px 14px',background:sel?typeColor+'0d':'transparent',cursor:'pointer'}}>
-                              <div style={{display:'flex',alignItems:'flex-start',gap:'8px'}}>
-                                <div style={{width:'18px',height:'18px',borderRadius:'4px',flexShrink:0,marginTop:'1px',
-                                  border:`2px solid ${sel?typeColor:t.border}`,background:sel?typeColor:'transparent',
-                                  display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:'11px',fontWeight:900}}>
-                                  {sel?'✓':''}
-                                </div>
-                                <div style={{flex:1}}
-                                  onMouseEnter={()=>setTooltipId(ex.id)}
-                                  onMouseLeave={()=>setTooltipId(null)}>
-                                  <div style={{fontSize:'12px',fontWeight:sel?600:400,color:sel?typeColor:t.text}}>{ex.name}</div>
-                                  <div style={{fontSize:'10px',color:t.textMuted,marginTop:'1px'}}>{ex.desc.length>50?ex.desc.slice(0,50)+'…':ex.desc}</div>
-                                  {tooltipId===ex.id && (
-                                    <div style={{position:'absolute',zIndex:100,background:theme==='dark'?'#1a1a1a':'#fff',
-                                      border:`1px solid ${t.border}`,borderRadius:'8px',padding:'8px 12px',width:'220px',
-                                      boxShadow:'0 4px 16px rgba(0,0,0,0.15)',marginTop:'4px'}}>
-                                      <div style={{fontSize:'11px',fontWeight:700,color:typeColor,marginBottom:'3px'}}>{ex.name}</div>
-                                      <div style={{fontSize:'11px',color:t.text,lineHeight:1.5}}>{ex.desc}</div>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
+                      <button key={opt.v} onClick={()=>{
+                        const next={...wizardSessionTypes}
+                        wizardSelectedChips.forEach(ds=>{next[ds]=opt.v})
+                        setWizardSessionTypes(next)
+                      }}
+                        style={{flex:1,padding:'9px',borderRadius:'8px',fontFamily:F,fontSize:'12px',fontWeight:allMatch?700:400,cursor:'pointer',
+                          border:`1px solid ${allMatch?typeColor:t.border}`,background:allMatch?typeColor+'18':'transparent',color:allMatch?typeColor:t.textMuted}}>
+                        {opt.l}
+                      </button>
                     )
                   })}
+                </div>
+              </div>
+            )}
 
-                  {!isRestDay && (
-                    <div style={{...card,marginTop:'8px'}}>
-                      <div style={{fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginBottom:'10px'}}>EXERCÍCIO PERSONALIZADO</div>
-                      <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
-                        <input placeholder='Nome' value={wizardCustom.name} onChange={e=>setWizardCustom(p=>({...p,name:e.target.value}))} style={inp}/>
-                        <select value={wizardCustom.cat} onChange={e=>setWizardCustom(p=>({...p,cat:e.target.value}))} style={inp}>
-                          <option value=''>Categoria</option>
-                          {cats.map(c=><option key={c} value={c}>{c}</option>)}
-                        </select>
-                        <input placeholder='Descrição (opcional)' value={wizardCustom.desc} onChange={e=>setWizardCustom(p=>({...p,desc:e.target.value}))} style={inp}/>
-                        <button onClick={addCustom} style={{background:typeColor,border:'none',borderRadius:'6px',color:'#fff',padding:'8px',cursor:'pointer',fontSize:'12px',fontWeight:700,fontFamily:F}}>
-                          + Adicionar
+            {/* Plan source */}
+            {wizardSelectedChips.length>0 && !isRestDay && (
+              <div style={{...card,marginBottom:'14px',padding:'14px 16px'}}>
+                <div style={{fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginBottom:'8px'}}>PLANO PARA ESTE DIA</div>
+                <div style={{display:'flex',gap:'6px',marginBottom:'10px',flexWrap:'wrap'}}>
+                  <button onClick={()=>setWizardDaySource('specific')}
+                    style={{background:wizardDaySource==='specific'?typeColor+'18':'transparent',border:`1px solid ${wizardDaySource==='specific'?typeColor:t.border}`,borderRadius:'16px',color:wizardDaySource==='specific'?typeColor:t.textMuted,padding:'5px 10px',cursor:'pointer',fontSize:'11px',fontWeight:wizardDaySource==='specific'?700:500,fontFamily:F}}>
+                    Novo plano
+                  </button>
+                  <button onClick={()=>setWizardDaySource('saved')}
+                    style={{background:wizardDaySource==='saved'?typeColor+'18':'transparent',border:`1px solid ${wizardDaySource==='saved'?typeColor:t.border}`,borderRadius:'16px',color:wizardDaySource==='saved'?typeColor:t.textMuted,padding:'5px 10px',cursor:'pointer',fontSize:'11px',fontWeight:wizardDaySource==='saved'?700:500,fontFamily:F}}>
+                    Plano guardado
+                  </button>
+                  <button onClick={exportCurrentDayToExcel}
+                    style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'16px',color:t.textMuted,padding:'5px 10px',cursor:'pointer',fontSize:'11px',fontWeight:600,fontFamily:F}}>
+                    Exportar Excel
+                  </button>
+                  <button onClick={()=>excelFileRef.current?.click()}
+                    style={{background:typeColor+'18',border:`1px solid ${typeColor}`,borderRadius:'16px',color:typeColor,padding:'5px 10px',cursor:'pointer',fontSize:'11px',fontWeight:700,fontFamily:F}}>
+                    Importar Excel
+                  </button>
+                  <input ref={excelFileRef} type="file" accept=".xlsx" style={{display:'none'}} onChange={e => {
+                    const file = e.target.files?.[0]
+                    e.target.value = ''
+                    if (file) importDailyPlanFromExcel(file)
+                  }} />
+                </div>
+                {wizardDaySource==='saved' ? (
+                  dailyTemplates.length > 0 ? (
+                    <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
+                      {dailyTemplates.map(tpl => (
+                        <button key={tpl.id} onClick={()=>applyDailyTemplate(tpl)}
+                          style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'10px',width:'100%',background:t.bg,border:`1px solid ${t.border}`,borderRadius:'8px',padding:'9px 12px',cursor:'pointer',fontFamily:F,textAlign:'left'}}>
+                          <div style={{minWidth:0}}>
+                            <div style={{fontSize:'12px',fontWeight:700,color:t.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{tpl.name}</div>
+                            <div style={{fontSize:'10px',color:t.textMuted,marginTop:'1px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                              {extractDailyTemplateMeta(tpl).sessionFocus || extractDailyTemplateMeta(tpl).sessionObjective || 'Plano diário guardado'}
+                            </div>
+                          </div>
+                          <div style={{fontSize:'10px',color:typeColor,fontWeight:700,flexShrink:0}}>Aplicar</div>
                         </button>
-                      </div>
+                      ))}
                     </div>
+                  ) : (
+                    <div style={{fontSize:'11px',color:t.textMuted}}>Sem planos diários guardados ainda.</div>
+                  )
+                ) : (
+                  <div style={{fontSize:'11px',color:t.textMuted}}>Cria um plano específico e guarda-o para reutilizar em outros dias.</div>
+                )}
+              </div>
+            )}
+
+            {/* Chip summary / rest indicator */}
+            {wizardSelectedChips.length>0 && isRestDay && (
+              <div style={{...card,marginBottom:'14px',padding:'12px 16px',background:'#fff7ed',border:'1px solid #f59e0b44'}}>
+                <div style={{fontSize:'12px',color:'#f59e0b',fontWeight:600}}>😴 Dia de descanso marcado para os dias seleccionados</div>
+              </div>
+            )}
+
+            {/* Current session for primary chip */}
+            {wizardSelectedChips.length>0 && !isRestDay && wizardDaySource==='specific' && (
+              <div style={{...card,marginBottom:'14px',padding:'14px 16px'}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'8px'}}>
+                  <div style={{fontSize:'9px',letterSpacing:'2px',color:typeColor,fontWeight:600}}>
+                    SESSÃO — {primaryItems.length} exercício{primaryItems.length!==1?'s':''}
+                    {wizardType==='golf'&&primaryItems.length>0&&totalMins>0&&<span style={{color:t.textMuted,fontWeight:400}}> · {fmtMins(totalMins)}{totalBalls>0&&` · ~${totalBalls} bolas`}</span>}
+                  </div>
+                  {wizardSelectedChips.length>1&&primaryItems.length>0&&(
+                    <button onClick={copyToAllChips}
+                      style={{background:'transparent',border:`1px solid ${typeColor}`,borderRadius:'6px',color:typeColor,padding:'3px 10px',cursor:'pointer',fontSize:'11px',fontWeight:600,fontFamily:F}}>
+                      Copiar para todos
+                    </button>
                   )}
                 </div>
-
-                {/* Right: current chip detail */}
-                <div>
-                  <div style={{...card,position:'sticky',top:'16px'}}>
-                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px'}}>
-                      <div>
-                        <div style={{fontSize:'9px',letterSpacing:'2px',color:typeColor,fontWeight:600,marginBottom:'2px'}}>
-                          {wizardSelectedChips.length===1
-                            ? (() => { const d=new Date(primaryChip+'T12:00:00'); return `${DAYS_SHORT_PT[d.getDay()===0?6:d.getDay()-1]} ${d.getDate()}/${d.getMonth()+1}` })()
-                            : `${wizardSelectedChips.length} dias`}
-                        </div>
-                        {wizardType==='golf' && primaryItems.filter(i=>!i.isRest).length>0 && (
-                          <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
-                            <div style={{fontSize:'11px',color:t.textMuted}}>{totalBalls} bolas</div>
-                            {totalMins>0 && (
-                              <div style={{fontSize:'11px',color:typeColor,fontWeight:600}}>{fmtMins(totalMins)}</div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      {primaryItems.filter(i=>!i.isRest).length>0 && (
-                        <button onClick={copyToAllChips}
-                          style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'6px',color:t.textMuted,padding:'5px 10px',cursor:'pointer',fontSize:'11px',fontFamily:F}}>
-                          Copiar para Todos os Dias
-                        </button>
-                      )}
+                {primaryItems.length===0&&(
+                  <div style={{fontSize:'12px',color:t.textMuted,marginBottom:'8px'}}>Adiciona exercícios da biblioteca abaixo.</div>
+                )}
+                {primaryItems.map((item,ii)=>(
+                  <div key={item.id} style={{background:t.bg,border:`1px solid ${t.border}`,borderRadius:'6px',padding:'7px 10px',marginBottom:'4px',display:'flex',alignItems:'center',gap:'8px'}}>
+                    <div style={{display:'flex',flexDirection:'column',gap:'2px',marginRight:'2px'}}>
+                      <button onClick={()=>moveItem(item.id,'up')} disabled={ii===0} style={{background:'transparent',border:'none',cursor:ii===0?'default':'pointer',color:ii===0?t.border:t.textMuted,fontSize:'10px',padding:'0',lineHeight:1}}>▲</button>
+                      <button onClick={()=>moveItem(item.id,'down')} disabled={ii===primaryItems.length-1} style={{background:'transparent',border:'none',cursor:ii===primaryItems.length-1?'default':'pointer',color:ii===primaryItems.length-1?t.border:t.textMuted,fontSize:'10px',padding:'0',lineHeight:1}}>▼</button>
                     </div>
-
-                    {isRestDay && (
-                      <div style={{textAlign:'center',padding:'24px',color:'#f59e0b',fontSize:'13px',fontWeight:600}}>Dia de Descanso</div>
-                    )}
-                    {!isRestDay && primaryItems.length===0 && (
-                      <div style={{textAlign:'center',padding:'24px',color:t.textMuted,fontSize:'13px'}}>Selecciona exercícios à esquerda</div>
-                    )}
-                    {!isRestDay && primaryItems.map((item)=>(
-                      <div key={item.id} style={{background:t.bg,border:`1px solid ${t.border}`,borderRadius:'8px',padding:'10px 12px',marginBottom:'8px'}}>
-                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'6px'}}>
-                          <div style={{fontSize:'12px',fontWeight:600,color:t.text,flex:1,paddingRight:'8px'}}>{item.name}</div>
-                          <div style={{display:'flex',gap:'3px',flexShrink:0}}>
-                            <button onClick={()=>moveItem(item.id,'up')} style={{background:'transparent',border:'none',cursor:'pointer',color:t.textMuted,padding:'0 3px',fontSize:'12px'}}>↑</button>
-                            <button onClick={()=>moveItem(item.id,'down')} style={{background:'transparent',border:'none',cursor:'pointer',color:t.textMuted,padding:'0 3px',fontSize:'12px'}}>↓</button>
-                            <button onClick={()=>removeItem(item.id)} style={{background:'transparent',border:'none',cursor:'pointer',color:'#ef4444',padding:'0 3px',fontSize:'12px'}}>×</button>
-                          </div>
-                        </div>
-                        {wizardType==='golf' ? (
-                          <div style={{display:'flex',alignItems:'center',gap:'6px'}}>
-                            <input type='number' value={item.qty||''} onChange={e=>updateItem(item.id,'qty',e.target.value)} placeholder='50' style={{...smInp,width:'80px'}}/>
-                            <span style={{fontSize:'11px',color:t.textMuted}}>bolas</span>
-                            {estimateMins(item)>0 && <span style={{fontSize:'10px',color:typeColor}}>{fmtMins(estimateMins(item))}</span>}
-                          </div>
-                        ) : (
-                          <div style={{display:'flex',gap:'5px',flexWrap:'wrap'}}>
-                            <input type='number' value={item.sets||''} onChange={e=>updateItem(item.id,'sets',e.target.value)} placeholder='3' style={{...smInp,width:'60px'}}/>
-                            <input type='number' value={item.reps||''} onChange={e=>updateItem(item.id,'reps',e.target.value)} placeholder='10' style={{...smInp,width:'60px'}}/>
-                            <input value={item.load||''} onChange={e=>updateItem(item.id,'load',e.target.value)} placeholder='kg' style={{...smInp,width:'55px'}}/>
-                          </div>
-                        )}
+                    <div style={{flex:1,fontSize:'12px',fontWeight:500,color:t.text,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{item.name}</div>
+                    {wizardType==='golf'?(
+                      <div style={{display:'flex',alignItems:'center',gap:'3px',flexShrink:0}}>
+                        <input type='number' value={item.qty||''} onChange={e=>updateItem(item.id,'qty',e.target.value)} placeholder='50' style={{...smInp,width:'54px'}}/>
+                        <span style={{fontSize:'9px',color:t.textMuted}}>bolas</span>
                       </div>
-                    ))}
+                    ):(
+                      <div style={{display:'flex',gap:'3px',flexShrink:0}}>
+                        <input type='number' value={item.sets||''} onChange={e=>updateItem(item.id,'sets',e.target.value)} placeholder='3' style={{...smInp,width:'40px'}}/>
+                        <input type='number' value={item.reps||''} onChange={e=>updateItem(item.id,'reps',e.target.value)} placeholder='10' style={{...smInp,width:'40px'}}/>
+                        <input value={item.load||''} onChange={e=>updateItem(item.id,'load',e.target.value)} placeholder='kg' style={{...smInp,width:'38px'}}/>
+                      </div>
+                    )}
+                    <button onClick={()=>removeItem(item.id)} style={{background:'transparent',border:'none',cursor:'pointer',color:'#ef4444',fontSize:'14px',padding:'0',flexShrink:0}}>×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Exercise library — only shown when chips are selected and not rest */}
+            {wizardSelectedChips.length>0 && !isRestDay && wizardDaySource==='specific' && (
+              <div style={{...card,marginBottom:'14px',padding:'14px 16px'}}>
+                <div style={{fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginBottom:'8px'}}>BIBLIOTECA DE EXERCÍCIOS</div>
+                {cats.map(cat=>{
+                  const catItems=allLib.filter(e=>e.cat===cat)
+                  const open=wizardOpenCat===cat
+                  return (
+                    <div key={cat} style={{border:`1px solid ${t.border}`,borderRadius:'8px',marginBottom:'4px',overflow:'hidden'}}>
+                      <button onClick={()=>setWizardOpenCat(open?null:cat)}
+                        style={{width:'100%',display:'flex',justifyContent:'space-between',alignItems:'center',padding:'9px 12px',background:'transparent',border:'none',cursor:'pointer',fontFamily:F}}>
+                        <div style={{fontSize:'12px',fontWeight:600,color:t.text}}>{cat}</div>
+                        <div style={{display:'flex',alignItems:'center',gap:'6px'}}>
+                          <div style={{fontSize:'10px',color:t.textMuted}}>{catItems.filter(e=>isDrillSelected(e.id)).length}/{catItems.length}</div>
+                          <div style={{fontSize:'11px',color:t.textMuted}}>{open?'▲':'▼'}</div>
+                        </div>
+                      </button>
+                      {open&&catItems.map(ex=>{
+                        const sel=isDrillSelected(ex.id)
+                        return (
+                          <div key={ex.id} onClick={()=>toggleDrill(ex)}
+                            style={{borderTop:`1px solid ${t.border}`,padding:'8px 12px',background:sel?typeColor+'0d':'transparent',cursor:'pointer',display:'flex',gap:'8px',alignItems:'flex-start'}}>
+                            <div style={{width:'16px',height:'16px',borderRadius:'3px',flexShrink:0,marginTop:'1px',
+                              border:`2px solid ${sel?typeColor:t.border}`,background:sel?typeColor:'transparent',
+                              display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:'10px',fontWeight:900}}>
+                              {sel?'✓':''}
+                            </div>
+                            <div style={{flex:1}}>
+                              <div style={{fontSize:'12px',fontWeight:sel?600:400,color:sel?typeColor:t.text}}>{ex.name}</div>
+                              <div style={{fontSize:'10px',color:t.textMuted}}>{ex.desc.length>60?ex.desc.slice(0,60)+'…':ex.desc}</div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })}
+
+                {/* Custom exercise */}
+                <div style={{...card,marginTop:'8px',padding:'10px 12px'}}>
+                  <div style={{fontSize:'9px',letterSpacing:'1px',color:t.textMuted,fontWeight:600,marginBottom:'6px'}}>EXERCÍCIO PERSONALIZADO</div>
+                  <div style={{display:'flex',gap:'5px',flexWrap:'wrap'}}>
+                    <input placeholder='Nome' value={wizardCustom.name} onChange={e=>setWizardCustom(p=>({...p,name:e.target.value}))} style={{...inp,flex:2,minWidth:'120px'}}/>
+                    <select value={wizardCustom.cat} onChange={e=>setWizardCustom(p=>({...p,cat:e.target.value}))} style={{...inp,flex:1,minWidth:'80px'}}>
+                      <option value=''>Cat.</option>
+                      {cats.map(c=><option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <button onClick={addCustom} style={{background:typeColor,border:'none',borderRadius:'6px',color:'#fff',padding:'7px 12px',cursor:'pointer',fontSize:'12px',fontWeight:700,fontFamily:F}}>+</button>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Validation error */}
-            {wizardError && (
-              <div style={{background:'#fef2f2',border:'1px solid #fecaca',borderRadius:'8px',padding:'10px 14px',marginTop:'12px',fontSize:'12px',color:'#991b1b',fontWeight:600}}>
+            {/* Save as template */}
+            {wizardSelectedChips.length>0 && primaryItems.length>0 && !isRestDay && (
+              <div style={{marginBottom:'14px'}}>
+                {wizardSelectedChips.length === 1 ? (
+                  !showSaveTemplate ? (
+                    <button onClick={()=>setShowSaveTemplate(true)}
+                      style={{width:'100%',padding:'9px',background:'transparent',border:`1px dashed ${typeColor}`,borderRadius:'8px',color:typeColor,cursor:'pointer',fontSize:'12px',fontWeight:600,fontFamily:F}}>
+                      💾 Guardar como plano diário
+                    </button>
+                  ) : (
+                    <div style={{...card,padding:'12px 14px'}}>
+                      <div style={{fontSize:'9px',letterSpacing:'1px',color:typeColor,fontWeight:600,marginBottom:'8px'}}>GUARDAR PLANO DIÁRIO</div>
+                      <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+                        <input value={wizardDailyTemplateName} onChange={e=>setWizardDailyTemplateName(e.target.value)} placeholder='Nome do plano' style={{...inp}}/>
+                        <input value={wizardDailyTemplateFocus} onChange={e=>setWizardDailyTemplateFocus(e.target.value)} placeholder='Foco da sessão' style={{...inp}}/>
+                        <input value={wizardDailyTemplateObjective} onChange={e=>setWizardDailyTemplateObjective(e.target.value)} placeholder='Objetivo da sessão' style={{...inp}}/>
+                        <textarea value={wizardNote} onChange={e=>setWizardNote(e.target.value)} placeholder='Observações gerais' style={{...inp,minHeight:'56px',resize:'vertical'}}/>
+                        <div style={{display:'flex',gap:'6px'}}>
+                          <button onClick={saveAsDailyTemplate} disabled={savingTemplate||!wizardDailyTemplateName.trim()}
+                            style={{background:savingTemplate?t.border:typeColor,border:'none',borderRadius:'6px',color:'#fff',padding:'7px 14px',cursor:'pointer',fontSize:'12px',fontWeight:700,fontFamily:F}}>
+                            {savingTemplate?'...':'Guardar'}
+                          </button>
+                          <button onClick={()=>setShowSaveTemplate(false)}
+                            style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'6px',color:t.textMuted,padding:'7px 10px',cursor:'pointer',fontSize:'12px',fontFamily:F}}>
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                ) : (
+                  !showSaveTemplate ? (
+                    <button onClick={()=>setShowSaveTemplate(true)}
+                      style={{width:'100%',padding:'9px',background:'transparent',border:`1px dashed ${typeColor}`,borderRadius:'8px',color:typeColor,cursor:'pointer',fontSize:'12px',fontWeight:600,fontFamily:F}}>
+                      💾 Guardar como template semanal
+                    </button>
+                  ) : (
+                    <div style={{...card,padding:'12px 14px'}}>
+                      <div style={{fontSize:'9px',letterSpacing:'1px',color:typeColor,fontWeight:600,marginBottom:'6px'}}>NOME DO TEMPLATE</div>
+                      <div style={{display:'flex',gap:'6px'}}>
+                        <input value={wizardTemplateName} onChange={e=>setWizardTemplateName(e.target.value)} placeholder='Ex: Semana de Acumulação' style={{...inp,flex:1}}/>
+                        <button onClick={()=>saveAsWeeklyTemplate(wizardTemplateName)} disabled={savingTemplate||!wizardTemplateName.trim()}
+                          style={{background:savingTemplate?t.border:typeColor,border:'none',borderRadius:'6px',color:'#fff',padding:'7px 14px',cursor:'pointer',fontSize:'12px',fontWeight:700,fontFamily:F}}>
+                          {savingTemplate?'...':'OK'}
+                        </button>
+                        <button onClick={()=>setShowSaveTemplate(false)}
+                          style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'6px',color:t.textMuted,padding:'7px 10px',cursor:'pointer',fontSize:'12px',fontFamily:F}}>
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                  )
+                )}
+              </div>
+            )}
+
+            {wizardError&&(
+              <div style={{background:'#fef2f2',border:'1px solid #fecaca',borderRadius:'8px',padding:'10px 14px',marginBottom:'12px',fontSize:'12px',color:'#991b1b',fontWeight:600}}>
                 ⚠ {wizardError}
               </div>
             )}
-
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:'16px',flexWrap:'wrap',gap:'8px'}}>
-              {/* Save as template */}
-              {showSaveTemplate ? (
-                <div style={{display:'flex',gap:'6px',alignItems:'center',flex:1,flexWrap:'wrap'}}>
-                  <input value={wizardTemplateName} onChange={e=>setWizardTemplateName(e.target.value)}
-                    placeholder='Nome do template' style={{...inp,flex:1,minWidth:'160px'}}/>
-                  <button onClick={()=>saveAsTemplate(wizardTemplateName)} disabled={savingTemplate||!wizardTemplateName.trim()}
-                    style={{background:savingTemplate?t.border:typeColor,border:'none',borderRadius:'8px',color:'#fff',padding:'8px 16px',cursor:savingTemplate?'not-allowed':'pointer',fontSize:'12px',fontWeight:700,fontFamily:F}}>
-                    {savingTemplate?'...':'💾 Confirmar'}
-                  </button>
-                  <button onClick={()=>{setShowSaveTemplate(false);setWizardTemplateName('')}}
-                    style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'8px',color:t.textMuted,padding:'8px 12px',cursor:'pointer',fontSize:'12px',fontFamily:F}}>
-                    Cancelar
-                  </button>
-                </div>
-              ) : (
-                <button onClick={()=>setShowSaveTemplate(true)}
-                  style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'8px',color:t.textMuted,padding:'8px 14px',cursor:'pointer',fontSize:'12px',fontFamily:F}}>
-                  💾 Guardar como Template
-                </button>
-              )}
-              <button onClick={saveWizard} disabled={saving||datesInRange.length===0}
-                style={{background:saving?t.border:typeColor,border:'none',borderRadius:'8px',color:saving?t.textMuted:'#fff',
-                  padding:'12px 28px',fontSize:'14px',fontWeight:700,cursor:saving?'not-allowed':'pointer',fontFamily:F}}>
+            <div style={{display:'flex',justifyContent:'space-between',marginTop:'4px',gap:'8px'}}>
+              <button onClick={()=>{setWizardStep(1)}}
+                style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'8px',color:t.textMuted,padding:'12px 20px',fontSize:'13px',cursor:'pointer',fontFamily:F}}>
+                ← Voltar
+              </button>
+              <button onClick={saveWizard} disabled={saving||wizardSelectedChips.length===0}
+                style={{background:saving||wizardSelectedChips.length===0?t.border:typeColor,border:'none',borderRadius:'8px',color:saving||wizardSelectedChips.length===0?t.textMuted:'#fff',
+                  padding:'12px 28px',fontSize:'14px',fontWeight:700,cursor:saving||wizardSelectedChips.length===0?'not-allowed':'pointer',fontFamily:F}}>
                 {saving?'A guardar...':'Guardar Plano'}
               </button>
             </div>
@@ -1258,7 +2085,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
     <div style={{fontFamily:F,color:t.text}}>
       <style>{`
         .train-coach-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
-        .train-stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+        .train-stats-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px}
         .train-perio-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
         @media(max-width:700px){.train-coach-grid{grid-template-columns:repeat(2,1fr)}.train-stats-grid{grid-template-columns:repeat(2,1fr)}.train-perio-grid{grid-template-columns:1fr}}
         @media(max-width:400px){.train-coach-grid{grid-template-columns:1fr 1fr}}
@@ -1273,6 +2100,10 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
               <div>
                 <div style={{fontSize:'10px',letterSpacing:'2px',color:t.textMuted,marginBottom:'5px',fontWeight:600}}>DATA</div>
                 <input type='date' value={freeSession.date} onChange={e=>setFreeSession(p=>({...p,date:e.target.value}))} style={inp}/>
+              </div>
+              <div>
+                <div style={{fontSize:'10px',letterSpacing:'2px',color:t.textMuted,marginBottom:'5px',fontWeight:600}}>CAMPO</div>
+                <input value={freeSession.course} onChange={e=>setFreeSession(p=>({...p,course:e.target.value}))} placeholder='Nome do campo / percurso' style={inp}/>
               </div>
               <div>
                 <div style={{fontSize:'10px',letterSpacing:'2px',color:t.textMuted,marginBottom:'5px',fontWeight:600}}>SCORE</div>
@@ -1365,7 +2196,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
           {/* Create plan buttons — smaller coach cards */}
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px',marginBottom:'20px'}}>
             <div style={{background:'#eaf4ff',border:`2px solid ${golfColor}`,borderRadius:'12px',padding:'14px 16px',cursor:'pointer'}}
-              onClick={()=>{setWizardType('golf');setWizard(true);setWizardStep(1);setWizardStartDate('');setWizardEndDate('');setWizardActiveDays([0,1,2,3,4,5,6]);setWizardDayPlans({});setWizardSelectedChips([]);setWizardSessionTypes({});setWizardNote('');setWizardUserLib([]);setWizardError('')}}>
+              onClick={()=>startWizard('golf')}>
               <div style={{fontSize:'9px',letterSpacing:'2px',color:golfColor,fontWeight:700,marginBottom:'2px'}}>COACH GOLF</div>
               <div style={{fontSize:'14px',fontWeight:800,color:golfDark}}>Golf Plan</div>
               <div style={{fontSize:'11px',color:'#185FA5',marginTop:'4px',lineHeight:1.4}}>Drills · bolas · campo</div>
@@ -1374,7 +2205,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
               </div>
             </div>
             <div style={{background:'#eafff0',border:`2px solid ${gymColor}`,borderRadius:'12px',padding:'14px 16px',cursor:'pointer'}}
-              onClick={()=>{setWizardType('gym');setWizard(true);setWizardStep(1);setWizardStartDate('');setWizardEndDate('');setWizardActiveDays([0,1,2,3,4,5,6]);setWizardDayPlans({});setWizardSelectedChips([]);setWizardSessionTypes({});setWizardNote('');setWizardUserLib([]);setWizardError('')}}>
+              onClick={()=>startWizard('gym')}>
               <div style={{fontSize:'9px',letterSpacing:'2px',color:gymColor,fontWeight:700,marginBottom:'2px'}}>COACH GYM</div>
               <div style={{fontSize:'14px',fontWeight:800,color:gymDark}}>Gym Plan</div>
               <div style={{fontSize:'11px',color:'#27500A',marginTop:'4px',lineHeight:1.4}}>Séries · reps · carga</div>
@@ -1560,11 +2391,12 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
                         <div style={{fontSize:'8px',letterSpacing:'3px',color:session.isRest?'#f59e0b':color,marginBottom:'2px',fontWeight:600}}>
                           {type.toUpperCase()}{session.free?' · CAMPO':session.isRest?' · DESCANSO':session.session_type==='coach'?' · COM COACH':session.session_type==='auto'?' · AUTÓNOMO':''}
                         </div>
+                        {session.course&&<div style={{fontSize:'12px',color:t.textMuted}}>{session.course}</div>}
                         {session.notes&&<div style={{fontSize:'12px',color:t.textMuted}}>{session.notes}</div>}
                         {session.score&&<div style={{fontSize:'13px',fontWeight:700,color:t.text}}>Score: {session.score}{session.holes?` (${session.holes}h)`:''}</div>}
                       </div>
                       <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:'4px',flexShrink:0}}>
-                        {(email===COACH_GOLF||email===ADMIN)&&!session.free&&(
+                        {COACH_ROLES.includes(userRole)&&!session.free&&(
                           <button onClick={()=>{
                             const focusDate=(()=>{const d=new Date(weekStart+'T12:00:00');d.setDate(d.getDate()+selectedDay);return d.toISOString().split('T')[0]})()
                             openEditWizard(type,focusDate)
@@ -1660,6 +2492,9 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
         })
 
         const allSessions = filteredPlans.flatMap(p=>(p.days||[]).flatMap((d,di)=>(d?.sessions||[]).filter(s=>!s.isRest).map(s=>({...s,plan_type:p.plan_type,week_start:p.week_start,dayIdx:di}))))
+        const golfSessions = allSessions.filter(s => s.plan_type === 'golf' && !s.free)
+        const gymSessions = allSessions.filter(s => s.plan_type === 'gym')
+        const practiceRounds = allSessions.filter(s => s.plan_type === 'golf' && s.free)
         const catCounts = {}
         allSessions.forEach(s=>{ if(s.cat) catCounts[s.cat]=(catCounts[s.cat]||0)+1 })
         const gTotal   = GOLF_CATS.reduce((a,c)=>a+(catCounts[c]||0),0)
@@ -1739,10 +2574,11 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
             {/* Summary cards */}
             <div className="train-stats-grid">
               {[
-                {l:'SESSÕES',    v:allSessions.length,                                    c:t.text},
-                {l:'GOLF',      v:allSessions.filter(s=>s.plan_type==='golf').length,    c:golfColor},
-                {l:'GYM',       v:allSessions.filter(s=>s.plan_type==='gym').length,     c:gymColor},
-                {l:'CONCLUSÃO', v:`${overallComp}%`,                                     c:overallComp>=80?gymColor:overallComp>=50?'#f59e0b':'#ef4444'},
+                {l:'SESSÕES', v:allSessions.length, c:t.text},
+                {l:'GOLF', v:golfSessions.length, c:golfColor},
+                {l:'GYM', v:gymSessions.length, c:gymColor},
+                {l:'RONDAS', v:practiceRounds.length, c:'#f59e0b'},
+                {l:'CONCLUSÃO', v:`${overallComp}%`, c:overallComp>=80?gymColor:overallComp>=50?'#f59e0b':'#ef4444'},
               ].map(item=>(
                 <div key={item.l} style={card}>
                   <div style={{fontSize:'8px',letterSpacing:'2px',color:t.textMuted,marginBottom:'8px',fontWeight:600}}>{item.l}</div>
@@ -1797,7 +2633,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
             {(progressType==='all' || progressType==='golf') && gTotal>0 && (
               <div style={{...card,marginBottom:'14px'}}>
                 <div style={{fontSize:'8px',letterSpacing:'3px',color:golfColor,marginBottom:'12px',fontWeight:600}}>GOLFE — DISTRIBUIÇÃO POR CATEGORIA</div>
-                {GOLF_CATS.map(cat=>{
+                {[...GOLF_CATS].sort((a,b)=>(catCounts[b]||0)-(catCounts[a]||0)).map(cat=>{
                   const count=catCounts[cat]||0
                   const pct=gTotal>0?Math.round((count/gTotal)*100):0
                   return (
@@ -1818,7 +2654,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
             {(progressType==='all' || progressType==='gym') && gymTotal>0 && (
               <div style={{...card,marginBottom:'14px'}}>
                 <div style={{fontSize:'8px',letterSpacing:'3px',color:gymColor,marginBottom:'12px',fontWeight:600}}>GINÁSIO — DISTRIBUIÇÃO POR CATEGORIA</div>
-                {GYM_CATS.map(cat=>{
+                {[...GYM_CATS].sort((a,b)=>(catCounts[b]||0)-(catCounts[a]||0)).map(cat=>{
                   const count=catCounts[cat]||0
                   const pct=gymTotal>0?Math.round((count/gymTotal)*100):0
                   return (
@@ -1853,7 +2689,10 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
                           <div style={{fontSize:'11px',fontWeight:700,color:t.text,marginBottom:'1px'}}>
                             {s.date.toLocaleDateString('pt-PT',{weekday:'short',day:'2-digit',month:'short'})}
                           </div>
-                          <div style={{fontSize:'10px',color:t.textMuted}}>{s.cat}</div>
+                          <div style={{fontSize:'10px',color:t.textMuted}}>
+                            {s.free ? 'Ronda de campo' : s.cat}
+                            {s.course ? ` · ${s.course}` : ''}
+                          </div>
                         </div>
                         <div style={{textAlign:'right',flexShrink:0}}>
                           <div style={{fontSize:'9px',letterSpacing:'1px',color,fontWeight:700}}>{s.plan_type.toUpperCase()}</div>
@@ -1903,7 +2742,7 @@ export default function Training({ theme, t, user, lang = 'en', events = [], foc
 
       {/* ── PERIODIZAÇÃO ── */}
       {subTab==='periodizacao' && (() => {
-        const isCoach = email===COACH_GOLF||email===COACH_GYM||email===ADMIN
+        const isCoach = COACH_ROLES.includes(userRole)
         const today = new Date()
         const todayStr = today.toISOString().split('T')[0]
         const currentWsDate = new Date(todayStr+'T12:00:00')

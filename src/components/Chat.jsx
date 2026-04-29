@@ -69,12 +69,14 @@ export default function Chat({ theme, t, user, profile, lang = 'en' }) {
   const saveEdit = async () => {
     const text = editText.trim()
     if (!text) return
-    await supabase.from('messages').update({ content: text, edited: true }).eq('id', editingId)
+    const { error } = await supabase.from('messages').update({ content: text, edited: true }).eq('id', editingId)
+    if (error) { console.error('saveEdit:', error); return }
     setEditingId(null); setEditText(''); await fetchMessages()
   }
 
   const doDelete = async (id) => {
-    await supabase.from('messages').delete().eq('id', id)
+    const { error } = await supabase.from('messages').delete().eq('id', id)
+    if (error) { console.error('doDelete:', error); return }
     setDeleteConfirm(null); await fetchMessages()
   }
 
