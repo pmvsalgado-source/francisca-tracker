@@ -118,45 +118,104 @@ const light = {
 function TeamModal({ t, F, onClose }) {
   const [members, setMembers] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     const fetchTeam = async () => {
-      const [{ data: msgs }, { data: entries }, { data: plans }] = await Promise.all([
-        supabase.from('messages').select('user_email, user_name, user_id').limit(500),
-        supabase.from('entries').select('updated_by').limit(500),
-        supabase.from('training_plans').select('created_by, updated_by').limit(100),
-      ])
+      try {
+        const [{ data: msgs, error: e1 }, { data: entries, error: e2 }, { data: plans, error: e3 }] = await Promise.all([
+          supabase.from('messages').select('user_email, user_name, user_id').limit(500),
+          supabase.from('entries').select('updated_by').limit(500),
+          supabase.from('training_plans').select('created_by, updated_by').limit(100),
+        ])
+        if (e1 || e2 || e3) throw new Error((e1 || e2 || e3).message)
 
-      const map = {}
-      ;(msgs || []).forEach(r => {
-        if (r.user_email && !map[r.user_email]) map[r.user_email] = { email: r.user_email, name: r.user_name || r.user_email.split('@')[0], userId: r.user_id || null }
-      })
-      ;(entries || []).forEach(r => {
-        if (r.updated_by && !map[r.updated_by]) map[r.updated_by] = { email: r.updated_by, name: r.updated_by.split('@')[0], userId: null }
-      })
-      ;(plans || []).forEach(r => {
-        if (r.created_by && !map[r.created_by]) map[r.created_by] = { email: r.created_by, name: r.created_by.split('@')[0], userId: null }
-        if (r.updated_by && !map[r.updated_by]) map[r.updated_by] = { email: r.updated_by, name: r.updated_by.split('@')[0], userId: null }
-      })
+        const map = {}
+        ;(msgs || []).forEach(r => {
+          if (r.user_email && !map[r.user_email]) map[r.user_email] = { email: r.user_email, name: r.user_name || r.user_email.split('@')[0], userId: r.user_id || null }
+        })
+        ;(entries || []).forEach(r => {
+          if (r.updated_by && !map[r.updated_by]) map[r.updated_by] = { email: r.updated_by, name: r.updated_by.split('@')[0], userId: null }
+        })
+        ;(plans || []).forEach(r => {
+          if (r.created_by && !map[r.created_by]) map[r.created_by] = { email: r.created_by, name: r.created_by.split('@')[0], userId: null }
+          if (r.updated_by && !map[r.updated_by]) map[r.updated_by] = { email: r.updated_by, name: r.updated_by.split('@')[0], userId: null }
+        })
 
-      const userIds = Object.values(map).map(m => m.userId).filter(Boolean)
-      const profilesByUserId = {}
-      if (userIds.length > 0) {
-        const { data: profs } = await supabase.from('profiles').select('id, name, role, phone, athlete_club').in('id', userIds)
-        ;(profs || []).forEach(p => { profilesByUserId[p.id] = p })
+        const userIds = Object.values(map).map(m => m.userId).filter(Boolean)
+        const profilesByUserId = {}
+        if (userIds.length > 0) {
+          const { data: profs, error: e4 } = await supabase.from('profiles').select('id, name, role, phone, athlete_club').in('id', userIds)
+          if (e4) throw new Error(e4.message)
+          ;(profs || []).forEach(p => { profilesByUserId[p.id] = p })
+        }
+
+        setMembers(Object.values(map).map(m => {
+          const prof = m.userId ? profilesByUserId[m.userId] : null
+          if (prof) return { ...m, name: prof.name || m.name, role: prof.role || null, phone: prof.phone || null, club: prof.athlete_club || null }
+          return m
+        }))
+      } catch (err) {
+        setError(err.message || 'Erro ao carregar a equipa.')
+      } finally {
+        setLoading(false)
       }
-
-      setMembers(Object.values(map).map(m => {
-        const prof = m.userId ? profilesByUserId[m.userId] : null
-        if (prof) return { ...m, name: prof.name || m.name, role: prof.role || null, phone: prof.phone || null, club: prof.athlete_club || null }
-        return m
-      }))
-      setLoading(false)
     }
     fetchTeam()
   }, [])
 
   const initials = (name) => name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0,2)
+
+  const bodyContent = () => {
+    if (loading) return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        {[1, 2, 3].map(i => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '12px 14px', background: t.bg, border: `1px solid ${t.border}`, borderRadius: '10px' }}>
+            <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: t.border, flexShrink: 0 }} />
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '7px' }}>
+              <div style={{ height: '13px', borderRadius: '6px', background: t.border, width: '55%' }} />
+              <div style={{ height: '11px', borderRadius: '6px', background: t.border, width: '75%' }} />
+            </div>
+            <div style={{ width: '60px', height: '22px', borderRadius: '10px', background: t.border }} />
+          </div>
+        ))}
+      </div>
+    )
+    if (error) return (
+      <div style={{ textAlign: 'center', padding: '30px 20px' }}>
+        <div style={{ fontSize: '28px', marginBottom: '10px' }}>⚠️</div>
+        <div style={{ fontSize: '13px', fontWeight: 700, color: t.danger, marginBottom: '6px' }}>Erro ao carregar</div>
+        <div style={{ fontSize: '12px', color: t.textMuted, lineHeight: 1.5 }}>{error}</div>
+        <button onClick={onClose} style={{ marginTop: '18px', background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '8px', color: t.textMuted, padding: '7px 18px', cursor: 'pointer', fontSize: '12px', fontFamily: F }}>Fechar</button>
+      </div>
+    )
+    if (members.length === 0) return (
+      <div style={{ textAlign: 'center', padding: '30px 20px' }}>
+        <div style={{ fontSize: '28px', marginBottom: '10px' }}>👥</div>
+        <div style={{ fontSize: '13px', fontWeight: 700, color: t.text, marginBottom: '6px' }}>Sem membros ainda</div>
+        <div style={{ fontSize: '12px', color: t.textMuted, lineHeight: 1.5 }}>A equipa aparece aqui assim que existirem mensagens ou registos partilhados.</div>
+      </div>
+    )
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        {members.map((m, i) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '12px 14px', background: t.bg, border: `1px solid ${t.border}`, borderRadius: '10px' }}>
+            <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: `linear-gradient(135deg, ${t.accent}, #4ade80)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+              {initials(m.name)}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: '14px', fontWeight: 700, color: t.text }}>{m.name}</div>
+              <div style={{ fontSize: '12px', color: t.textMuted, marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.email}</div>
+              {m.phone && <div style={{ fontSize: '11px', color: t.textFaint, marginTop: '1px' }}>{m.phone}</div>}
+            </div>
+            <div style={{ fontSize: '10px', letterSpacing: '1px', color: t.accent, fontWeight: 600, background: t.accentBg, padding: '3px 10px', borderRadius: '10px', flexShrink: 0 }}>
+              {m.role || 'Utilizador'}
+            </div>
+          </div>
+        ))}
+      </div>
+    )
+  }
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999, padding: '20px' }}>
@@ -168,30 +227,7 @@ function TeamModal({ t, F, onClose }) {
           </div>
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: t.textMuted, cursor: 'pointer', fontSize: '22px', lineHeight: 1 }}>×</button>
         </div>
-
-        {loading ? (
-          <div style={{ textAlign: 'center', color: t.textMuted, padding: '30px' }}>A carregar...</div>
-        ) : members.length === 0 ? (
-          <div style={{ textAlign: 'center', color: t.textMuted, padding: '30px', fontSize: '13px' }}>Sem membros ainda.</div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {members.map((m, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '12px 14px', background: t.bg, border: `1px solid ${t.border}`, borderRadius: '10px' }}>
-                <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: `linear-gradient(135deg, ${t.accent}, #4ade80)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 800, color: '#fff', flexShrink: 0 }}>
-                  {initials(m.name)}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: '14px', fontWeight: 700, color: t.text }}>{m.name}</div>
-                  <div style={{ fontSize: '12px', color: t.textMuted, marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.email}</div>
-                  {m.phone && <div style={{ fontSize: '11px', color: t.textFaint, marginTop: '1px' }}>{m.phone}</div>}
-                </div>
-                <div style={{ fontSize: '10px', letterSpacing: '1px', color: t.accent, fontWeight: 600, background: t.accentBg, padding: '3px 10px', borderRadius: '10px', flexShrink: 0 }}>
-                  {m.role || 'Utilizador'}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        {bodyContent()}
       </div>
     </div>
   )
