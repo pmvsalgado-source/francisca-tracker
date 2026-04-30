@@ -13,6 +13,7 @@ export default function Chat({ theme, t, user, profile, lang = 'en' }) {
   const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [hoveredId, setHoveredId] = useState(null)
   const [avatarMap, setAvatarMap] = useState({})
+  const [sendError, setSendError] = useState('')
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
   const isMountedRef = useRef(true)
@@ -63,12 +64,13 @@ export default function Chat({ theme, t, user, profile, lang = 'en' }) {
     const text = input.trim()
     if (!text) return
     setSending(true)
+    setSendError('')
     setInput('')
     const name = profile?.name || myEmail.split('@')[0]
     const uid = user?.id || user?.sub || null
     const avatarUrl = (uid && avatarMap[uid]) || null
     const { error } = await supabase.from('messages').insert({ user_email: myEmail, user_name: name, content: text, avatar_url: avatarUrl, user_id: uid })
-    if (error) { alert('Erro: ' + error.message); setInput(text) }
+    if (error) { setSendError(error.message); setInput(text) }
     else await fetchMessages()
     setSending(false)
     inputRef.current?.focus()
@@ -253,12 +255,18 @@ export default function Chat({ theme, t, user, profile, lang = 'en' }) {
         </div>
 
         {/* Input area */}
-        <div style={{ padding: '12px 16px', borderTop: `1px solid ${t.border}`, display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0 }}>
+        <div style={{ padding: '12px 16px', borderTop: `1px solid ${t.border}`, flexShrink: 0 }}>
+          {sendError && (
+            <div style={{ fontSize: '11px', color: '#f87171', marginBottom: '6px', padding: '5px 10px', background: 'rgba(248,113,113,0.1)', borderRadius: '6px', borderLeft: '3px solid #f87171' }}>
+              ⚠ {sendError}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <input
             ref={inputRef}
             className="chat-input"
             value={input}
-            onChange={e => setInput(e.target.value)}
+            onChange={e => { setInput(e.target.value); if (sendError) setSendError('') }}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
             placeholder={s.placeholder}
             disabled={sending}
@@ -278,6 +286,7 @@ export default function Chat({ theme, t, user, profile, lang = 'en' }) {
               <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
             </svg>
           </button>
+          </div>
         </div>
       </div>
     </div>
