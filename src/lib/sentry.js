@@ -7,7 +7,4 @@ Sentry.init({
   sendDefaultPii: false,
 });
 
-// TODO: remover após confirmar que o Sentry recebe eventos
-Sentry.captureMessage("Sentry teste - ok");
-
 export default Sentry;
