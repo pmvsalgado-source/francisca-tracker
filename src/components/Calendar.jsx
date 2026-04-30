@@ -46,6 +46,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
   const [wellnessData, setWellnessData] = useState({})
   const [sessionRatings, setSessionRatings] = useState({})
   const [expandedSession, setExpandedSession] = useState(null)
+  const [deleteSessionConfirm, setDeleteSessionConfirm] = useState(null) // { entryId, metricId }
   const focusDateRef = useRef(null)
 
   const todayDate = new Date()
@@ -394,18 +395,30 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
 
   const saveSessionRating = async (sessionKey, dateStr, val) => {
     const metricId = `__sr_${sessionKey}__`
+    if (val === null) {
+      const { data } = await supabase.from('entries')
+        .select('id').eq('entry_date', dateStr).eq('metric_id', metricId).limit(1)
+      if (data && data.length > 0) {
+        setDeleteSessionConfirm({ entryId: data[0].id, metricId })
+      }
+      return
+    }
     setSessionRatings(p => ({ ...p, [metricId]: val }))
     const { data } = await supabase.from('entries')
       .select('id').eq('entry_date', dateStr).eq('metric_id', metricId).limit(1)
-    if (val === null) {
-      if (data && data.length > 0) {
-        await supabase.from('entries').delete().eq('id', data[0].id)
-      }
-    } else if (data && data.length > 0) {
+    if (data && data.length > 0) {
       await supabase.from('entries').update({ value: val, updated_at: new Date().toISOString(), updated_by: user?.email || '' }).eq('id', data[0].id)
     } else {
       await supabase.from('entries').insert({ entry_date: dateStr, metric_id: metricId, value: val, updated_at: new Date().toISOString(), updated_by: user?.email || '' })
     }
+  }
+
+  const confirmDeleteSession = async () => {
+    if (!deleteSessionConfirm) return
+    const { entryId, metricId } = deleteSessionConfirm
+    await supabase.from('entries').delete().eq('id', entryId)
+    setSessionRatings(p => { const n = { ...p }; delete n[metricId]; return n })
+    setDeleteSessionConfirm(null)
   }
 
   const markSessionDone = async (plan, dayIdx, si) => {
@@ -727,6 +740,20 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
         @media(max-width:768px){.annual-grid{grid-template-columns:repeat(2,1fr)}.cal-cell{height:96px;min-height:96px;max-height:96px;padding:3px}.cal-week-cell{min-height:100px;padding:4px}}
         @media(max-width:600px){.cal-year-stats{grid-template-columns:repeat(2,1fr)}}
       `}</style>
+
+      {/* Session rating delete confirm */}
+      {deleteSessionConfirm && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1001 }}>
+          <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '14px', padding: '24px', width: '300px' }}>
+            <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '8px', color: t.text }}>Apagar esta avaliação?</div>
+            <div style={{ fontSize: '12px', color: t.textMuted, marginBottom: '20px' }}>Esta acção não pode ser desfeita.</div>
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <button onClick={() => setDeleteSessionConfirm(null)} style={btn(false)}>Cancelar</button>
+              <button onClick={confirmDeleteSession} style={{ background: t.danger, border: 'none', borderRadius: '20px', color: '#fff', padding: '7px 16px', cursor: 'pointer', fontSize: '11px', fontFamily: F, fontWeight: 700 }}>Apagar</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Delete Confirm Modal */}
       {deleteConfirmEvent && (
