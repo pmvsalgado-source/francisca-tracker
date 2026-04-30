@@ -610,8 +610,12 @@ export default function Dashboard({ user }) {
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
           <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '14px', padding: '28px 32px', maxWidth: '380px', width: '90%' }}>
             <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '8px', color: t.text }}>{s.deleteModal.title}</div>
-            <div style={{ fontSize: '13px', color: t.textMuted, marginBottom: '24px', lineHeight: 1.6 }}
-              dangerouslySetInnerHTML={{ __html: s.deleteModal.body(`<b style="color:${t.text}">${new Date(deleteConfirm + 'T12:00:00').toLocaleDateString('pt-PT')}</b>`) }} />
+            <div style={{ fontSize: '13px', color: t.textMuted, marginBottom: '24px', lineHeight: 1.6 }}>
+              {lang === 'pt'
+                ? <>Todos os dados de <b style={{ color: t.text }}>{new Date(deleteConfirm + 'T12:00:00').toLocaleDateString('pt-PT')}</b> serão apagados permanentemente. Esta acção não pode ser desfeita.</>
+                : <>All data from <b style={{ color: t.text }}>{new Date(deleteConfirm + 'T12:00:00').toLocaleDateString('pt-PT')}</b> will be permanently deleted. This action cannot be undone.</>
+              }
+            </div>
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
               <button onClick={() => setDeleteConfirm(null)} style={btn(false)}>{s.deleteModal.cancel}</button>
               <button onClick={() => doDelete(deleteConfirm)}
