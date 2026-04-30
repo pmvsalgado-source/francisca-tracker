@@ -43,6 +43,7 @@ export default function CompStats({ theme, t, user, events = [] }) {
   const [editStat, setEditStat] = useState(null)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
+  const [fetchError, setFetchError] = useState(null)
   const [hasMore, setHasMore] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
 
@@ -61,8 +62,8 @@ export default function CompStats({ theme, t, user, events = [] }) {
   // ── Fetch ──────────────────────────────────────────────────────────────────
   const fetchData = useCallback(async () => {
     setLoading(true)
+    setFetchError(null)
     try {
-      // RLS in Supabase should restrict competition_stats to the authenticated user.
       const { data, error } = await supabase.from('competition_stats').select('*').order('event_date', { ascending: false }).range(0, PAGE_SIZE - 1)
       if (error) throw error
       const rows = data || []
@@ -70,6 +71,7 @@ export default function CompStats({ theme, t, user, events = [] }) {
       setHasMore(rows.length === PAGE_SIZE)
     } catch (err) {
       console.error('fetchData:', err)
+      setFetchError(err.message || 'Erro ao carregar competições.')
     } finally {
       setLoading(false)
     }
@@ -639,6 +641,12 @@ export default function CompStats({ theme, t, user, events = [] }) {
       )}
 
       {/* Stats Table */}
+      {fetchError && (
+        <div style={{ color: t.danger, fontSize: '13px', padding: '12px 16px', background: t.dangerBg || '#1a0808', borderRadius: '8px', border: `1px solid ${t.danger}`, marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+          <span>⚠ {fetchError}</span>
+          <button onClick={fetchData} style={{ background: 'transparent', border: `1px solid ${t.danger}`, borderRadius: '6px', color: t.danger, padding: '4px 12px', cursor: 'pointer', fontSize: '12px', fontFamily: F, fontWeight: 600, whiteSpace: 'nowrap' }}>Tentar novamente</button>
+        </div>
+      )}
       {loading ? (
         <div style={{ padding: '40px', textAlign: 'center', color: t.textMuted, fontSize: '13px' }}>A carregar...</div>
       ) : filteredStats.length === 0 ? (
