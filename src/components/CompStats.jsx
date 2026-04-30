@@ -709,11 +709,17 @@ export default function CompStats({ theme, t, user, events = [] }) {
 
       {/* Load More */}
       {hasMore && !loading && (
-        <div style={{ textAlign: 'center', marginTop: '12px' }}>
+        <div style={{ textAlign: 'center', marginTop: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+          <div style={{ fontSize: '11px', color: t.textMuted }}>A mostrar últimos {stats.length} registos</div>
           <button onClick={loadMoreStats} disabled={loadingMore}
             style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '20px', color: t.textMuted, padding: '7px 24px', fontSize: '12px', cursor: loadingMore ? 'not-allowed' : 'pointer', fontFamily: F }}>
             {loadingMore ? 'A carregar...' : 'Ver mais'}
           </button>
+        </div>
+      )}
+      {!hasMore && !loading && stats.length > 0 && (
+        <div style={{ textAlign: 'center', marginTop: '8px', fontSize: '11px', color: t.textFaint }}>
+          {stats.length} {stats.length === 1 ? 'competição' : 'competições'} no total
         </div>
       )}
 

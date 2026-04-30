@@ -177,7 +177,8 @@ export default function Backoffice({ theme, t, user, userRole = '' }) {
             </table>
           )}
           {section === 'performance' && hasMoreEntries && (
-            <div style={{ textAlign: 'center', padding: '12px' }}>
+            <div style={{ textAlign: 'center', padding: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+              <div style={{ fontSize: '11px', color: t.textMuted }}>A mostrar últimos {entries.length} registos</div>
               <button onClick={loadMoreEntries} disabled={loadingMoreEntries}
                 style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '20px', color: t.textMuted, padding: '6px 20px', fontSize: '12px', cursor: loadingMoreEntries ? 'not-allowed' : 'pointer', fontFamily: F }}>
                 {loadingMoreEntries ? 'A carregar...' : 'Ver mais'}
@@ -269,7 +270,8 @@ export default function Backoffice({ theme, t, user, userRole = '' }) {
             </table>
           )}
           {section === 'messages' && hasMoreMessages && (
-            <div style={{ textAlign: 'center', padding: '12px' }}>
+            <div style={{ textAlign: 'center', padding: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px' }}>
+              <div style={{ fontSize: '11px', color: t.textMuted }}>A mostrar últimas {messages.length} mensagens</div>
               <button onClick={loadMoreMessages} disabled={loadingMoreMessages}
                 style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '20px', color: t.textMuted, padding: '6px 20px', fontSize: '12px', cursor: loadingMoreMessages ? 'not-allowed' : 'pointer', fontFamily: F }}>
                 {loadingMoreMessages ? 'A carregar...' : 'Ver mais'}
