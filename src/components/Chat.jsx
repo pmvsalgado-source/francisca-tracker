@@ -13,6 +13,8 @@ export default function Chat({ theme, t, user, profile, lang = 'en' }) {
   const [avatarMap, setAvatarMap] = useState({})
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
+  const isMountedRef = useRef(true)
+  const fetchIdRef = useRef(0)
   const F = "'Inter', system-ui, sans-serif"
   const myEmail = (user?.email || '').trim().toLowerCase()
 
@@ -20,8 +22,12 @@ export default function Chat({ theme, t, user, profile, lang = 'en' }) {
     ? { placeholder: 'Mensagem...', send: 'Enviar', loading: 'A carregar...', empty: 'Sem mensagens. Começa a conversa!', you: 'Tu', cancel: 'Cancelar', save: 'Guardar', deleteMsg: 'Apagar esta mensagem?', deleteBtn: 'Apagar', edited: 'editado' }
     : { placeholder: 'Message...', send: 'Send', loading: 'Loading...', empty: 'No messages yet. Start the conversation!', you: 'You', cancel: 'Cancel', save: 'Save', deleteMsg: 'Delete this message?', deleteBtn: 'Delete', edited: 'edited' }
 
+  useEffect(() => () => { isMountedRef.current = false }, [])
+
   const fetchMessages = useCallback(async () => {
+    const id = ++fetchIdRef.current
     const { data } = await supabase.from('messages').select('*').order('created_at', { ascending: true }).limit(200)
+    if (!isMountedRef.current || id !== fetchIdRef.current) return
     setMessages(data || [])
     setLoading(false)
   }, [])
