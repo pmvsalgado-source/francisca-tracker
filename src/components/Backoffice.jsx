@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 
 import { COACH_ROLES } from '../constants/roles'
+import { PAGE_SIZE, MESSAGES_PAGE_SIZE } from '../constants/pagination'
 
 export default function Backoffice({ theme, t, user, userRole = '' }) {
   const [section, setSection] = useState('performance')
@@ -24,10 +25,10 @@ export default function Backoffice({ theme, t, user, userRole = '' }) {
   const fetchAll = useCallback(async () => {
     setLoading(true)
     const [e, m, c, g] = await Promise.all([
-      supabase.from('entries').select('*').order('entry_date', { ascending: false }).limit(500),
-      supabase.from('messages').select('*').order('created_at', { ascending: false }).limit(1000),
-      supabase.from('competition_stats').select('*').order('event_date', { ascending: false }).limit(500),
-      supabase.from('goals').select('*').order('created_at', { ascending: false }).limit(500),
+      supabase.from('entries').select('*').order('entry_date', { ascending: false }).limit(PAGE_SIZE),
+      supabase.from('messages').select('*').order('created_at', { ascending: false }).limit(MESSAGES_PAGE_SIZE),
+      supabase.from('competition_stats').select('*').order('event_date', { ascending: false }).limit(PAGE_SIZE),
+      supabase.from('goals').select('*').order('created_at', { ascending: false }).limit(PAGE_SIZE),
     ])
     setEntries(e.data || [])
     setMessages(m.data || [])

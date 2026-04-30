@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { PAGE_SIZE } from '../constants/pagination'
 
 // comp_config table needed: id (uuid pk), stat_fields (jsonb), visible_columns (jsonb), summary_cards (jsonb), updated_at (timestamptz)
 
@@ -59,7 +60,7 @@ export default function CompStats({ theme, t, user, events = [] }) {
     setLoading(true)
     try {
       // RLS in Supabase should restrict competition_stats to the authenticated user.
-      const { data, error } = await supabase.from('competition_stats').select('*').order('event_date', { ascending: false }).limit(500)
+      const { data, error } = await supabase.from('competition_stats').select('*').order('event_date', { ascending: false }).limit(PAGE_SIZE)
       if (error) throw error
       setStats(data || [])
     } catch (err) {

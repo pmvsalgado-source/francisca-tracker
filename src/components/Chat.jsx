@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { MESSAGES_PAGE_SIZE } from '../constants/pagination'
 
 export default function Chat({ theme, t, user, profile, lang = 'en' }) {
   const [messages, setMessages] = useState([])
@@ -26,7 +27,7 @@ export default function Chat({ theme, t, user, profile, lang = 'en' }) {
 
   const fetchMessages = useCallback(async () => {
     const id = ++fetchIdRef.current
-    const { data } = await supabase.from('messages').select('*').order('created_at', { ascending: true }).limit(200)
+    const { data } = await supabase.from('messages').select('*').order('created_at', { ascending: true }).limit(MESSAGES_PAGE_SIZE)
     if (!isMountedRef.current || id !== fetchIdRef.current) return
     setMessages(data || [])
     setLoading(false)
