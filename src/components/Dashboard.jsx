@@ -9,7 +9,25 @@ import Chat from './Chat'
 import Microcycles from './Microcycles'
 import Backoffice from './Backoffice'
 import HcpWagr from './HcpWagr'
-import { supabase } from '../lib/supabase'
+import {
+  getProfile,
+  saveProfile as saveProfileSvc,
+  uploadAvatar as uploadAvatarSvc,
+  getTeamActivity,
+  getProfilesByIds,
+  getAvatarPublicUrl,
+  changePassword as changePasswordSvc,
+  signOut as signOutSvc,
+} from '../services/profileService'
+import {
+  getMetrics,
+  saveMetrics,
+  getEntries,
+  saveEntries as saveEntriesSvc,
+  deleteEntries as deleteEntriesSvc,
+} from '../services/dashboardService'
+import { getEvents } from '../services/calendarService'
+import { getTrainingPlans } from '../services/trainingService'
 
 import { DEFAULT_METRICS } from '../constants/metrics'
 import { COACH_ROLES } from '../constants/roles'
@@ -123,12 +141,7 @@ function TeamModal({ t, F, onClose }) {
   useEffect(() => {
     const fetchTeam = async () => {
       try {
-        const [{ data: msgs, error: e1 }, { data: entries, error: e2 }, { data: plans, error: e3 }] = await Promise.all([
-          supabase.from('messages').select('user_email, user_name, user_id').limit(500),
-          supabase.from('entries').select('updated_by').limit(500),
-          supabase.from('training_plans').select('created_by, updated_by').limit(100),
-        ])
-        if (e1 || e2 || e3) throw new Error((e1 || e2 || e3).message)
+        const { msgs, entries, plans } = await getTeamActivity()
 
         const map = {}
         ;(msgs || []).forEach(r => {
@@ -145,8 +158,7 @@ function TeamModal({ t, F, onClose }) {
         const userIds = Object.values(map).map(m => m.userId).filter(Boolean)
         const profilesByUserId = {}
         if (userIds.length > 0) {
-          const { data: profs, error: e4 } = await supabase.from('profiles').select('id, name, role, phone, athlete_club').in('id', userIds)
-          if (e4) throw new Error(e4.message)
+          const profs = await getProfilesByIds(userIds)
           ;(profs || []).forEach(p => { profilesByUserId[p.id] = p })
         }
 
@@ -350,16 +362,16 @@ export default function Dashboard({ user }) {
 
   useEffect(() => {
     if (!user?.id) return
-    supabase.from('profiles').select('name,role,phone,athlete_club,avatar_url').eq('id', user.id).single()
-      .then(({ data }) => {
+    getProfile(user.id)
+      .then(data => {
         const base = { name: user.email.split('@')[0], role: 'athlete', club: '', phone: '' }
         const p = data ? { name: data.name || base.name, role: data.role || base.role, club: data.athlete_club || base.club, phone: data.phone || base.phone } : base
         setProfile(p); setProfileForm(p)
-        // Load avatar from profiles table first, fallback to storage check
         if (data?.avatar_url) {
           setAvatar(data.avatar_url + '?t=' + Date.now())
         }
       })
+      .catch(() => {})
   }, [user])
 
   useEffect(() => {
@@ -387,8 +399,8 @@ export default function Dashboard({ user }) {
 
   const fetchMetrics = useCallback(async () => {
     try {
-      const { data, error } = await supabase.from('metrics').select('*').order('sort_order', { ascending: true })
-      if (!error && data && data.length > 0) {
+      const data = await getMetrics()
+      if (data && data.length > 0) {
         setMetrics(data.map(m => ({
           id: m.metric_id, label: m.label, unit: m.unit || '',
           category: m.category || 'golfe', target: m.target ? parseFloat(m.target) : null,
@@ -406,8 +418,7 @@ export default function Dashboard({ user }) {
         category: m.category || 'golfe', target: m.target || null,
         sort_order: i, created_by: user.email,
       }))
-      const { error } = await supabase.rpc('save_metrics', { metrics_data: metricsData })
-      if (error) throw error
+      await saveMetrics(metricsData)
       setKpiMsg(s.kpiSaved); setTimeout(() => setKpiMsg(''), 3000)
     } catch (e) {
       setKpiMsg(s.kpiError + (e.message || '')); setTimeout(() => setKpiMsg(''), 4000)
@@ -417,10 +428,10 @@ export default function Dashboard({ user }) {
 
   const fetchEntries = useCallback(async () => {
     setLoading(true)
-    // RLS in Supabase must restrict entries to the authenticated user; no client-side filter added
-    // because entries are keyed by entry_date+metric_id (not user_id) in the current schema.
-    const { data } = await supabase.from('entries').select('*').order('entry_date', { ascending: true })
-    setEntries(data || [])
+    try {
+      const data = await getEntries()
+      setEntries(data || [])
+    } catch (_) { setEntries([]) }
     setLoading(false)
   }, [])
 
@@ -429,21 +440,25 @@ export default function Dashboard({ user }) {
   const [events, setEvents] = useState([])
   const [trainingPlans, setTrainingPlans] = useState([])
   const fetchEvents = useCallback(async () => {
-    const { data } = await supabase.from('events').select('*').order('start_date')
-    setEvents(data || [])
+    try {
+      const data = await getEvents()
+      setEvents(data || [])
+    } catch (_) { setEvents([]) }
   }, [])
   const fetchTrainingPlans = useCallback(async () => {
-    const { data } = await supabase.from('training_plans').select('*').order('week_start', { ascending: false })
-    setTrainingPlans(data || [])
+    try {
+      const data = await getTrainingPlans()
+      setTrainingPlans(data || [])
+    } catch (_) { setTrainingPlans([]) }
   }, [])
   useEffect(() => { fetchEvents(); fetchTrainingPlans() }, [fetchEvents, fetchTrainingPlans])
 
   useEffect(() => {
-    const { data } = supabase.storage.from('avatars').getPublicUrl(user.id + '.jpg')
-    if (data?.publicUrl) {
+    const publicUrl = getAvatarPublicUrl(user.id)
+    if (publicUrl) {
       const img = new Image()
-      img.onload = () => setAvatar(data.publicUrl + '?t=' + Date.now())
-      img.src = data.publicUrl
+      img.onload = () => setAvatar(publicUrl + '?t=' + Date.now())
+      img.src = publicUrl
     }
   }, [user.id])
 
@@ -459,14 +474,11 @@ export default function Dashboard({ user }) {
       return
     }
     setUploadingAvatar(true)
-    const { data: { user: currentUser } } = await supabase.auth.getUser()
-    if (!currentUser?.id) { setUploadingAvatar(false); return }
-    const { error } = await supabase.storage.from('avatars').upload(currentUser.id + '.jpg', file, { upsert: true, contentType: file.type })
-    if (!error) {
-      const { data } = supabase.storage.from('avatars').getPublicUrl(currentUser.id + '.jpg')
-      const url = data.publicUrl + '?t=' + Date.now()
-      setAvatar(url)
-      await supabase.from('profiles').update({ avatar_url: data.publicUrl }).eq('id', currentUser.id)
+    try {
+      const url = await uploadAvatarSvc(user.id, file)
+      setAvatar(url + '?t=' + Date.now())
+    } catch (err) {
+      setAvatarError((lang === 'pt' ? 'Erro ao carregar: ' : 'Upload error: ') + err.message)
     }
     setUploadingAvatar(false)
   }
@@ -478,44 +490,44 @@ export default function Dashboard({ user }) {
       .map(([metric_id, value]) => ({ metric_id, value: String(value), entry_date: form.date, updated_by: user.email, updated_at: new Date().toISOString() }))
     if (form.notes) rows.push({ metric_id: '__notes__', value: form.notes, entry_date: form.date, updated_by: user.email, updated_at: new Date().toISOString() })
     if (!rows.length) { setSaving(false); return }
-    const { error } = await supabase.from('entries').upsert(rows, { onConflict: 'entry_date,metric_id' })
+    try {
+      await saveEntriesSvc(rows)
+      setSavedMsg(s.saved); setTimeout(() => setSavedMsg(''), 3000)
+      setForm(p => ({ ...p, values: {}, notes: '' }))
+      setShowRegister(false)
+      fetchEntries()
+    } catch (err) { setRegisterError('Erro ao guardar: ' + err.message) }
     setSaving(false)
-    if (error) { setRegisterError('Erro ao guardar: ' + error.message); return }
-    setSavedMsg(s.saved); setTimeout(() => setSavedMsg(''), 3000)
-    setForm(p => ({ ...p, values: {}, notes: '' }))
-    setShowRegister(false)
-    fetchEntries()
   }
 
   const doDelete = async (date) => {
     const ids = metrics.map(m => dateMap[date]?.[m.id]?.id).filter(Boolean)
     const noteEntry = entries.find(e => e.entry_date === date && e.metric_id === '__notes__')
     if (noteEntry) ids.push(noteEntry.id)
-    for (const id of ids) await supabase.from('entries').delete().eq('id', id)
+    await deleteEntriesSvc(ids)
     setDeleteConfirm(null); fetchEntries()
   }
 
   const saveProfile = async () => {
     setProfileSaving(true); setProfileError('')
-    const { data: { user: currentUser } } = await supabase.auth.getUser()
-    if (!currentUser?.id) { setProfileError('Sessão expirada. Faz login novamente.'); setProfileSaving(false); return }
-    const { error } = await supabase.from('profiles')
-      .update({ name: profileForm.name, role: profileForm.role, phone: profileForm.phone, athlete_club: profileForm.club })
-      .eq('id', currentUser.id)
+    try {
+      await saveProfileSvc(user.id, { name: profileForm.name, role: profileForm.role, phone: profileForm.phone, athlete_club: profileForm.club })
+      setProfile({ ...profileForm, email: user.email })
+      setShowProfile(false)
+    } catch (err) { setProfileError('Erro: ' + err.message) }
     setProfileSaving(false)
-    if (error) { setProfileError('Erro: ' + error.message); return }
-    setProfile({ ...profileForm, email: currentUser.email })
-    setShowProfile(false)
   }
 
   const changePassword = async () => {
     if (pwForm.newPw.length < 6) { setPwMsg(lang === 'pt' ? 'Mínimo 6 caracteres.' : 'Minimum 6 characters.'); return }
     if (pwForm.newPw !== pwForm.confirmPw) { setPwMsg(lang === 'pt' ? 'As passwords não coincidem.' : 'Passwords do not match.'); return }
     setPwSaving(true); setPwMsg('')
-    const { error } = await supabase.auth.updateUser({ password: pwForm.newPw })
+    try {
+      await changePasswordSvc(pwForm.newPw)
+      setPwMsg(lang === 'pt' ? 'Password alterada ✓' : 'Password updated ✓')
+      setPwForm({ newPw: '', confirmPw: '' })
+    } catch (err) { setPwMsg((lang === 'pt' ? 'Erro: ' : 'Error: ') + err.message) }
     setPwSaving(false)
-    if (error) { setPwMsg((lang === 'pt' ? 'Erro: ' : 'Error: ') + error.message) }
-    else { setPwMsg(lang === 'pt' ? 'Password alterada ✓' : 'Password updated ✓'); setPwForm({ newPw: '', confirmPw: '' }) }
     setTimeout(() => setPwMsg(''), 4000)
   }
 
@@ -803,7 +815,7 @@ export default function Dashboard({ user }) {
                   { label: theme === 'dark' ? s.menu.lightMode : s.menu.darkMode, action: () => { const next = theme === 'dark' ? 'light' : 'dark'; setTheme(next); localStorage.setItem('fs_theme', next); setShowMenu(false) } },
                   { label: s.menu.exportExcel, action: () => { exportXLS(); setShowMenu(false) } },
                   { label: `${s.menu.language}: ${lang === 'en' ? '🇬🇧 EN' : '🇵🇹 PT'}`, action: () => { setShowLangModal(true); setShowMenu(false) } },
-                  { label: s.menu.signOut, action: () => supabase.auth.signOut(), danger: true },
+                  { label: s.menu.signOut, action: () => signOutSvc(), danger: true },
                 ].map((item, i) => (
                   <button key={i} className={`menu-item${item.danger ? ' danger' : ''}`} onClick={item.action}
                     style={{ borderTop: i > 0 ? `1px solid ${t.border}` : 'none' }}>

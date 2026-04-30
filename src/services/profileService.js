@@ -60,3 +60,50 @@ export async function getTeam() {
   }
   return data
 }
+
+export async function getTeamActivity() {
+  const [{ data: msgs, error: e1 }, { data: entries, error: e2 }, { data: plans, error: e3 }] = await Promise.all([
+    supabase.from('messages').select('user_email, user_name, user_id').limit(500),
+    supabase.from('entries').select('updated_by').limit(500),
+    supabase.from('training_plans').select('created_by, updated_by').limit(100),
+  ])
+  const error = e1 || e2 || e3
+  if (error) {
+    Sentry.captureException(error, { extra: { context: 'profileService.getTeamActivity' } })
+    throw new Error(error.message)
+  }
+  return { msgs: msgs || [], entries: entries || [], plans: plans || [] }
+}
+
+export async function getProfilesByIds(userIds) {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, name, role, phone, athlete_club')
+    .in('id', userIds)
+  if (error) {
+    Sentry.captureException(error, { extra: { context: 'profileService.getProfilesByIds' } })
+    throw error
+  }
+  return data
+}
+
+export function getAvatarPublicUrl(userId) {
+  const { data } = supabase.storage.from('avatars').getPublicUrl(userId + '.jpg')
+  return data?.publicUrl || null
+}
+
+export async function changePassword(newPw) {
+  const { error } = await supabase.auth.updateUser({ password: newPw })
+  if (error) {
+    Sentry.captureException(error, { extra: { context: 'profileService.changePassword' } })
+    throw error
+  }
+}
+
+export async function signOut() {
+  const { error } = await supabase.auth.signOut()
+  if (error) {
+    Sentry.captureException(error, { extra: { context: 'profileService.signOut' } })
+    throw error
+  }
+}
