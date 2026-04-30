@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { MESSAGES_PAGE_SIZE } from '../constants/pagination'
+import EmptyState from './EmptyState'
 
 export default function Chat({ theme, t, user, profile, lang = 'en' }) {
   const [messages, setMessages] = useState([])
@@ -166,7 +167,7 @@ export default function Chat({ theme, t, user, profile, lang = 'en' }) {
           {loading ? (
             <div style={{ textAlign: 'center', color: t.textMuted, padding: '40px', fontSize: '13px' }}>{s.loading}</div>
           ) : messages.length === 0 ? (
-            <div style={{ textAlign: 'center', color: t.textMuted, padding: '60px 20px', fontSize: '13px', fontStyle: 'italic' }}>{s.empty}</div>
+            <EmptyState icon="💬" message={s.empty} t={t} />
           ) : messages.map(msg => {
             const isOwn = (msg.user_email || '').trim().toLowerCase() === myEmail
             const d = fmtDate(msg.created_at)

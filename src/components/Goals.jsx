@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { DEFAULT_METRICS } from '../constants/metrics'
+import EmptyState from './EmptyState'
 
 function GoalChart({ entries, goal, theme, t }) {
   const canvasRef = useRef(null)
@@ -367,12 +368,13 @@ export default function Goals({ theme, t, user }) {
 
       {/* Goals list */}
       {goals.length === 0 ? (
-        <div style={{ ...card, textAlign: 'center', padding: '48px' }}>
-          <div style={{ fontSize: '14px', color: t.textMuted, marginBottom: '16px' }}>No goals defined yet.</div>
-          <button onClick={openNew}
-            style={{ background: t.accent, border: 'none', borderRadius: '8px', color: theme === 'dark' ? '#000' : '#fff', padding: '10px 24px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', fontFamily: F }}>
-            Set First Goal
-          </button>
+        <div style={{ ...card, padding: 0 }}>
+          <EmptyState icon="🎯" message="No goals defined yet." subMessage="Define a target to track your progress over time." t={t}>
+            <button onClick={openNew}
+              style={{ background: t.accent, border: 'none', borderRadius: '8px', color: theme === 'dark' ? '#000' : '#fff', padding: '10px 24px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', fontFamily: F }}>
+              Set First Goal
+            </button>
+          </EmptyState>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>

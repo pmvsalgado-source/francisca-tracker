@@ -5,6 +5,7 @@ import Goals from './Goals'
 import { ACTIVITY_COLORS } from '../constants/eventCategories'
 
 import { COACH_ROLES } from '../constants/roles'
+import EmptyState from './EmptyState'
 
 const GOLF_CATS = ['Driving Range', 'Jogo Curto', 'Putt', 'Bunker', 'Campo']
 const GYM_CATS  = ['Pernas', 'Potência', 'Core', 'Braços', 'Mobilidade', 'Cardio', 'Prevenção']
@@ -1893,7 +1894,7 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
                       ))}
                     </div>
                   ) : (
-                    <div style={{fontSize:'11px',color:t.textMuted}}>Sem planos diários guardados ainda.</div>
+                    <EmptyState icon="📋" message="Sem planos guardados." subMessage="Cria um plano e guarda-o para reutilizar." t={t} compact />
                   )
                 ) : (
                   <div style={{fontSize:'11px',color:t.textMuted}}>Cria um plano específico e guarda-o para reutilizar em outros dias.</div>

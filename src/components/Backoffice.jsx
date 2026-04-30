@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 
 import { COACH_ROLES } from '../constants/roles'
 import { PAGE_SIZE, MESSAGES_PAGE_SIZE } from '../constants/pagination'
+import EmptyState from './EmptyState'
 
 export default function Backoffice({ theme, t, user, userRole = '' }) {
   const [section, setSection] = useState('performance')
@@ -171,7 +172,7 @@ export default function Backoffice({ theme, t, user, userRole = '' }) {
                     <td style={{ ...td, color: t.textMuted }}>{e.updated_at ? new Date(e.updated_at).toLocaleDateString('pt-PT') : '—'}</td>
                   </tr>
                 ))}
-                {!entries.length && <tr><td colSpan={6} style={{ ...td, textAlign: 'center', color: t.textMuted, padding: '40px' }}>Sem registos.</td></tr>}
+                {!entries.length && <tr><td colSpan={6}><EmptyState icon="📊" message="Sem registos." subMessage="Ainda não há dados de performance registados." t={t} compact /></td></tr>}
               </tbody>
             </table>
           )}
@@ -263,7 +264,7 @@ export default function Backoffice({ theme, t, user, userRole = '' }) {
                     <td style={{ ...td, color: m.edited ? '#f59e0b' : t.textFaint }}>{m.edited ? 'Sim' : '—'}</td>
                   </tr>
                 ))}
-                {!messages.length && <tr><td colSpan={4} style={{ ...td, textAlign: 'center', color: t.textMuted, padding: '40px' }}>Sem mensagens.</td></tr>}
+                {!messages.length && <tr><td colSpan={4}><EmptyState icon="💬" message="Sem mensagens." subMessage="Nenhuma mensagem foi enviada ainda." t={t} compact /></td></tr>}
               </tbody>
             </table>
           )}

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { SCHEDULE_TYPES, TOURNAMENT_CATEGORIES, DEFAULT_CATEGORIES, activityColor, activityColorFromCategory } from '../constants/eventCategories'
 import { calcWeekPhase, PHASE_COLORS } from '../lib/periodization'
+import EmptyState from './EmptyState'
 
 const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
 const WEEKDAYS = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom']
@@ -1041,10 +1042,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
               <div style={{ ...cardShell, padding: '14px', display: 'flex', flexDirection: 'column' }}>
                 <div style={{ fontSize: '9px', letterSpacing: '2px', color: t.textMuted, fontWeight: 700, textTransform: 'uppercase', marginBottom: '10px', flexShrink: 0 }}>Atividades</div>
                 {selectedDayEvents.length === 0 ? (
-                  <div style={{ textAlign: 'left' }}>
-                    <div style={{ fontSize: '13px', fontWeight: 700, color: t.textMuted }}>Sem eventos</div>
-                    <div style={{ fontSize: '11px', color: t.textFaint, marginTop: '4px' }}>Usa + Evento para criar um registo.</div>
-                  </div>
+                  <EmptyState icon="📅" message="Sem eventos" subMessage="Usa + Evento para criar um registo." t={t} compact />
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', overflowY: 'auto', maxHeight: '220px', paddingRight: '2px' }}>
                     {selectedDayEvents.map((ev, ei) => (

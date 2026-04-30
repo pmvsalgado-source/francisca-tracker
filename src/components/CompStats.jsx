@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { PAGE_SIZE } from '../constants/pagination'
 
 // comp_config table needed: id (uuid pk), stat_fields (jsonb), visible_columns (jsonb), summary_cards (jsonb), updated_at (timestamptz)
+import EmptyState from './EmptyState'
 
 const DEFAULT_STAT_FIELDS = [
   { id: 'score', label: 'Score', unit: '', lower_better: true },
@@ -641,12 +642,13 @@ export default function CompStats({ theme, t, user, events = [] }) {
       {loading ? (
         <div style={{ padding: '40px', textAlign: 'center', color: t.textMuted, fontSize: '13px' }}>A carregar...</div>
       ) : filteredStats.length === 0 ? (
-        <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '14px', textAlign: 'center', padding: '48px 24px' }}>
-          <div style={{ fontSize: '13px', color: t.textMuted, marginBottom: '16px' }}>Sem stats de competição ainda.</div>
-          <button onClick={openNew}
-            style={{ background: 'transparent', border: `1px solid ${t.accent}`, borderRadius: '20px', color: t.accent, padding: '6px 20px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: F }}>
-            Adicionar Primeira Competição
-          </button>
+        <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '14px' }}>
+          <EmptyState icon="🏌️" message="Sem stats de competição ainda." subMessage="Adiciona os resultados da tua primeira competição." t={t}>
+            <button onClick={openNew}
+              style={{ background: 'transparent', border: `1px solid ${t.accent}`, borderRadius: '20px', color: t.accent, padding: '6px 20px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: F }}>
+              Adicionar Primeira Competição
+            </button>
+          </EmptyState>
         </div>
       ) : (
         <div style={{ overflowX: 'auto', border: `1px solid ${t.border}`, borderRadius: '14px' }}>
