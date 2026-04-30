@@ -227,7 +227,7 @@ export default function Chat({ theme, t, user, profile, lang = 'en' }) {
                       }}>
                         {msg.content}
                         {isSafeUrl(msg.photo_url) && (
-                          <img src={msg.photo_url} alt="foto" style={{ display: 'block', maxWidth: '220px', maxHeight: '220px', borderRadius: '8px', marginTop: msg.content ? '6px' : '0', objectFit: 'cover', cursor: 'pointer' }} onClick={() => window.open(msg.photo_url, '_blank')} />
+                          <img src={msg.photo_url} alt="foto" style={{ display: 'block', maxWidth: '220px', maxHeight: '220px', borderRadius: '8px', marginTop: msg.content ? '6px' : '0', objectFit: 'cover', cursor: 'pointer' }} onClick={() => window.open(msg.photo_url, '_blank', 'noopener,noreferrer')} />
                         )}
                       </div>
                     )}
