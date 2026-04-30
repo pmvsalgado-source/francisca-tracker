@@ -186,7 +186,7 @@ function TeamModal({ t, F, onClose }) {
                   {m.phone && <div style={{ fontSize: '11px', color: t.textFaint, marginTop: '1px' }}>{m.phone}</div>}
                 </div>
                 <div style={{ fontSize: '10px', letterSpacing: '1px', color: t.accent, fontWeight: 600, background: t.accentBg, padding: '3px 10px', borderRadius: '10px', flexShrink: 0 }}>
-                  {m.role || '—'}
+                  {m.role || 'Utilizador'}
                 </div>
               </div>
             ))}
