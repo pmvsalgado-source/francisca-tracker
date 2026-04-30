@@ -335,6 +335,7 @@ export default function Dashboard({ user }) {
   const [savingKpis, setSavingKpis] = useState(false)
   const [avatar, setAvatar] = useState(null)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [avatarError, setAvatarError] = useState('')
   const avatarInputRef = useRef(null)
   const [kpiMsg, setKpiMsg] = useState('')
   const [registerError, setRegisterError] = useState('')
@@ -448,6 +449,15 @@ export default function Dashboard({ user }) {
 
   const uploadAvatar = async (file) => {
     if (!file) return
+    setAvatarError('')
+    if (!file.type.startsWith('image/')) {
+      setAvatarError(lang === 'pt' ? 'Ficheiro inválido. Selecciona uma imagem.' : 'Invalid file. Please select an image.')
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setAvatarError(lang === 'pt' ? 'Ficheiro demasiado grande. Máximo 5 MB.' : 'File too large. Maximum 5 MB.')
+      return
+    }
     setUploadingAvatar(true)
     const { data: { user: currentUser } } = await supabase.auth.getUser()
     if (!currentUser?.id) { setUploadingAvatar(false); return }
@@ -692,10 +702,13 @@ export default function Dashboard({ user }) {
               </div>
               <div>
                 <div style={{ fontSize: '13px', fontWeight: 600, color: t.text, marginBottom: '6px' }}>{displayName}</div>
-                <button onClick={() => avatarInputRef.current?.click()} disabled={uploadingAvatar}
+                <button onClick={() => { setAvatarError(''); avatarInputRef.current?.click() }} disabled={uploadingAvatar}
                   style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '6px', color: t.textMuted, padding: '5px 12px', fontSize: '11px', cursor: 'pointer', fontFamily: F }}>
                   {uploadingAvatar ? 'A carregar...' : 'Alterar foto'}
                 </button>
+                {avatarError && (
+                  <div style={{ fontSize: '11px', color: t.danger, marginTop: '4px' }}>{avatarError}</div>
+                )}
               </div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
