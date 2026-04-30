@@ -3,6 +3,179 @@ import { findCurrentPlan } from '../lib/trainingPlanUtils'
 import { supabase } from '../lib/supabase'
 import { calcCurrentPhase, isCompetition, getUpcomingCompetitions } from '../lib/periodization'
 import { getPlansForDate } from '../lib/trainingUtils'
+import { ACTIVITY_COLORS } from '../constants/eventCategories'
+
+const golfColor = ACTIVITY_COLORS.golf
+const gymColor = ACTIVITY_COLORS.gym
+const compColor = ACTIVITY_COLORS.competition
+
+function PhaseIllustration({ phase }) {
+  const w  = 'rgba(255,255,255,0.30)'
+  const wm = 'rgba(255,255,255,0.16)'
+  const ws = 'rgba(255,255,255,0.50)'
+
+  /* PEAK — bandeira no green + bola perto do buraco */
+  if (phase === 'PEAK') return (
+    <svg width="210" height="110" viewBox="0 0 210 110" fill="none" aria-hidden="true">
+      {/* green surface */}
+      <ellipse cx="110" cy="96" rx="90" ry="14" fill={wm} />
+      {/* hole */}
+      <ellipse cx="72" cy="94" rx="9" ry="4" fill="rgba(0,0,0,0.25)" />
+      {/* ball very close to hole */}
+      <circle cx="96" cy="90" r="10" fill={ws} />
+      <circle cx="96" cy="90" r="10" stroke={w} strokeWidth="1.5" />
+      {/* dimples suggestion */}
+      <circle cx="92" cy="87" r="2" fill={wm} />
+      <circle cx="99" cy="86" r="2" fill={wm} />
+      <circle cx="95" cy="92" r="2" fill={wm} />
+      {/* flagpole */}
+      <line x1="148" y1="94" x2="148" y2="14" stroke={ws} strokeWidth="3" strokeLinecap="round" />
+      {/* flag waving */}
+      <path d="M148,14 Q172,22 168,34 Q164,46 148,42" fill={ws} />
+      {/* motion lines near ball */}
+      <line x1="116" y1="84" x2="128" y2="80" stroke={w} strokeWidth="1.5" strokeLinecap="round" />
+      <line x1="118" y1="90" x2="132" y2="88" stroke={wm} strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  )
+
+  /* AFINACAO — putter + bola encostada ao buraco */
+  if (phase === 'AFINACAO') return (
+    <svg width="210" height="110" viewBox="0 0 210 110" fill="none" aria-hidden="true">
+      {/* ground */}
+      <line x1="10" y1="98" x2="200" y2="98" stroke={wm} strokeWidth="1.5" />
+      {/* putter shaft */}
+      <line x1="40" y1="10" x2="138" y2="90" stroke={ws} strokeWidth="4" strokeLinecap="round" />
+      {/* putter head */}
+      <rect x="124" y="87" width="44" height="12" rx="4" fill={ws} />
+      {/* hole */}
+      <ellipse cx="100" cy="98" rx="11" ry="5" fill="rgba(0,0,0,0.3)" />
+      {/* ball touching hole rim */}
+      <circle cx="117" cy="92" r="9" fill={ws} />
+      <circle cx="113" cy="89" r="2" fill={wm} />
+      <circle cx="120" cy="88" r="2" fill={wm} />
+      <circle cx="116" cy="94" r="2" fill={wm} />
+      {/* putting line (guide) */}
+      <line x1="138" y1="90" x2="117" y2="92" stroke={w} strokeWidth="1" strokeDasharray="4 3" />
+    </svg>
+  )
+
+  /* DESENVOLVIMENTO — barra de pesos + taco cruzados */
+  if (phase === 'DESENVOLVIMENTO') return (
+    <svg width="210" height="110" viewBox="0 0 210 110" fill="none" aria-hidden="true">
+      {/* golf club shaft (diagonal /) */}
+      <line x1="50" y1="100" x2="160" y2="10" stroke={ws} strokeWidth="5" strokeLinecap="round" />
+      {/* club head */}
+      <rect x="148" y="6" width="28" height="12" rx="4" fill={ws} />
+      {/* barbell bar (diagonal \) */}
+      <line x1="30" y1="18" x2="182" y2="92" stroke={w} strokeWidth="5" strokeLinecap="round" />
+      {/* weight discs left */}
+      <ellipse cx="38" cy="24" rx="18" ry="18" fill={wm} stroke={w} strokeWidth="2.5" />
+      <ellipse cx="38" cy="24" rx="10" ry="10" fill={w} />
+      {/* weight discs right */}
+      <ellipse cx="174" cy="86" rx="18" ry="18" fill={wm} stroke={w} strokeWidth="2.5" />
+      <ellipse cx="174" cy="86" rx="10" ry="10" fill={w} />
+    </svg>
+  )
+
+  /* DESENVOLVIMENTO_LIGHT — taco a bater bola no tee */
+  if (phase === 'DESENVOLVIMENTO_LIGHT') return (
+    <svg width="210" height="110" viewBox="0 0 210 110" fill="none" aria-hidden="true">
+      {/* ground */}
+      <line x1="20" y1="100" x2="200" y2="100" stroke={wm} strokeWidth="1.5" />
+      {/* tee stick */}
+      <line x1="140" y1="100" x2="140" y2="72" stroke={ws} strokeWidth="3" strokeLinecap="round" />
+      <line x1="128" y1="72" x2="152" y2="72" stroke={ws} strokeWidth="2.5" strokeLinecap="round" />
+      {/* ball on tee */}
+      <circle cx="140" cy="62" r="12" fill={ws} />
+      <circle cx="136" cy="58" r="3" fill={wm} />
+      <circle cx="144" cy="57" r="3" fill={wm} />
+      <circle cx="140" cy="65" r="3" fill={wm} />
+      {/* club approaching — relaxed angle */}
+      <line x1="28" y1="40" x2="122" y2="66" stroke={ws} strokeWidth="5" strokeLinecap="round" />
+      <rect x="112" y="62" width="26" height="10" rx="4" fill={ws} />
+      {/* swing arc (gentle) */}
+      <path d="M28,40 Q70,55 122,66" stroke={w} strokeWidth="1.5" strokeDasharray="5 4" fill="none" />
+    </svg>
+  )
+
+  /* ACUMULACAO — balde de bolas no range */
+  if (phase === 'ACUMULACAO') return (
+    <svg width="210" height="110" viewBox="0 0 210 110" fill="none" aria-hidden="true">
+      {/* bucket body */}
+      <path d="M65,38 L54,100 L156,100 L145,38 Z" fill={wm} stroke={w} strokeWidth="2" strokeLinejoin="round" />
+      {/* bucket top ellipse */}
+      <ellipse cx="105" cy="38" rx="40" ry="11" fill={w} />
+      {/* handle arc */}
+      <path d="M72,38 Q105,12 138,38" stroke={ws} strokeWidth="3.5" fill="none" strokeLinecap="round" />
+      {/* balls at top of bucket */}
+      <circle cx="88"  cy="32" r="11" fill={ws} />
+      <circle cx="108" cy="28" r="11" fill={ws} />
+      <circle cx="128" cy="32" r="11" fill={ws} />
+      {/* balls scattered on ground */}
+      <circle cx="36"  cy="98" r="8"  fill={w} />
+      <circle cx="172" cy="94" r="7"  fill={w} />
+      <circle cx="20"  cy="88" r="6"  fill={wm} />
+      <circle cx="190" cy="84" r="5"  fill={wm} />
+    </svg>
+  )
+
+  /* MANUTENCAO_B2B — putter + faixa de resistência */
+  if (phase === 'MANUTENCAO_B2B') return (
+    <svg width="210" height="110" viewBox="0 0 210 110" fill="none" aria-hidden="true">
+      {/* putter shaft */}
+      <line x1="30" y1="10" x2="108" y2="82" stroke={ws} strokeWidth="4" strokeLinecap="round" />
+      {/* putter head */}
+      <rect x="94" y="80" width="36" height="10" rx="4" fill={ws} />
+      {/* ground */}
+      <line x1="20" y1="100" x2="210" y2="100" stroke={wm} strokeWidth="1.5" />
+      {/* resistance band — loop shape */}
+      <ellipse cx="166" cy="62" rx="32" ry="44" stroke={ws} strokeWidth="5" fill="none" />
+      <ellipse cx="166" cy="62" rx="18" ry="28" stroke={w} strokeWidth="3" fill="none" />
+      {/* hands gripping band (top & bottom) */}
+      <rect x="152" y="14" width="28" height="10" rx="5" fill={w} />
+      <rect x="152" y="96" width="28" height="10" rx="5" fill={w} />
+    </svg>
+  )
+
+  /* DESCARGA — colchão de yoga + faixa leve */
+  if (phase === 'DESCARGA') return (
+    <svg width="210" height="110" viewBox="0 0 210 110" fill="none" aria-hidden="true">
+      {/* yoga mat flat */}
+      <rect x="20" y="72" width="148" height="26" rx="6" fill={w} />
+      {/* mat rolled end */}
+      <ellipse cx="168" cy="85" rx="14" ry="13" fill={ws} />
+      <ellipse cx="168" cy="85" rx="7"  ry="6"  fill={w} />
+      {/* mat texture lines */}
+      <line x1="20" y1="80" x2="154" y2="80" stroke={wm} strokeWidth="1" />
+      <line x1="20" y1="87" x2="154" y2="87" stroke={wm} strokeWidth="1" />
+      <line x1="20" y1="94" x2="154" y2="94" stroke={wm} strokeWidth="1" />
+      {/* resistance band above — soft curve */}
+      <path d="M40,50 Q80,20 120,50 Q160,80 190,44" stroke={ws} strokeWidth="4.5" fill="none" strokeLinecap="round" />
+      <path d="M40,56 Q80,26 120,56 Q160,86 190,50" stroke={wm} strokeWidth="2.5" fill="none" strokeLinecap="round" />
+    </svg>
+  )
+
+  /* DESCANSO — taco encostado à parede, pesos no chão */
+  return (
+    <svg width="210" height="110" viewBox="0 0 210 110" fill="none" aria-hidden="true">
+      {/* wall */}
+      <line x1="178" y1="8" x2="178" y2="102" stroke={w} strokeWidth="2" />
+      {/* floor */}
+      <line x1="18" y1="102" x2="200" y2="102" stroke={w} strokeWidth="2" />
+      {/* golf club leaning against wall */}
+      <line x1="178" y1="16" x2="136" y2="100" stroke={ws} strokeWidth="5" strokeLinecap="round" />
+      <rect x="122" y="96" width="24" height="8" rx="3" fill={ws} />
+      {/* barbell on floor */}
+      <line x1="40" y1="96" x2="112" y2="96" stroke={ws} strokeWidth="5" strokeLinecap="round" />
+      {/* weight disc left */}
+      <ellipse cx="36"  cy="96" rx="16" ry="16" fill={wm} stroke={w} strokeWidth="2.5" />
+      <ellipse cx="36"  cy="96" rx="8"  ry="8"  fill={w} />
+      {/* weight disc right */}
+      <ellipse cx="116" cy="96" rx="16" ry="16" fill={wm} stroke={w} strokeWidth="2.5" />
+      <ellipse cx="116" cy="96" rx="8"  ry="8"  fill={w} />
+    </svg>
+  )
+}
 
 function Sparkline({ data, t, target }) {
   const canvasRef = useRef(null)
@@ -870,7 +1043,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
       tasks.push({
         label: isCoach ? `Treino com Coach — ${type}` : `Treino ${type}`,
         detail: session.title || '',
-        color: session.type === 'gym' ? '#52E8A0' : '#378ADD',
+        color: session.type === 'gym' ? gymColor : golfColor,
       })
     })
     todayCalEvents.forEach(e => {
@@ -880,9 +1053,9 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
       tasks.push({
         label: e.title || 'Evento',
         detail: isComp ? 'Competição' : isGolf ? 'Golf' : e.category || '',
-        color: isComp ? '#ef4444' : isGolf ? '#378ADD' : '#52E8A0',
+        color: isComp ? compColor : isGolf ? golfColor : gymColor,
         badge: isComp ? 'COMP' : null,
-        badgeColor: '#ef4444',
+        badgeColor: compColor,
       })
     })
     return tasks
@@ -895,13 +1068,13 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
     tomorrowPlanSessions.forEach(session => {
       const isCoach = session.coachType === 'coach'
       const type = session.type === 'gym' ? 'Ginásio' : 'Golf'
-      tasks.push({ label: isCoach ? `Coach — ${type}` : `Treino ${type}`, detail: session.title || '', color: session.type === 'gym' ? '#52E8A0' : '#378ADD' })
+      tasks.push({ label: isCoach ? `Coach — ${type}` : `Treino ${type}`, detail: session.title || '', color: session.type === 'gym' ? gymColor : golfColor })
     })
     tomorrowCalEvents.forEach(e => {
       const isComp = isCompetition(e)
       const cat = (e.category || '').toLowerCase()
       const isGolf = !isComp && (cat.includes('treino') || cat.includes('camp'))
-      tasks.push({ label: e.title || 'Evento', detail: isComp ? 'Competição' : isGolf ? 'Golf' : e.category || '', color: isComp ? '#ef4444' : isGolf ? '#378ADD' : '#52E8A0', badge: isComp ? 'COMP' : null, badgeColor: '#ef4444' })
+      tasks.push({ label: e.title || 'Evento', detail: isComp ? 'Competição' : isGolf ? 'Golf' : e.category || '', color: isComp ? compColor : isGolf ? golfColor : gymColor, badge: isComp ? 'COMP' : null, badgeColor: compColor })
     })
     return tasks
   })()
@@ -992,8 +1165,8 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   // Agenda items - real scheduled sessions only (max 3)
   const agendaItems = (() => {
     const items = []
-    if (nextGolfCoachDate) items.push({ label: 'Coach · Golf',     date: nextGolfCoachDate, color: '#378ADD' })
-    if (nextGymCoachDate)  items.push({ label: 'Coach · Ginásio',  date: nextGymCoachDate,  color: '#52E8A0' })
+    if (nextGolfCoachDate) items.push({ label: 'Coach · Golf',     date: nextGolfCoachDate, color: golfColor })
+    if (nextGymCoachDate)  items.push({ label: 'Coach · Ginásio',  date: nextGymCoachDate,  color: gymColor })
     const coachDates = new Set([nextGolfCoachDate, nextGymCoachDate].filter(Boolean))
     if (nextTrainingDate && !coachDates.has(nextTrainingDate)) {
       const sessions = getPlansForDate(trainingPlans, nextTrainingDate)
@@ -1001,7 +1174,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
       const label = sessions.length
         ? sessions.map(planSessionLabel).join(' • ')
         : 'Treino'
-      items.push({ label, date: nextTrainingDate, color: first?.type === 'gym' ? '#52E8A0' : '#378ADD' })
+      items.push({ label, date: nextTrainingDate, color: first?.type === 'gym' ? gymColor : golfColor })
     }
     return items.sort((a, b) => a.date.localeCompare(b.date)).slice(0, 3)
   })()
@@ -1074,14 +1247,14 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
           const gymEvts  = dayEvts.filter(e => (e.category||'').toLowerCase().includes('gym'))
           const daySessions = getPlansForDate(trainingPlans, ds)
           const dayItems = [
-            ...compEvts.map(e => ({ label: e.title?.slice(0, 30) || 'Competição', color:'#ef4444', weight:850, view:'competition', title:'Abrir competição' })),
-            ...golfEvts.map(e => ({ label: e.title?.slice(0, 30) || 'Golf', color:'#378ADD', weight:760, view:'calendar', opts:{ date:ds }, title:'Abrir calendário' })),
-            ...gymEvts.map(e => ({ label: e.title?.slice(0, 30) || 'Ginásio', color:'#52E8A0', weight:760, view:'calendar', opts:{ date:ds }, title:'Abrir calendário' })),
+            ...compEvts.map(e => ({ label: e.title?.slice(0, 30) || 'Competição', color: compColor, weight:850, view:'competition', title:'Abrir competição' })),
+            ...golfEvts.map(e => ({ label: e.title?.slice(0, 30) || 'Golf', color:golfColor, weight:760, view:'calendar', opts:{ date:ds }, title:'Abrir calendário' })),
+            ...gymEvts.map(e => ({ label: e.title?.slice(0, 30) || 'Ginásio', color:gymColor, weight:760, view:'calendar', opts:{ date:ds }, title:'Abrir calendário' })),
             ...daySessions.map(session => ({
               label: planSessionLabel(session),
-              color: session.type === 'gym' ? '#52E8A0' : '#378ADD',
+              color: session.type === 'gym' ? gymColor : golfColor,
               weight:720,
-              view:'training',
+              view:'calendar',
               opts:{ date:ds },
               title:'Abrir plano',
             })),
@@ -1133,41 +1306,22 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
     </div>
   )
   return (
-    <div style={{
-      fontFamily: F,
-      color: t.text,
-      minHeight:'100%',
-      background: theme === 'dark' ? t.bg : 'radial-gradient(circle at 8% 0%, rgba(239,68,68,0.08) 0, transparent 28%), linear-gradient(180deg, #f8fafc 0%, #edf2f7 100%)',
-    }}>
+    <div style={{ fontFamily:F, color:t.text, minHeight:'100%', background: theme === 'dark' ? t.bg : '#f8fafc' }}>
       <style>{`
         *{box-sizing:border-box}
-        .hm-page-shell{
-          width:100%;
-          max-width:1380px;
-          margin:0 auto;
-          padding:28px 34px 40px;
-        }
+        .hm-page-shell{width:100%;max-width:1380px;margin:0 auto;padding:28px 34px 40px}
         .hm2-grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
         .hm-athlete-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
-        .hm-hoje-row{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(0,0.92fr);gap:18px;align-items:stretch}
-        .hm-row2{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(320px,0.75fr);gap:26px;margin-bottom:8px;align-items:start}
-        .hm-row3{display:grid;grid-template-columns:1fr 300px;gap:16px;align-items:start}
-        .hm-card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:20px 22px}
-        .hm-section-label{font-size:9px;letter-spacing:2px;font-weight:700;margin-bottom:10px;text-transform:uppercase}
-        .hm-divider{border:none;border-top:1px solid var(--border);margin:10px 0}
-        .hm-row2 > div, .hm-hoje-row > div{min-width:0}
-        @media(max-width:1180px){
-          .hm-row2{grid-template-columns:1fr}
-        }
+        .hm-row{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:16px;margin-bottom:16px;align-items:start}
+        .hm-row3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:16px;align-items:stretch}
+        .hm-week-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+        .hm-btn-reset{background:transparent;border:none;padding:0;cursor:pointer;font-family:inherit;text-align:left;width:100%}
+        @media(max-width:900px){.hm-row{grid-template-columns:1fr}.hm-row3{grid-template-columns:1fr}}
         @media(max-width:768px){
           .hm-page-shell{padding:16px 14px 28px}
           .hm2-grid3{grid-template-columns:1fr 1fr}
           .hm-athlete-grid{grid-template-columns:repeat(2,1fr)}
-          .hm-row2{grid-template-columns:1fr}
-          .hm-row3{grid-template-columns:1fr}
-        }
-        @media(max-width:700px){
-          .hm-hoje-row{grid-template-columns:1fr}
+          .hm-week-grid{gap:3px}
         }
         @media(max-width:480px){
           .hm2-grid3{grid-template-columns:1fr}
@@ -1176,7 +1330,8 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
       `}</style>
 
       <div className="hm-page-shell">
-      {/* KPI MODAL (preserved) */}
+
+      {/* ─── KPI MODAL ─── */}
       {kpiModal && (
         <div style={{ position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:300,padding:'20px' }}
           onClick={e => { if (e.target===e.currentTarget) setKpiModal(null) }}>
@@ -1230,313 +1385,288 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
         </div>
       )}
 
-      {/* 1. HEADER */}
-      <div style={{ marginBottom:'8px' }}>
-        {editingAthlete ? (
-          <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'12px', padding:'12px 14px' }}>
-            <div className="hm-athlete-grid">
-              {[['hcp','Handicap'],['wagr','WAGR'],['club','Clube'],['category','Categoria'],['fed','Federação'],['fed_num','Nº Federado']].map(([k,l]) => (
-                <div key={k}>
-                  <div style={{ fontSize:'8px', color:t.textMuted, marginBottom:'3px', letterSpacing:'1px' }}>{l.toUpperCase()}</div>
-                  <input value={athleteForm[k] || ''} onChange={e => setAthleteForm(p => ({...p,[k]:e.target.value}))} style={inp} />
-                </div>
-              ))}
-            </div>
-            <div style={{ display:'flex', gap:'8px' }}>
-              <button onClick={saveAthlete} disabled={athleteSaving} style={{ background:'#378ADD', border:'none', borderRadius:'6px', color:'#fff', padding:'6px 16px', fontSize:'11px', fontWeight:700, cursor:'pointer', fontFamily:F, opacity:athleteSaving?0.7:1 }}>{athleteSaving ? 'A GUARDAR...' : 'GUARDAR'}</button>
-              <button onClick={() => setEditingAthlete(false)} style={{ background:'transparent', border:`1px solid ${t.border}`, borderRadius:'6px', color:t.textMuted, padding:'6px 16px', fontSize:'11px', cursor:'pointer', fontFamily:F }}>Cancelar</button>
-            </div>
-          </div>
-        ) : (
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'10px', flexWrap:'wrap' }}>
-            {/* Name + HCP + WAGR */}
-            <div style={{ display:'flex', alignItems:'center', gap:'14px', flexWrap:'wrap' }}>
-              <div>
-                <div style={{ fontSize:'8px', letterSpacing:'2.4px', color:'#378ADD', fontWeight:700, marginBottom:'1px' }}>PERFORMANCE · GOLF</div>
-                <div style={{ fontSize:'18px', fontWeight:800, color:t.text, lineHeight:1 }}>{profile?.name || 'Francisca Salgado'}</div>
+      {/* ─── HERO BANNER ─── */}
+      {editingAthlete ? (
+        <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'16px', padding:'20px', marginBottom:'16px' }}>
+          <div className="hm-athlete-grid">
+            {[['hcp','Handicap'],['wagr','WAGR'],['club','Clube'],['category','Categoria'],['fed','Federação'],['fed_num','Nº Federado']].map(([k,l]) => (
+              <div key={k}>
+                <div style={{ fontSize:'8px', color:t.textMuted, marginBottom:'3px', letterSpacing:'1px' }}>{l.toUpperCase()}</div>
+                <input value={athleteForm[k] || ''} onChange={e => setAthleteForm(p => ({...p,[k]:e.target.value}))} style={inp} />
               </div>
-              <div style={{ display:'flex', gap:'12px' }}>
-                <div style={{ textAlign:'center' }}>
-                  <div style={{ fontSize:'7px', letterSpacing:'1px', color:'#378ADD', fontWeight:700, marginBottom:'1px' }}>HCP</div>
-                  <div style={{ fontSize:'18px', fontWeight:900, color:t.text, lineHeight:1 }}>{athlete.hcp || '—'}</div>
-                  {hcpDelta && <div style={{ fontSize:'10px', color:parseFloat(hcpDelta)<0?'#52E8A0':'#f87171', marginTop:'1px' }}>{parseFloat(hcpDelta)<0?'▼':'▲'} {Math.abs(parseFloat(hcpDelta))}</div>}
-                </div>
-                <div style={{ textAlign:'center' }}>
-                  <div style={{ fontSize:'7px', letterSpacing:'1px', color:'#52E8A0', fontWeight:700, marginBottom:'1px' }}>WAGR</div>
-                  <div style={{ fontSize:'18px', fontWeight:900, color:t.text, lineHeight:1 }}>{displayWagr}</div>
-                  {displayWagrDelta != null && <div style={{ fontSize:'10px', color:displayWagrDelta<0?'#52E8A0':'#f87171', marginTop:'1px' }}>{displayWagrDelta<0?'▼':'▲'} {Math.abs(displayWagrDelta)}</div>}
-                </div>
-              </div>
-            </div>
-            {/* Action buttons */}
-            <div style={{ display:'flex', gap:'6px', alignItems:'center' }}>
-              <button style={{ background:'transparent', border:`1px solid ${t.border}`, borderRadius:'8px', color:t.textMuted, padding:'4px 8px', cursor:'default', fontSize:'13px', lineHeight:1 }} title="Notifica��es (em breve)">??</button>
-              <button onClick={() => { setAthleteForm({...athlete}); setEditingAthlete(true) }} style={{ background:'transparent', border:`1px solid ${t.border}`, borderRadius:'8px', color:t.textMuted, padding:'4px 8px', cursor:'pointer', fontSize:'13px', lineHeight:1 }} title="Editar perfil">?</button>
+            ))}
+          </div>
+          <div style={{ display:'flex', gap:'8px', marginTop:'12px' }}>
+            <button onClick={saveAthlete} disabled={athleteSaving} style={{ background:'#378ADD', border:'none', borderRadius:'6px', color:'#fff', padding:'6px 16px', fontSize:'11px', fontWeight:700, cursor:'pointer', fontFamily:F, opacity:athleteSaving?0.7:1 }}>{athleteSaving ? 'A GUARDAR...' : 'GUARDAR'}</button>
+            <button onClick={() => setEditingAthlete(false)} style={{ background:'transparent', border:`1px solid ${t.border}`, borderRadius:'6px', color:t.textMuted, padding:'6px 16px', fontSize:'11px', cursor:'pointer', fontFamily:F }}>Cancelar</button>
+          </div>
+        </div>
+      ) : (
+        <div style={{
+          borderRadius:'16px',
+          padding:'20px 40px',
+          marginBottom:'16px',
+          background:`linear-gradient(125deg, ${phaseInfo.phaseColor} 0%, ${phaseInfo.phaseColor}d0 55%, ${phaseInfo.phaseColor}90 100%)`,
+          position:'relative',
+          overflow:'hidden',
+          minHeight:'126px',
+          display:'flex',
+          flexDirection:'column',
+          justifyContent:'center',
+        }}>
+          {/* edit button */}
+          <button onClick={() => { setAthleteForm({...athlete}); setEditingAthlete(true) }}
+            style={{ position:'absolute', top:'12px', right:'12px', background:'rgba(255,255,255,0.18)', border:'1px solid rgba(255,255,255,0.30)', borderRadius:'8px', color:heroTextColor, padding:'5px 10px', cursor:'pointer', fontSize:'13px', fontFamily:F, opacity:0.85 }} title="Editar perfil">✎</button>
+          {/* crown + phase name */}
+          <div style={{ display:'flex', alignItems:'center', gap:'14px', marginBottom:'8px', position:'relative', zIndex:1 }}>
+            <span style={{ fontSize:'24px', lineHeight:1 }}>👑</span>
+            <div style={{ fontSize:'clamp(30px,4vw,52px)', fontWeight:950, color:heroTextColor, lineHeight:0.92, letterSpacing:'-0.02em', textTransform:'uppercase' }}>
+              {currentPhase.name}
             </div>
           </div>
-        )}
-      </div>
-
-      {/* HERO - desktop performance */}
-      <div style={{
-        width:'100%',
-        minHeight:'172px',
-        display:'grid',
-        gridTemplateColumns:'minmax(0, 1.15fr) minmax(360px, 0.85fr)',
-        alignItems:'stretch',
-        gap:'22px',
-        padding:'26px',
-        marginBottom:'24px',
-        borderRadius:'30px',
-        color:heroTextColor,
-        background:`linear-gradient(135deg, ${phaseInfo.phaseColor} 0%, ${phaseInfo.phaseColor}e8 48%, ${phaseInfo.phaseColor}b8 100%)`,
-        boxShadow:`0 28px 70px ${phaseInfo.phaseColor}26`,
-        overflow:'hidden',
-        position:'relative',
-      }}>
-        <div style={{ position:'absolute', left:'-80px', top:'-130px', width:'300px', height:'300px', borderRadius:'50%', background:'rgba(255,255,255,0.10)' }} />
-        <div style={{ position:'absolute', right:'-90px', top:'-120px', width:'310px', height:'310px', borderRadius:'50%', background:'rgba(255,255,255,0.14)' }} />
-        <div style={{ position:'absolute', right:'220px', bottom:'-110px', width:'230px', height:'230px', borderRadius:'50%', background:'rgba(255,255,255,0.07)' }} />
-
-        <div style={{ position:'relative', zIndex:1, display:'flex', flexDirection:'column', justifyContent:'center', minWidth:0 }}>
-          <div style={{ fontSize:'clamp(44px, 5.3vw, 78px)', fontWeight:980, lineHeight:0.86, letterSpacing:'-0.07em', textTransform:'uppercase' }}>
-            {currentPhase.name}
-          </div>
-          {heroMainLine && (
-            <div style={{ maxWidth:'680px', marginTop:'18px', fontSize:'clamp(17px, 1.65vw, 24px)', fontWeight:850, lineHeight:1.16, opacity:0.98 }}>
-              {heroMainLine}
+          {/* subtitle */}
+          {currentPhase.situation && (
+            <div style={{ fontSize:'clamp(13px,1.4vw,17px)', fontWeight:700, color:heroTextColor, opacity:0.95, position:'relative', zIndex:1 }}>
+              {currentPhase.situation}
             </div>
           )}
+          {/* illustration + HCP + WAGR — right side, vertically centred */}
+          <div style={{ position:'absolute', right:'16px', bottom:'14px', display:'flex', alignItems:'flex-end', gap:'12px', zIndex:1, pointerEvents:'none' }}>
+            <div style={{ opacity:0.85 }}>
+              <PhaseIllustration phase={phaseInfo.phase} />
+            </div>
+            {athlete.hcp && athlete.hcp !== '—' && (
+              <div style={{ background:'rgba(255,255,255,0.22)', border:'1px solid rgba(255,255,255,0.35)', borderRadius:'999px', padding:'4px 14px', display:'flex', alignItems:'center', gap:'6px', pointerEvents:'auto' }}>
+                <span style={{ fontSize:'10px', fontWeight:800, color:heroTextColor, opacity:0.75, letterSpacing:'1px' }}>HCP</span>
+                <span style={{ fontSize:'15px', fontWeight:900, color:heroTextColor }}>{athlete.hcp}</span>
+              </div>
+            )}
+            {displayWagr && displayWagr !== '—' && (
+              <div style={{ background:'rgba(255,255,255,0.22)', border:'1px solid rgba(255,255,255,0.35)', borderRadius:'999px', padding:'4px 14px', display:'flex', alignItems:'center', gap:'6px', pointerEvents:'auto' }}>
+                <span style={{ fontSize:'10px', fontWeight:800, color:heroTextColor, opacity:0.75, letterSpacing:'1px' }}>WAGR</span>
+                <span style={{ fontSize:'15px', fontWeight:900, color:heroTextColor }}>#{displayWagr}</span>
+              </div>
+            )}
+          </div>
         </div>
+      )}
 
-        <div style={{ position:'relative', zIndex:1, borderRadius:'24px', background:'rgba(255,255,255,0.15)', border:'1px solid rgba(255,255,255,0.22)', boxShadow:'inset 0 1px 0 rgba(255,255,255,0.18)', padding:'17px 18px', display:'flex', flexDirection:'column', justifyContent:'center', minWidth:0 }}>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:'12px', marginBottom:'13px' }}>
-            <div style={{ fontSize:'10px', letterSpacing:'2.2px', fontWeight:950, textTransform:'uppercase', opacity:0.88 }}>ESTA SEMANA</div>
-            <div style={{ width:'38px', height:'38px', borderRadius:'50%', background:'rgba(255,255,255,0.92)', color:phaseInfo.phaseColor, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'18px', fontWeight:950, flexShrink:0 }}>
-              ⛳
+      {/* ─── ROW 1: HOJE | AMANHÃ | PRÓXIMA COMPETIÇÃO ─── */}
+      <div className="hm-row3">
+
+        {/* HOJE */}
+        <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'16px', padding:'20px' }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'18px' }}>
+            <div style={{ fontSize:'16px', fontWeight:900, color:t.text, letterSpacing:'0.5px' }}>HOJE</div>
+            <div style={{ fontSize:'13px', color:t.textMuted, fontWeight:600 }}>
+              {todayDate.toLocaleDateString('pt-PT', { weekday:'long', day:'2-digit', month:'2-digit' })}
             </div>
           </div>
-          <div style={{ display:'flex', flexDirection:'column', gap:'10px' }}>
-            {heroWeekLines.map((line, idx) => {
-              const Icon = idx === 0 ? TargetIcon : idx === 1 ? DumbbellIcon : AlertIcon
+          <div style={{ display:'flex', flexDirection:'column', gap:'12px', marginBottom:'18px' }}>
+            {todayPlanSessions.length > 0 ? todayPlanSessions.map((session, i) => {
+              const isGym = session.type === 'gym'
+              const color = isGym ? gymColor : golfColor
               return (
-                <div key={idx} style={{ display:'flex', alignItems:'flex-start', gap:'10px', minWidth:0 }}>
-                  <div style={{ width:'25px', height:'25px', borderRadius:'50%', background:'rgba(255,255,255,0.18)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, marginTop:'-2px' }}>
-                    <Icon color={heroTextColor} />
+                <button key={i} className="hm-btn-reset" onClick={() => onNavigate && onNavigate('calendar', { date: todayStr })}
+                  style={{ display:'flex', alignItems:'center', gap:'14px' }}>
+                  <div style={{ width:'46px', height:'46px', borderRadius:'50%', background: isGym ? `${gymColor}22` : `${golfColor}22`, border:`2px solid ${color}`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, fontSize:'20px' }}>
+                    {isGym ? '⊕' : '⛳'}
                   </div>
-                  <div style={{ fontSize:'13px', fontWeight:720, lineHeight:1.22, color:heroTextColor, opacity: idx === 2 ? 0.94 : 0.98 }}>
-                    {line}
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:'15px', fontWeight:800, color:t.text }}>{sessionDisplayTitle(session)}</div>
+                    {sessionMeta(session) && <div style={{ fontSize:'13px', color:t.textMuted, marginTop:'2px' }}>{sessionMeta(session)}</div>}
+                  </div>
+                  <div style={{ color:t.textMuted, fontSize:'18px', flexShrink:0 }}>›</div>
+                </button>
+              )
+            }) : (
+              <div>
+                <div style={{ fontSize:'15px', fontWeight:700, color:t.text, marginBottom:'4px' }}>Plano ainda não definido</div>
+                <div style={{ fontSize:'13px', color:t.textMuted }}>A aguardar planeamento do coach</div>
+              </div>
+            )}
+          </div>
+          <button onClick={() => onNavigate && onNavigate('calendar', { date: todayStr })}
+            style={{ width:'100%', background:phaseInfo.phaseColor, border:'none', borderRadius:'10px', color:heroTextColor, padding:'13px', fontSize:'14px', fontWeight:800, cursor:'pointer', fontFamily:F, display:'flex', alignItems:'center', justifyContent:'center', gap:'8px' }}>
+            Ver plano completo →
+          </button>
+        </div>
+
+        {/* AMANHÃ */}
+        <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'16px', padding:'20px' }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'18px' }}>
+            <div style={{ fontSize:'16px', fontWeight:900, color:t.text, letterSpacing:'0.5px' }}>AMANHÃ</div>
+            <div style={{ fontSize:'13px', color:t.textMuted, fontWeight:600 }}>
+              {tomorrowDate.toLocaleDateString('pt-PT', { weekday:'long', day:'2-digit', month:'2-digit' })}
+            </div>
+          </div>
+          <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
+            {tomorrowPlanSessions.length > 0 ? tomorrowPlanSessions.map((session, i) => {
+              const isGym = session.type === 'gym'
+              const color = isGym ? gymColor : golfColor
+              return (
+                <button key={i} className="hm-btn-reset" onClick={() => onNavigate && onNavigate('calendar', { date: tomorrowStr })}
+                  style={{ display:'flex', alignItems:'center', gap:'14px' }}>
+                  <div style={{ width:'46px', height:'46px', borderRadius:'50%', background: isGym ? `${gymColor}22` : `${golfColor}22`, border:`2px solid ${color}`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, fontSize:'20px' }}>
+                    {isGym ? '⊕' : '⛳'}
+                  </div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:'15px', fontWeight:800, color:t.text }}>{sessionDisplayTitle(session)}</div>
+                    {sessionMeta(session) && <div style={{ fontSize:'13px', color:t.textMuted, marginTop:'2px' }}>{sessionMeta(session)}</div>}
+                  </div>
+                  <div style={{ color:t.textMuted, fontSize:'18px', flexShrink:0 }}>›</div>
+                </button>
+              )
+            }) : (
+              <div>
+                <div style={{ fontSize:'15px', fontWeight:700, color:t.text, marginBottom:'4px' }}>Plano ainda não definido</div>
+                <div style={{ fontSize:'13px', color:t.textMuted }}>A aguardar planeamento do coach</div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* PRÓXIMA COMPETIÇÃO */}
+        <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'16px', padding:'20px' }}>
+          <div style={{ fontSize:'11px', letterSpacing:'2px', color: daysToNextComp != null && daysToNextComp <= 7 ? '#ef4444' : '#f59e0b', fontWeight:800, textTransform:'uppercase', marginBottom:'16px' }}>
+            PRÓXIMA COMPETIÇÃO
+          </div>
+          {upcomingCompsAll.length > 0 ? (
+            <>
+              <div style={{ display:'flex', alignItems:'flex-start', gap:'20px', marginBottom:'16px' }}>
+                <div style={{ textAlign:'center', flexShrink:0 }}>
+                  <div style={{ fontSize:'64px', fontWeight:950, color:'#ef4444', lineHeight:0.88 }}>{daysToNextComp ?? '—'}</div>
+                  <div style={{ fontSize:'10px', letterSpacing:'2px', color:t.textMuted, fontWeight:800, marginTop:'6px' }}>DIAS</div>
+                </div>
+                <div style={{ minWidth:0 }}>
+                  <div style={{ fontSize:'16px', fontWeight:900, color:t.text, lineHeight:1.25 }}>{upcomingCompsAll[0].title}</div>
+                  <div style={{ fontSize:'13px', color:t.textMuted, fontWeight:600, marginTop:'5px' }}>
+                    {formatDate(upcomingCompsAll[0].start_date)}
+                    {upcomingCompsAll[0].end_date && upcomingCompsAll[0].end_date !== upcomingCompsAll[0].start_date
+                      ? ` — ${formatDate(upcomingCompsAll[0].end_date)}` : ''}
+                  </div>
+                </div>
+              </div>
+              {upcomingCompsAll.length > 1 && (
+                <div style={{ borderTop:`1px solid ${t.border}`, paddingTop:'12px', display:'flex', flexDirection:'column', gap:'8px' }}>
+                  {upcomingCompsAll.slice(1, 4).map((comp, i) => {
+                    const d = Math.max(0, Math.ceil((new Date(normDate(comp.start_date) + 'T12:00:00') - new Date()) / 86400000))
+                    return (
+                      <button key={i} className="hm-btn-reset" onClick={() => onNavigate && onNavigate('calendar')}
+                        style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:'8px' }}>
+                        <div style={{ display:'flex', alignItems:'center', gap:'8px', minWidth:0 }}>
+                          <span style={{ fontSize:'13px' }}>🏆</span>
+                          <div style={{ fontSize:'13px', color:t.textMuted, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontWeight:650 }}>{comp.title}</div>
+                        </div>
+                        <div style={{ fontSize:'12px', color:t.textMuted, flexShrink:0, fontWeight:750 }}>{d}d</div>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </>
+          ) : (
+            <div style={{ fontSize:'14px', color:t.textMuted }}>Sem competições agendadas</div>
+          )}
+        </div>
+      </div>
+
+      {/* ─── ROW 2: ESTA SEMANA | AGENDA ─── */}
+      <div className="hm-row">
+
+        {/* ESTA SEMANA */}
+        <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'16px', padding:'20px' }}>
+          <div style={{ fontSize:'16px', fontWeight:900, color:t.text, marginBottom:'16px' }}>ESTA SEMANA</div>
+          <div className="hm-week-grid">
+            {weekDays.map((day, i) => {
+              const ds = day.toISOString().split('T')[0]
+              const isToday = ds === todayStr
+              const isPast  = ds < todayStr
+              const dayEvts = events.filter(e => {
+                const s = normDate(e.start_date || e.date || e.start)
+                const end = normDate(e.end_date || e.end) || s
+                return s <= ds && end >= ds
+              })
+              const compEvts = dayEvts.filter(isCompetition)
+              const daySessions = getPlansForDate(trainingPlans, ds)
+              const hasComp = compEvts.length > 0
+              const gymSess = daySessions.filter(s => s.type === 'gym')
+              const golfSess = daySessions.filter(s => s.type !== 'gym')
+              const hasGolf = !hasComp && golfSess.length > 0
+              const hasGym  = !hasComp && !hasGolf && gymSess.length > 0
+              const actLabel = hasComp
+                ? (compEvts[0].title?.slice(0, 12) || 'Competição')
+                : hasGolf
+                  ? (golfSess[0]?.title?.slice(0, 12) || 'Golf')
+                  : hasGym
+                    ? 'Ginásio'
+                    : ''
+              return (
+                <div key={i} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:'8px', padding:'10px 4px', borderRadius:'10px', background: isToday ? `${t.accent}12` : 'transparent', border: isToday ? `1px solid ${t.accent}33` : '1px solid transparent', opacity: isPast && !isToday ? 0.5 : 1 }}>
+                  <div style={{ fontSize:'12px', fontWeight: isToday ? 900 : 700, color: isToday ? t.accent : t.textMuted }}>
+                    {DAY_LABELS[i]}
+                  </div>
+                  <div style={{ height:'28px', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                    {hasComp
+                      ? <span style={{ fontSize:'20px' }}>🏆</span>
+                      : hasGolf
+                        ? <div style={{ width:'10px', height:'10px', borderRadius:'50%', background:'#378ADD', boxShadow:'0 0 0 3px #378ADD22' }} />
+                        : hasGym
+                          ? <div style={{ width:'10px', height:'10px', borderRadius:'50%', background:'#52E8A0', boxShadow:'0 0 0 3px #52E8A022' }} />
+                          : <span style={{ color:t.textFaint, fontSize:'14px', fontWeight:500 }}>—</span>
+                    }
+                  </div>
+                  <div style={{ fontSize:'10px', color:t.textMuted, fontWeight:600, textAlign:'center', lineHeight:1.25, minHeight:'20px', wordBreak:'break-word' }}>
+                    {actLabel}
                   </div>
                 </div>
               )
             })}
           </div>
         </div>
-      </div>
-
-      {/* ROW 2: HOJE & AMANHÃ | PRÓXIMA COMPETIÇÃO */}
-      <div className="hm-row2">
-
-        <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
-        {/* HOJE + AMANHÃ */}
-        <div className="hm-hoje-row">
-
-          {/* HOJE */}
-          <div style={{ ...premiumCard, border:`1.5px solid ${t.accent}66`, borderRadius:'24px', padding:'22px 24px', position:'relative', overflow:'hidden', alignSelf:'stretch', minHeight:'190px' }}>
-            <div style={{ position:'absolute', top:0, left:0, right:0, height:'3px', background:t.accent }} />
-            <div style={{ marginBottom:'8px', display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:'12px' }}>
-              <div>
-                <div style={{ fontSize:'12px', letterSpacing:'2.4px', color:t.accent, fontWeight:900 }}>HOJE</div>
-                <div style={{ fontSize:'13px', color:t.textMuted, marginTop:'3px', fontWeight:600 }}>
-                  {todayDate.toLocaleDateString('pt-PT', { weekday:'long', day:'2-digit', month:'2-digit' })}
-                </div>
-              </div>
-              {todayPlanSessions.length > 0 && (
-                <div style={{ fontSize:'11px', color:t.accent, background:t.accentBg||`${t.accent}18`, border:`1px solid ${t.accent}33`, borderRadius:'999px', padding:'4px 9px', fontWeight:800, whiteSpace:'nowrap' }}>
-                  {todayPlanSessions.length} {todayPlanSessions.length === 1 ? 'sessão hoje' : 'sessões hoje'}
-                </div>
-              )}
-            </div>
-            {todayPlanSessions.length === 0 ? (
-              <div>
-                <div style={{ fontSize:'17px', color:t.text, fontWeight:800, marginBottom:'5px' }}>Plano ainda não definido</div>
-                <div style={{ fontSize:'13px', color:t.textMuted, fontWeight:500 }}>A aguardar planeamento do coach</div>
-              </div>
-            ) : (
-              <div style={{ display:'flex', flexDirection:'column', gap:'8px' }}>
-                {todayPlanSessions.map((session, i) => (
-                  <div key={i} style={{ paddingLeft:'11px', borderLeft:`3px solid ${session.type==='gym' ? '#52E8A0' : '#378ADD'}` }}>
-                    <div style={{ fontSize:'16px', fontWeight:850, color:t.text, lineHeight:1.2 }}>
-                      {sessionDisplayTitle(session)}
-                    </div>
-                    {(session.duration || sessionFocusItems(session).length > 0) && (
-                      <div style={{ fontSize:'13px', color:t.textMuted, marginTop:'4px', lineHeight:1.35, fontWeight:500 }}>
-                        {sessionMeta(session)}
-                      </div>
-                    )}
-                  </div>
-                ))}
-                <button onClick={() => onNavigate('training', { date: todayStr })}
-                  style={{ fontSize:'12px', color:'#fff', background:t.accent, border:'none', borderRadius:'8px', cursor:'pointer', padding:'7px 13px', fontFamily:F, fontWeight:800, marginTop:'2px', display:'inline-block', alignSelf:'flex-start', boxShadow:`0 8px 18px ${t.accent}33` }}>
-                  → Ver plano
-                </button>
-              </div>
-            )}
-          </div>
-          {/* AMANHÃ */}
-          <div style={{ ...premiumCard, borderRadius:'24px', padding:'22px 24px', opacity:0.96, alignSelf:'stretch', minHeight:'190px' }}>
-            <div style={{ marginBottom:'8px', display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:'12px' }}>
-              <div>
-                <div style={{ fontSize:'12px', letterSpacing:'2.4px', color:t.textMuted, fontWeight:900 }}>AMANHÃ</div>
-                <div style={{ fontSize:'13px', color:t.textMuted, marginTop:'3px', fontWeight:600 }}>
-                  {tomorrowDate.toLocaleDateString('pt-PT', { weekday:'long', day:'2-digit', month:'2-digit' })}
-                </div>
-              </div>
-              {tomorrowPlanSessions.length > 0 && (
-                <div style={{ fontSize:'11px', color:t.textMuted, background:t.bg, border:`1px solid ${t.border}`, borderRadius:'999px', padding:'4px 9px', fontWeight:800, whiteSpace:'nowrap' }}>
-                  {tomorrowPlanSessions.length} {tomorrowPlanSessions.length === 1 ? 'sessão amanhã' : 'sessões amanhã'}
-                </div>
-              )}
-            </div>
-            {tomorrowPlanSessions.length === 0 ? (
-              <div>
-                <div style={{ fontSize:'16px', color:t.text, fontWeight:800, marginBottom:'5px' }}>Plano ainda não definido</div>
-                <div style={{ fontSize:'13px', color:t.textMuted, fontWeight:500 }}>A aguardar planeamento do coach</div>
-              </div>
-            ) : (
-              <div style={{ display:'flex', flexDirection:'column', gap:'8px' }}>
-                {tomorrowPlanSessions.map((session, i) => (
-                  <div key={i} style={{ paddingLeft:'11px', borderLeft:`3px solid ${session.type==='gym' ? '#52E8A0' : '#378ADD'}` }}>
-                    <div style={{ fontSize:'15px', fontWeight:800, color:t.text, lineHeight:1.2 }}>
-                      {sessionDisplayTitle(session)}
-                    </div>
-                    {(session.duration || sessionFocusItems(session).length > 0) && (
-                      <div style={{ fontSize:'13px', color:t.textMuted, marginTop:'4px', lineHeight:1.35, fontWeight:500 }}>
-                        {sessionMeta(session)}
-                      </div>
-                    )}
-                  </div>
-                ))}
-                <button onClick={() => onNavigate('training', { date: tomorrowStr })}
-                  style={{ fontSize:'12px', color:t.textMuted, background:'transparent', border:`1px solid ${t.border}`, borderRadius:'8px', cursor:'pointer', padding:'7px 13px', fontFamily:F, fontWeight:800, marginTop:'2px', display:'inline-block', alignSelf:'flex-start' }}>
-                  → Ver plano
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {weekCard}
-        </div>
-
-        <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
-        {/* PRÓXIMA COMPETIÇÃO */}
-        {upcomingCompsAll.length > 0 ? (
-          <div style={{ ...premiumCard, border:`1px solid ${daysToNextComp != null && daysToNextComp <= 7 ? '#ef444466' : '#f59e0b44'}`, borderRadius:'24px', padding:'22px', minHeight:'236px', position:'relative', overflow:'hidden' }}>
-            <div style={{ position:'absolute', inset:'0 auto 0 0', width:'4px', background: daysToNextComp != null && daysToNextComp <= 7 ? '#ef4444' : '#f59e0b' }} />
-            <div style={{ ...sectionTitleStyle, marginBottom:'12px', color: daysToNextComp != null && daysToNextComp <= 7 ? '#ef4444' : '#f59e0b' }}>PRÓXIMA COMPETIÇÃO</div>
-            <div style={{ display:'flex', flexDirection:'column', gap:'12px', marginBottom:'12px' }}>
-              <div style={{ textAlign:'left', lineHeight:1 }}>
-                <div style={{ fontSize:'56px', fontWeight:950, color: daysToNextComp != null && daysToNextComp <= 7 ? '#ef4444' : daysToNextComp != null && daysToNextComp <= 14 ? '#f59e0b' : '#378ADD', lineHeight:0.82, letterSpacing:'0' }}>
-                  {daysToNextComp ?? '—'}
-                </div>
-                <div style={{ fontSize:'10px', letterSpacing:'2px', color:t.textMuted, fontWeight:900, marginTop:'7px' }}>DIAS</div>
-              </div>
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ fontSize:'17px', fontWeight:900, color:t.text, lineHeight:1.2, marginBottom:'5px' }}>{upcomingCompsAll[0].title}</div>
-                <div style={{ fontSize:'13px', color:t.textMuted, fontWeight:700 }}>
-                  {formatDate(upcomingCompsAll[0].start_date)}
-                  {upcomingCompsAll[0].end_date && upcomingCompsAll[0].end_date !== upcomingCompsAll[0].start_date ? ` — ${formatDate(upcomingCompsAll[0].end_date)}` : ''}
-                </div>
-                {upcomingCompsAll[0].location && <div style={{ fontSize:'12px', color:t.textFaint, marginTop:'4px' }}>📍 {upcomingCompsAll[0].location}</div>}
-              </div>
-            </div>
-            {upcomingCompsAll.length > 1 && (
-              <div style={{ borderTop:`1px solid ${t.border}`, paddingTop:'10px', display:'flex', flexDirection:'column', gap:'7px' }}>
-                <div style={{ fontSize:'10px', letterSpacing:'1.4px', color:t.textFaint, fontWeight:800, textTransform:'uppercase' }}>Próximas</div>
-                {upcomingCompsAll.slice(1, 4).map((comp, i) => {
-                  const d = Math.max(0, Math.ceil((new Date(normDate(comp.start_date) + 'T12:00:00') - new Date()) / 86400000))
-                  return (
-                    <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:'8px' }}>
-                      <div style={{ fontSize:'12px', color:t.textMuted, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1, fontWeight:650 }}>{comp.title}</div>
-                      <div style={{ fontSize:'11px', color:t.text, flexShrink:0, fontWeight:850, background:t.bg, padding:'2px 8px', borderRadius:'10px' }}>{d}d</div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div style={{ ...premiumCard, borderRadius:'24px', padding:'22px' }}>
-            <div style={sectionTitleStyle}>PRÓXIMA COMPETIÇÃO</div>
-            <div style={{ fontSize:'14px', color:t.textMuted, fontWeight:650 }}>Sem competições agendadas</div>
-          </div>
-        )}
 
         {/* AGENDA */}
-        <div style={{ ...premiumCard, borderRadius:'24px', padding:'20px 22px' }}>
-          <div style={sectionTitleStyle}>AGENDA</div>
+        <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'16px', padding:'20px' }}>
+          <div style={{ fontSize:'16px', fontWeight:900, color:t.text, marginBottom:'16px' }}>AGENDA</div>
 
-          {agendaItems.length > 0 && (
-            <div style={{ marginBottom:'10px', display:'flex', flexDirection:'column', gap:'3px' }}>
-              {agendaItems.map((item, i) => {
-                const daysAway = Math.ceil((new Date(item.date + 'T12:00:00') - new Date()) / 86400000)
-                const dayLabel = daysAway <= 0 ? 'Hoje' : daysAway === 1 ? 'Amanhã' : `${daysAway}d`
-                return (
-                  <div key={`${item.label}-${item.date}-${i}`} style={{ display:'flex', alignItems:'center', gap:'9px', padding:'3px 0' }}>
-                    <div style={{ width:'6px', height:'6px', borderRadius:'50%', background:item.color, flexShrink:0, boxShadow:`0 0 0 4px ${item.color}16` }} />
-                    <div style={{ fontSize:'13px', color:t.text, flex:1, fontWeight:700 }}>{item.label}</div>
-                    <div style={{ fontSize:'11px', fontWeight:850, color: daysAway <= 1 ? item.color : t.textMuted }}>{dayLabel}</div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-
-          <div style={{ marginBottom: coachReminders.length > 0 ? '8px' : '0', paddingTop:agendaItems.length > 0 ? '8px' : '0', borderTop:agendaItems.length > 0 ? `1px solid ${t.border}` : 'none' }}>
-            <div style={{ fontSize:'10px', letterSpacing:'1.4px', color:'#f59e0b', fontWeight:900, marginBottom:'5px', textTransform:'uppercase' }}>Recovery & Mental</div>
-            <div style={{ display:'flex', flexDirection:'column', gap:'3px' }}>
-              {recoveryStatus.map((r, i) => (
-                <div key={i} style={{ display:'flex', alignItems:'center', gap:'8px', padding:'3px 0' }}>
-                  <div style={{ fontSize:'12px', flex:1, minWidth:0 }}>
-                    <span style={{ color:'#f59e0b', marginRight:'6px' }}>{r.alert ? '⚠' : '·'}</span>
-                    <span style={{ color:t.textMuted, fontWeight: r.alert ? 750 : 600 }}>{r.label}</span>
-                    <span style={{ color:t.textFaint, fontSize:'11px', marginLeft:'5px', fontWeight:650 }}>
-                      {r.daysSince === null ? 'Sem registo' : `${r.daysSince}d`}
-                    </span>
-                  </div>
-                  {r.alert && (
-                    <button onClick={() => onNavigate && onNavigate('calendar', { scheduleType: r.key === 'massage' ? 'massagem' : r.key === 'physio' ? 'fisio' : 'mental_coach' })}
-                      style={{ background:theme === 'dark' ? 'rgba(245,158,11,0.08)' : '#fff7ed', border:'1px solid #f59e0b33', borderRadius:'7px', color:'#b45309', padding:'3px 8px', fontSize:'10px', cursor:'pointer', fontFamily:F, fontWeight:800, whiteSpace:'nowrap', flexShrink:0 }}>
-                      Agendar
-                    </button>
-                  )}
+          {/* Coach/training items */}
+          {agendaItems.map((item, i) => {
+            const daysAway = Math.ceil((new Date(item.date + 'T12:00:00') - new Date()) / 86400000)
+            const badge = daysAway <= 0 ? 'Hoje' : daysAway === 1 ? 'Amanhã' : `${daysAway}d`
+            const isGym = item.color === gymColor
+            const badgeColor = daysAway <= 0 ? golfColor : daysAway === 1 ? gymColor : t.textMuted
+            return (
+              <button key={`ag-${i}`} className="hm-btn-reset" onClick={() => onNavigate && onNavigate('calendar', { date: item.date })}
+                style={{ display:'flex', alignItems:'center', gap:'12px', padding:'10px 0', borderBottom:`1px solid ${t.border}` }}>
+                <div style={{ width:'36px', height:'36px', borderRadius:'50%', background: isGym ? `${gymColor}18` : `${golfColor}18`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, fontSize:'16px' }}>
+                  {isGym ? '⊕' : '🚶'}
                 </div>
-              ))}
-            </div>
+                <div style={{ flex:1, fontSize:'14px', fontWeight:700, color:t.text }}>{item.label}</div>
+                <div style={{ fontSize:'12px', fontWeight:800, color:badgeColor, background:`${badgeColor}18`, border:`1px solid ${badgeColor}30`, borderRadius:'999px', padding:'3px 10px', whiteSpace:'nowrap', flexShrink:0 }}>
+                  {badge}
+                </div>
+                <div style={{ color:t.textMuted, fontSize:'18px', flexShrink:0, lineHeight:1 }}>›</div>
+              </button>
+            )
+          })}
+
+          {/* Recovery & Mental */}
+          <div style={{ paddingTop:'12px' }}>
+            <div style={{ fontSize:'13px', fontWeight:800, color:'#f59e0b', marginBottom:'10px' }}>Recovery & Mental</div>
+            {recoveryStatus.map((r, i) => (
+              <button key={`rec-${i}`} className="hm-btn-reset" onClick={() => onNavigate && onNavigate('calendar', { scheduleType: r.key === 'massage' ? 'massagem' : r.key === 'physio' ? 'fisio' : 'mental_coach' })}
+                style={{ display:'flex', alignItems:'center', gap:'10px', padding:'8px 0', borderBottom: i < recoveryStatus.length - 1 ? `1px solid ${t.border}` : 'none' }}>
+                <div style={{ flex:1, fontSize:'14px', fontWeight:700, color:t.text }}>{r.label}</div>
+                <div style={{ fontSize:'12px', color: r.alert ? '#f59e0b' : t.textMuted, fontWeight:650, whiteSpace:'nowrap' }}>
+                  {r.daysSince === null ? 'Sem registo' : `${r.daysSince}d`}
+                </div>
+                <div style={{ color:t.textMuted, fontSize:'18px', flexShrink:0, lineHeight:1 }}>›</div>
+              </button>
+            ))}
           </div>
-
-          {coachReminders.length > 0 && (
-            <div style={{ paddingTop:'7px', borderTop:`1px solid ${t.border}` }}>
-              <div style={{ fontSize:'9px', letterSpacing:'1.4px', color:t.textFaint, fontWeight:850, marginBottom:'5px', textTransform:'uppercase' }}>Planeamento</div>
-              <div style={{ display:'flex', flexDirection:'column', gap:'4px' }}>
-                {coachReminders.map((r, i) => (
-                  <div key={i} style={{ display:'flex', alignItems:'center', gap:'8px' }}>
-                    <span style={{ fontSize:'10px', color:'#f59e0b' }}>•</span>
-                    <span style={{ fontSize:'12px', color:t.textMuted, flex:1, fontWeight:650 }}>{r.label}</span>
-                    <button onClick={() => onNavigate && onNavigate('training')}
-                      style={{ background:'transparent', border:`1px solid ${t.border}`, borderRadius:'7px', color:t.textMuted, padding:'3px 8px', fontSize:'10px', cursor:'pointer', fontFamily:F, fontWeight:750, whiteSpace:'nowrap', flexShrink:0 }}>
-                      Ver plano
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-
         </div>
       </div>
+
       </div>
     </div>
   )
