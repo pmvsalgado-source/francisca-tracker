@@ -1,5 +1,17 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { supabase } from '../lib/supabase'
+import {
+  getEventCategories,
+  saveEvent as saveEventSvc,
+  deleteEvent as deleteEventSvc,
+  saveEventCategory,
+  getWellnessEntries,
+  saveWellnessEntry,
+  getSessionRatings,
+  findSessionRatingEntry,
+  saveSessionRatingEntry,
+  deleteEntry,
+} from '../services/calendarService'
+import { saveTrainingPlan } from '../services/trainingService'
 import { SCHEDULE_TYPES, TOURNAMENT_CATEGORIES, DEFAULT_CATEGORIES, activityColor, activityColorFromCategory } from '../constants/eventCategories'
 import { calcWeekPhase, PHASE_COLORS } from '../lib/periodization'
 import EmptyState from './EmptyState'
@@ -57,8 +69,10 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
   const weekdayFullLabels = ['Domingo', 'Segunda', 'Tera', 'Quarta', 'Quinta', 'Sexta', 'Sbado']
 
   const fetchCategories = useCallback(async () => {
-    const { data } = await supabase.from('event_categories').select('*')
-    if (data && data.length > 0) setCategories(data)
+    try {
+      const data = await getEventCategories()
+      if (data && data.length > 0) setCategories(data)
+    } catch { /* fallback to DEFAULT_CATEGORIES already in state */ }
   }, [])
 
   useEffect(() => { fetchCategories() }, [fetchCategories])
@@ -107,15 +121,13 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
   useEffect(() => {
     const d = new Date()
     const dateStr = dayDetailDate || `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
-    supabase.from('entries')
-      .select('metric_id, value')
-      .eq('entry_date', dateStr)
-      .in('metric_id', WELLNESS_METRICS.map(m => m.id))
-      .then(({ data }) => {
+    getWellnessEntries(dateStr, WELLNESS_METRICS.map(m => m.id))
+      .then(data => {
         const map = {}
         ;(data || []).forEach(r => { map[r.metric_id] = Number(r.value) })
         setWellnessData(map)
       })
+      .catch(() => {})
   }, [dayDetailDate])
 
   useEffect(() => {
@@ -188,17 +200,18 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
       fez_campo: form.fez_campo,
     }
 
-    let result
-    if (editEvent) {
-      result = await supabase.from('events').update(payload).eq('id', editEvent.id)
-    } else {
-      result = await supabase.from('events').insert({ ...payload, created_by: 'user' })
-    }
-    setSaving(false)
-    if (result.error) {
-      setSaveError(result.error.message || 'Erro ao guardar o evento. Tenta novamente.')
+    try {
+      if (editEvent) {
+        await saveEventSvc(payload, editEvent.id)
+      } else {
+        await saveEventSvc({ ...payload, created_by: 'user' })
+      }
+    } catch (err) {
+      setSaving(false)
+      setSaveError(err.message || 'Erro ao guardar o evento. Tenta novamente.')
       return
     }
+    setSaving(false)
     setShowModal(false)
     setScheduleType(null)
     onEventsChanged?.()
@@ -208,14 +221,14 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
 
   const confirmDeleteEvent = async () => {
     if (!deleteConfirmEvent) return
-    await supabase.from('events').delete().eq('id', deleteConfirmEvent.id)
+    try { await deleteEventSvc(deleteConfirmEvent.id) } catch (err) { console.error('confirmDeleteEvent:', err) }
     setDeleteConfirmEvent(null)
     setShowModal(false)
     onEventsChanged?.()
   }
 
   const saveCat = async () => {
-    await supabase.from('event_categories').insert({ ...catForm, created_by: 'user' })
+    try { await saveEventCategory({ ...catForm, created_by: 'user' }) } catch (err) { console.error('saveCat:', err) }
     setCategories(p => [...p, catForm])
     setCatForm({ name: '', color: '#378ADD' })
     setShowCatModal(false)
@@ -347,11 +360,9 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
     if (!item) return
     item.progress = progressValue
     item.done = progressValue === 100
-    await supabase.from('training_plans').update({
-      days: newDays,
-      updated_at: new Date().toISOString(),
-      updated_by: user?.email || '',
-    }).eq('id', plan.id)
+    try {
+      await saveTrainingPlan({ days: newDays, updated_at: new Date().toISOString(), updated_by: user?.email || '' }, plan.id)
+    } catch (err) { console.error('savePlanProgress:', err) }
     onPlansChanged?.()
   }
 
@@ -361,62 +372,50 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
       || trainingPlans.find(p => p.week_start === ws)
     if (!plan) return
     setCalNoteSaving(true)
-    await supabase.from('training_plans').update({
-      athlete_notes: noteText,
-      updated_at: new Date().toISOString(),
-    }).eq('id', plan.id)
+    try {
+      await saveTrainingPlan({ athlete_notes: noteText, updated_at: new Date().toISOString() }, plan.id)
+    } catch (err) { console.error('saveCalNote:', err) }
     setCalNoteSaving(false)
     onPlansChanged?.()
   }
 
   const saveWellness = async (metricId, value) => {
     setWellnessData(p => ({ ...p, [metricId]: value }))
-    const { data } = await supabase.from('entries')
-      .select('id').eq('entry_date', selectedDayStr).eq('metric_id', metricId).limit(1)
-    if (data && data.length > 0) {
-      await supabase.from('entries').update({ value, updated_at: new Date().toISOString(), updated_by: user?.email || '' }).eq('id', data[0].id)
-    } else {
-      await supabase.from('entries').insert({ entry_date: selectedDayStr, metric_id: metricId, value, updated_at: new Date().toISOString(), updated_by: user?.email || '' })
-    }
+    try {
+      await saveWellnessEntry(selectedDayStr, metricId, value, user?.email)
+    } catch (err) { console.error('saveWellness:', err) }
   }
 
   useEffect(() => {
     const dateStr = dayDetailDate || todayIso
-    supabase.from('entries')
-      .select('metric_id, value')
-      .eq('entry_date', dateStr)
-      .like('metric_id', '__sr_%')
-      .then(({ data }) => {
+    getSessionRatings(dateStr)
+      .then(data => {
         const map = {}
         ;(data || []).forEach(r => { map[r.metric_id] = r.value })
         setSessionRatings(map)
       })
+      .catch(() => {})
   }, [dayDetailDate, todayIso])
 
   const saveSessionRating = async (sessionKey, dateStr, val) => {
     const metricId = `__sr_${sessionKey}__`
     if (val === null) {
-      const { data } = await supabase.from('entries')
-        .select('id').eq('entry_date', dateStr).eq('metric_id', metricId).limit(1)
-      if (data && data.length > 0) {
-        setDeleteSessionConfirm({ entryId: data[0].id, metricId })
-      }
+      try {
+        const existing = await findSessionRatingEntry(dateStr, metricId)
+        if (existing) setDeleteSessionConfirm({ entryId: existing.id, metricId })
+      } catch (err) { console.error('saveSessionRating (find):', err) }
       return
     }
     setSessionRatings(p => ({ ...p, [metricId]: val }))
-    const { data } = await supabase.from('entries')
-      .select('id').eq('entry_date', dateStr).eq('metric_id', metricId).limit(1)
-    if (data && data.length > 0) {
-      await supabase.from('entries').update({ value: val, updated_at: new Date().toISOString(), updated_by: user?.email || '' }).eq('id', data[0].id)
-    } else {
-      await supabase.from('entries').insert({ entry_date: dateStr, metric_id: metricId, value: val, updated_at: new Date().toISOString(), updated_by: user?.email || '' })
-    }
+    try {
+      await saveSessionRatingEntry(dateStr, metricId, val, user?.email)
+    } catch (err) { console.error('saveSessionRating (save):', err) }
   }
 
   const confirmDeleteSession = async () => {
     if (!deleteSessionConfirm) return
     const { entryId, metricId } = deleteSessionConfirm
-    await supabase.from('entries').delete().eq('id', entryId)
+    try { await deleteEntry(entryId) } catch (err) { console.error('confirmDeleteSession:', err) }
     setSessionRatings(p => { const n = { ...p }; delete n[metricId]; return n })
     setDeleteSessionConfirm(null)
   }
@@ -426,11 +425,9 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
     const session = newDays[dayIdx]?.sessions?.[si]
     if (!session) return
     session.status = 'done'
-    await supabase.from('training_plans').update({
-      days: newDays,
-      updated_at: new Date().toISOString(),
-      updated_by: user?.email || '',
-    }).eq('id', plan.id)
+    try {
+      await saveTrainingPlan({ days: newDays, updated_at: new Date().toISOString(), updated_by: user?.email || '' }, plan.id)
+    } catch (err) { console.error('markSessionDone:', err) }
     onPlansChanged?.()
   }
 
@@ -439,11 +436,9 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
     const session = newDays[dayIdx]?.sessions?.[si]
     if (!session) return
     session.status = nextStatus
-    await supabase.from('training_plans').update({
-      days: newDays,
-      updated_at: new Date().toISOString(),
-      updated_by: user?.email || '',
-    }).eq('id', plan.id)
+    try {
+      await saveTrainingPlan({ days: newDays, updated_at: new Date().toISOString(), updated_by: user?.email || '' }, plan.id)
+    } catch (err) { console.error('toggleSessionStatus:', err) }
     onPlansChanged?.()
   }
 
