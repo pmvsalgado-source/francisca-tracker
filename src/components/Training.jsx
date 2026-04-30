@@ -2,14 +2,15 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { isCompetition } from '../lib/periodization'
 import Goals from './Goals'
+import { ACTIVITY_COLORS } from '../constants/eventCategories'
 
 import { COACH_ROLES } from '../constants/roles'
 
 const GOLF_CATS = ['Driving Range', 'Jogo Curto', 'Putt', 'Bunker', 'Campo']
 const GYM_CATS  = ['Pernas', 'Potência', 'Core', 'Braços', 'Mobilidade', 'Cardio', 'Prevenção']
 const F = "'Inter', system-ui, sans-serif"
-const golfColor = '#378ADD'
-const gymColor  = '#52E8A0'
+const golfColor = ACTIVITY_COLORS.golf
+const gymColor  = ACTIVITY_COLORS.gym
 const golfDark  = '#0C447C'
 const gymDark   = '#27500A'
 
@@ -704,6 +705,7 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
   const [savingPhaseOverride, setSavingPhaseOverride] = useState(false)
   const [showCriterios, setShowCriterios] = useState(false)
   const [expandedPhaseKey, setExpandedPhaseKey] = useState(null)
+  const [deleteTemplateConfirm, setDeleteTemplateConfirm] = useState(null)
 
   const email = (user?.email||'').toLowerCase()
   const DAYS_LONG  = lang==='pt' ? DAYS_PT : DAYS_EN
@@ -764,7 +766,7 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
     const diff = Math.round((new Date(targetWs)-new Date(currentWs))/(7*86400000))
     setWeekOffset(diff)
     setSelectedDay(dayIdx)
-    setSubTab('log')
+    setSubTab('plan')
     onFocusConsumed?.()
   }, [focusDate, getWeekStart]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1182,9 +1184,6 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
     { key:'priorities', role:'ATHLETE', label: lang==='pt' ? 'Prioridades' : 'Priorities',
       icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>,
       bg:'#fdf4ff', color:'#7e22ce' },
-    { key:'log', role:'ATHLETE', label: lang==='pt' ? 'Registar Treino' : 'Log Session',
-      icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>,
-      bg:'#EAF3DE', color:'#27500A' },
     { key:'progress', role:'', label: lang==='pt' ? 'Progresso' : 'Progress',
       icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>,
       bg:t.navActive||'#f5f5f5', color:t.textMuted },
@@ -1515,8 +1514,12 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
     }
   }
 
-  const deleteTemplate = async (id) => {
-    await supabase.from('training_plan_templates').delete().eq('id',id)
+  const deleteTemplate = (id) => setDeleteTemplateConfirm(id)
+
+  const confirmDeleteTemplate = async () => {
+    if (!deleteTemplateConfirm) return
+    await supabase.from('training_plan_templates').delete().eq('id', deleteTemplateConfirm)
+    setDeleteTemplateConfirm(null)
     fetchTemplates()
   }
 
@@ -2082,6 +2085,21 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
   // ── MAIN RENDER ────────────────────────────────────────────────────────────
   return (
     <div style={{fontFamily:F,color:t.text}}>
+
+      {/* Confirmação apagar template */}
+      {deleteTemplateConfirm && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.75)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:'20px'}}>
+          <div style={{background:t.surface,border:`1px solid ${t.border}`,borderRadius:'14px',padding:'28px 32px',maxWidth:'360px',width:'100%',fontFamily:F}}>
+            <div style={{fontSize:'16px',fontWeight:700,color:t.text,marginBottom:'8px'}}>Apagar este template?</div>
+            <div style={{fontSize:'13px',color:t.textMuted,marginBottom:'24px',lineHeight:1.6}}>Esta acção é irreversível. O template será apagado permanentemente.</div>
+            <div style={{display:'flex',gap:'10px',justifyContent:'flex-end'}}>
+              <button onClick={()=>setDeleteTemplateConfirm(null)} style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'20px',color:t.textMuted,padding:'7px 16px',cursor:'pointer',fontSize:'12px',fontFamily:F}}>Cancelar</button>
+              <button onClick={confirmDeleteTemplate} style={{background:'#dc2626',border:'none',borderRadius:'20px',color:'#fff',padding:'7px 16px',cursor:'pointer',fontSize:'12px',fontFamily:F,fontWeight:700}}>Apagar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style>{`
         .train-coach-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
         .train-stats-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:14px}
