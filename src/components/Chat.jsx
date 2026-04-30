@@ -1,6 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { supabase } from '../lib/supabase'
-import { MESSAGES_PAGE_SIZE } from '../constants/pagination'
+import {
+  getMessages,
+  sendMessage as sendMessageSvc,
+  updateMessage,
+  deleteMessage,
+  getAvatarMap,
+} from '../services/chatService'
 import EmptyState from './EmptyState'
 
 export default function Chat({ theme, t, user, profile, lang = 'en' }) {
@@ -29,10 +34,15 @@ export default function Chat({ theme, t, user, profile, lang = 'en' }) {
 
   const fetchMessages = useCallback(async () => {
     const id = ++fetchIdRef.current
-    const { data } = await supabase.from('messages').select('*').order('created_at', { ascending: true }).limit(MESSAGES_PAGE_SIZE)
-    if (!isMountedRef.current || id !== fetchIdRef.current) return
-    setMessages(data || [])
-    setLoading(false)
+    try {
+      const data = await getMessages()
+      if (!isMountedRef.current || id !== fetchIdRef.current) return
+      setMessages(data || [])
+      setLoading(false)
+    } catch {
+      if (!isMountedRef.current || id !== fetchIdRef.current) return
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => {
@@ -42,20 +52,7 @@ export default function Chat({ theme, t, user, profile, lang = 'en' }) {
   }, [fetchMessages])
 
   useEffect(() => {
-    supabase.from('profiles').select('id, avatar_url').then(async ({ data }) => {
-      if (!data) return
-      const idMap = {}
-      data.forEach(p => { if (p.avatar_url) idMap[p.id] = p.avatar_url })
-      const { data: msgs } = await supabase.from('messages').select('user_email, user_id').not('user_id', 'is', null)
-      if (msgs) {
-        msgs.forEach(m => {
-          if (m.user_id && m.user_email && idMap[m.user_id]) {
-            idMap[m.user_email.trim().toLowerCase()] = idMap[m.user_id]
-          }
-        })
-      }
-      setAvatarMap(idMap)
-    })
+    getAvatarMap().then(setAvatarMap).catch(() => {})
   }, [])
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
@@ -69,9 +66,10 @@ export default function Chat({ theme, t, user, profile, lang = 'en' }) {
     const name = profile?.name || myEmail.split('@')[0]
     const uid = user?.id || user?.sub || null
     const avatarUrl = (uid && avatarMap[uid]) || null
-    const { error } = await supabase.from('messages').insert({ user_email: myEmail, user_name: name, content: text, avatar_url: avatarUrl, user_id: uid })
-    if (error) { setSendError(error.message); setInput(text) }
-    else await fetchMessages()
+    try {
+      await sendMessageSvc({ user_email: myEmail, user_name: name, content: text, avatar_url: avatarUrl, user_id: uid })
+      await fetchMessages()
+    } catch (err) { setSendError(err.message); setInput(text) }
     setSending(false)
     inputRef.current?.focus()
   }
@@ -79,14 +77,16 @@ export default function Chat({ theme, t, user, profile, lang = 'en' }) {
   const saveEdit = async () => {
     const text = editText.trim()
     if (!text) return
-    const { error } = await supabase.from('messages').update({ content: text, edited: true }).eq('id', editingId)
-    if (error) { console.error('saveEdit:', error); return }
+    try {
+      await updateMessage(editingId, text)
+    } catch (err) { console.error('saveEdit:', err); return }
     setEditingId(null); setEditText(''); await fetchMessages()
   }
 
   const doDelete = async (id) => {
-    const { error } = await supabase.from('messages').delete().eq('id', id)
-    if (error) { console.error('doDelete:', error); return }
+    try {
+      await deleteMessage(id)
+    } catch (err) { console.error('doDelete:', err); return }
     setDeleteConfirm(null); await fetchMessages()
   }
 
