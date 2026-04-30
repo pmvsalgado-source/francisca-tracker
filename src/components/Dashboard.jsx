@@ -121,18 +121,20 @@ function TeamModal({ t, F, onClose }) {
 
   useEffect(() => {
     const fetchTeam = async () => {
-      const { data: msgs } = await supabase.from('messages').select('user_email, user_name, user_id').limit(500)
-      const { data: entries } = await supabase.from('entries').select('updated_by').limit(500)
-      const { data: plans } = await supabase.from('training_plans').select('created_by, updated_by').limit(100)
+      const [{ data: msgs }, { data: entries }, { data: plans }] = await Promise.all([
+        supabase.from('messages').select('user_email, user_name, user_id').limit(500),
+        supabase.from('entries').select('updated_by').limit(500),
+        supabase.from('training_plans').select('created_by, updated_by').limit(100),
+      ])
 
       const map = {}
-      ;[...(msgs||[])].forEach(r => {
+      ;(msgs || []).forEach(r => {
         if (r.user_email && !map[r.user_email]) map[r.user_email] = { email: r.user_email, name: r.user_name || r.user_email.split('@')[0], userId: r.user_id || null }
       })
-      ;[...(entries||[])].forEach(r => {
+      ;(entries || []).forEach(r => {
         if (r.updated_by && !map[r.updated_by]) map[r.updated_by] = { email: r.updated_by, name: r.updated_by.split('@')[0], userId: null }
       })
-      ;[...(plans||[])].forEach(r => {
+      ;(plans || []).forEach(r => {
         if (r.created_by && !map[r.created_by]) map[r.created_by] = { email: r.created_by, name: r.created_by.split('@')[0], userId: null }
         if (r.updated_by && !map[r.updated_by]) map[r.updated_by] = { email: r.updated_by, name: r.updated_by.split('@')[0], userId: null }
       })
