@@ -37,6 +37,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
   const [form, setForm] = useState(EMPTY_FORM)
   const [catForm, setCatForm] = useState({ name: '', color: '#378ADD' })
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState(null)
   const [deleteConfirmEvent, setDeleteConfirmEvent] = useState(null)
   const [calFilters, setCalFilters] = useState({ events: true, golf: true, gym: true })
   const [calNote, setCalNote] = useState('')
@@ -161,6 +162,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
 
   const saveEvent = async () => {
     setSaving(true)
+    setSaveError(null)
     const isCampoType = scheduleType === 'campo' && !editEvent
     const extras = []
     if (form.time) extras.push(`Hora: ${form.time}`)
@@ -184,12 +186,17 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
       fez_campo: form.fez_campo,
     }
 
+    let result
     if (editEvent) {
-      await supabase.from('events').update(payload).eq('id', editEvent.id)
+      result = await supabase.from('events').update(payload).eq('id', editEvent.id)
     } else {
-      await supabase.from('events').insert({ ...payload, created_by: 'user' })
+      result = await supabase.from('events').insert({ ...payload, created_by: 'user' })
     }
     setSaving(false)
+    if (result.error) {
+      setSaveError(result.error.message || 'Erro ao guardar o evento. Tenta novamente.')
+      return
+    }
     setShowModal(false)
     setScheduleType(null)
     onEventsChanged?.()
@@ -950,12 +957,18 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '8px', marginTop: '18px', justifyContent: 'space-between' }}>
+            {saveError && (
+              <div style={{ marginTop: '12px', padding: '9px 13px', background: t.dangerBg, border: `1px solid ${t.danger}`, borderRadius: '8px', fontSize: '12px', color: t.danger, lineHeight: 1.5 }}>
+                {saveError}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '8px', marginTop: '12px', justifyContent: 'space-between' }}>
               <div>
                 {editEvent && <button onClick={deleteEvent} style={{ background: 'transparent', border: `1px solid ${t.danger}`, borderRadius: '20px', color: t.danger, padding: '7px 14px', cursor: 'pointer', fontSize: '11px', fontFamily: F }}>Apagar</button>}
               </div>
               <div style={{ display: 'flex', gap: '8px' }}>
-                <button onClick={() => { setShowModal(false); setScheduleType(null) }} style={btn(false)}>Cancelar</button>
+                <button onClick={() => { setShowModal(false); setScheduleType(null); setSaveError(null) }} style={btn(false)}>Cancelar</button>
                 <button onClick={saveEvent} disabled={saving || !canSave}
                   style={{ background: saving ? t.surface : (schedTypeInfo?.color || t.accent), border: 'none', borderRadius: '20px', color: '#fff', padding: '7px 20px', cursor: (saving || !canSave) ? 'not-allowed' : 'pointer', fontSize: '12px', fontFamily: F, fontWeight: 700, opacity: !canSave ? 0.5 : 1 }}>
                   {saving ? 'A guardar...' : 'Guardar'}
