@@ -169,16 +169,12 @@ export default function CompStats({ theme, t, user, events = [] }) {
       notes: form.notes || null,
     }
 
-    console.log('[CompStats] saveStat payload:', JSON.stringify(payload))
-
     let result
     if (editStat) {
       result = await supabase.from('competition_stats').update(payload).eq('id', editStat.id)
     } else {
       result = await supabase.from('competition_stats').insert(payload)
     }
-
-    console.log('[CompStats] saveStat result:', result?.error ?? 'ok')
 
     if (result?.error) {
       console.error('[CompStats] save error:', result.error)
