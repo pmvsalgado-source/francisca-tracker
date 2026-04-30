@@ -1,3 +1,14 @@
-import { createClient } from '@supabase/supabase-js' 
- 
-export const supabase = createClient('https://wccpgfgzdealwnuliesx.supabase.co', import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY) 
+import { createClient } from '@supabase/supabase-js'
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
+
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error(
+    '[Config] As variáveis VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY são obrigatórias. ' +
+    'Verifica o ficheiro .env.local'
+  )
+}
+
+export const supabase = createClient(supabaseUrl, supabaseKey)
+
