@@ -13,6 +13,10 @@ export default function Backoffice({ theme, t, user, userRole = '' }) {
   const [goals, setGoals] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('')
+  const [hasMoreEntries, setHasMoreEntries] = useState(false)
+  const [hasMoreMessages, setHasMoreMessages] = useState(false)
+  const [loadingMoreEntries, setLoadingMoreEntries] = useState(false)
+  const [loadingMoreMessages, setLoadingMoreMessages] = useState(false)
   const F = "'Inter', system-ui, sans-serif"
   const card = { background: t.surface, border: `1px solid ${t.border}`, borderRadius: '10px', padding: '16px 20px' }
   const th = { padding: '10px 12px', textAlign: 'left', color: t.textMuted, fontWeight: 600, fontSize: '10px', letterSpacing: '2px', borderBottom: `1px solid ${t.border}`, whiteSpace: 'nowrap' }
@@ -25,15 +29,19 @@ export default function Backoffice({ theme, t, user, userRole = '' }) {
   const fetchAll = useCallback(async () => {
     setLoading(true)
     const [e, m, c, g] = await Promise.all([
-      supabase.from('entries').select('*').order('entry_date', { ascending: false }).limit(PAGE_SIZE),
-      supabase.from('messages').select('*').order('created_at', { ascending: false }).limit(MESSAGES_PAGE_SIZE),
-      supabase.from('competition_stats').select('*').order('event_date', { ascending: false }).limit(PAGE_SIZE),
-      supabase.from('goals').select('*').order('created_at', { ascending: false }).limit(PAGE_SIZE),
+      supabase.from('entries').select('*').order('entry_date', { ascending: false }).range(0, PAGE_SIZE - 1),
+      supabase.from('messages').select('*').order('created_at', { ascending: false }).range(0, MESSAGES_PAGE_SIZE - 1),
+      supabase.from('competition_stats').select('*').order('event_date', { ascending: false }).range(0, PAGE_SIZE - 1),
+      supabase.from('goals').select('*').order('created_at', { ascending: false }).range(0, PAGE_SIZE - 1),
     ])
-    setEntries(e.data || [])
-    setMessages(m.data || [])
+    const eRows = e.data || []
+    const mRows = m.data || []
+    setEntries(eRows)
+    setMessages(mRows)
     setCompetitions(c.data || [])
     setGoals(g.data || [])
+    setHasMoreEntries(eRows.length === PAGE_SIZE)
+    setHasMoreMessages(mRows.length === MESSAGES_PAGE_SIZE)
 
     // Unique users from entries + messages
     const emailSet = new Set()
@@ -51,6 +59,24 @@ export default function Backoffice({ theme, t, user, userRole = '' }) {
   }, [])
 
   useEffect(() => { fetchAll() }, [fetchAll])
+
+  const loadMoreEntries = async () => {
+    setLoadingMoreEntries(true)
+    const { data } = await supabase.from('entries').select('*').order('entry_date', { ascending: false }).range(entries.length, entries.length + PAGE_SIZE - 1)
+    const rows = data || []
+    setEntries(prev => [...prev, ...rows])
+    setHasMoreEntries(rows.length === PAGE_SIZE)
+    setLoadingMoreEntries(false)
+  }
+
+  const loadMoreMessages = async () => {
+    setLoadingMoreMessages(true)
+    const { data } = await supabase.from('messages').select('*').order('created_at', { ascending: false }).range(messages.length, messages.length + MESSAGES_PAGE_SIZE - 1)
+    const rows = data || []
+    setMessages(prev => [...prev, ...rows])
+    setHasMoreMessages(rows.length === MESSAGES_PAGE_SIZE)
+    setLoadingMoreMessages(false)
+  }
 
   const exportAll = () => {
     const sections = [
@@ -149,6 +175,14 @@ export default function Backoffice({ theme, t, user, userRole = '' }) {
               </tbody>
             </table>
           )}
+          {section === 'performance' && hasMoreEntries && (
+            <div style={{ textAlign: 'center', padding: '12px' }}>
+              <button onClick={loadMoreEntries} disabled={loadingMoreEntries}
+                style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '20px', color: t.textMuted, padding: '6px 20px', fontSize: '12px', cursor: loadingMoreEntries ? 'not-allowed' : 'pointer', fontFamily: F }}>
+                {loadingMoreEntries ? 'A carregar...' : 'Ver mais'}
+              </button>
+            </div>
+          )}
 
           {/* Competitions */}
           {section === 'competitions' && (
@@ -232,6 +266,14 @@ export default function Backoffice({ theme, t, user, userRole = '' }) {
                 {!messages.length && <tr><td colSpan={4} style={{ ...td, textAlign: 'center', color: t.textMuted, padding: '40px' }}>Sem mensagens.</td></tr>}
               </tbody>
             </table>
+          )}
+          {section === 'messages' && hasMoreMessages && (
+            <div style={{ textAlign: 'center', padding: '12px' }}>
+              <button onClick={loadMoreMessages} disabled={loadingMoreMessages}
+                style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '20px', color: t.textMuted, padding: '6px 20px', fontSize: '12px', cursor: loadingMoreMessages ? 'not-allowed' : 'pointer', fontFamily: F }}>
+                {loadingMoreMessages ? 'A carregar...' : 'Ver mais'}
+              </button>
+            </div>
           )}
         </div>
       )}

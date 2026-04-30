@@ -42,6 +42,8 @@ export default function CompStats({ theme, t, user, events = [] }) {
   const [editStat, setEditStat] = useState(null)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
+  const [hasMore, setHasMore] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
 
   // Entry form
   const [form, setForm] = useState({ event_id: '', event_name: '', event_date: '', values: {}, notes: '' })
@@ -60,9 +62,11 @@ export default function CompStats({ theme, t, user, events = [] }) {
     setLoading(true)
     try {
       // RLS in Supabase should restrict competition_stats to the authenticated user.
-      const { data, error } = await supabase.from('competition_stats').select('*').order('event_date', { ascending: false }).limit(PAGE_SIZE)
+      const { data, error } = await supabase.from('competition_stats').select('*').order('event_date', { ascending: false }).range(0, PAGE_SIZE - 1)
       if (error) throw error
-      setStats(data || [])
+      const rows = data || []
+      setStats(rows)
+      setHasMore(rows.length === PAGE_SIZE)
     } catch (err) {
       console.error('fetchData:', err)
     } finally {
@@ -86,6 +90,21 @@ export default function CompStats({ theme, t, user, events = [] }) {
   }, [])
 
   useEffect(() => { fetchData(); fetchConfig() }, [fetchData, fetchConfig])
+
+  const loadMoreStats = async () => {
+    setLoadingMore(true)
+    try {
+      const { data, error } = await supabase.from('competition_stats').select('*').order('event_date', { ascending: false }).range(stats.length, stats.length + PAGE_SIZE - 1)
+      if (error) throw error
+      const rows = data || []
+      setStats(prev => [...prev, ...rows])
+      setHasMore(rows.length === PAGE_SIZE)
+    } catch (err) {
+      console.error('loadMoreStats:', err)
+    } finally {
+      setLoadingMore(false)
+    }
+  }
 
   const currentYear = String(new Date().getFullYear())
   const currentMonth = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
@@ -679,6 +698,16 @@ export default function CompStats({ theme, t, user, events = [] }) {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Load More */}
+      {hasMore && !loading && (
+        <div style={{ textAlign: 'center', marginTop: '12px' }}>
+          <button onClick={loadMoreStats} disabled={loadingMore}
+            style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '20px', color: t.textMuted, padding: '7px 24px', fontSize: '12px', cursor: loadingMore ? 'not-allowed' : 'pointer', fontFamily: F }}>
+            {loadingMore ? 'A carregar...' : 'Ver mais'}
+          </button>
         </div>
       )}
 
