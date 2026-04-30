@@ -80,6 +80,8 @@ export default function Chat({ theme, t, user, profile, lang = 'en' }) {
     setDeleteConfirm(null); await fetchMessages()
   }
 
+  const isSafeUrl = (url) => typeof url === 'string' && /^https:\/\//i.test(url)
+
   const fmt = (ts) => new Date(ts).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })
   const fmtDate = (ts) => {
     const d = new Date(ts)
@@ -171,7 +173,7 @@ export default function Chat({ theme, t, user, profile, lang = 'en' }) {
                     const avatarSrc = msg.avatar_url || (msg.user_id && avatarMap[msg.user_id]) || avatarMap[msgEmail] || null
                     return (
                       <div style={{ width: '26px', height: '26px', borderRadius: '50%', background: t.border, border: `1px solid ${t.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', fontWeight: 700, color: t.textMuted, flexShrink: 0, overflow: 'hidden' }}>
-                        {avatarSrc
+                        {isSafeUrl(avatarSrc)
                           ? <img src={avatarSrc} alt={initials} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.target.style.display = 'none' }} />
                           : initials}
                       </div>
@@ -203,7 +205,7 @@ export default function Chat({ theme, t, user, profile, lang = 'en' }) {
                         wordBreak: 'break-word',
                       }}>
                         {msg.content}
-                        {msg.photo_url && (
+                        {isSafeUrl(msg.photo_url) && (
                           <img src={msg.photo_url} alt="foto" style={{ display: 'block', maxWidth: '220px', maxHeight: '220px', borderRadius: '8px', marginTop: msg.content ? '6px' : '0', objectFit: 'cover', cursor: 'pointer' }} onClick={() => window.open(msg.photo_url, '_blank')} />
                         )}
                       </div>
