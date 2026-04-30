@@ -86,6 +86,9 @@ export default function HcpWagr({ theme, t, user }) {
   const [showHModal, setShowHModal] = useState(false)
   const [hForm, setHForm] = useState({ week: autoWeek, year: autoYear, reference_date: today.toISOString().split('T')[0], point_average: '', rank: '' })
 
+  // ── delete confirm ──
+  const [deleteConfirm, setDeleteConfirm] = useState(null) // { type: 't'|'h'|'hcp', id }
+
   // ── HCP state ──
   const [hcpHistory, setHcpHistory] = useState([])
   const [showHcpModal, setShowHcpModal] = useState(false)
@@ -141,10 +144,17 @@ export default function HcpWagr({ theme, t, user }) {
     setShowTModal(false)
     fetchAll()
   }
-  const deleteT = async (id) => {
-    await supabase.from('wagr_tournaments').delete().eq('id', id)
+  const doDelete = async () => {
+    if (!deleteConfirm) return
+    const { type, id } = deleteConfirm
+    if (type === 't') await supabase.from('wagr_tournaments').delete().eq('id', id)
+    else if (type === 'h') await supabase.from('wagr_history').delete().eq('id', id)
+    else if (type === 'hcp') await supabase.from('hcp_history').delete().eq('id', id)
+    setDeleteConfirm(null)
     fetchAll()
   }
+
+  const deleteT = (id) => setDeleteConfirm({ type: 't', id })
 
   // ── WAGR History CRUD ──
   const saveH = async () => {
@@ -159,10 +169,7 @@ export default function HcpWagr({ theme, t, user }) {
     setShowHModal(false)
     fetchAll()
   }
-  const deleteH = async (id) => {
-    await supabase.from('wagr_history').delete().eq('id', id)
-    fetchAll()
-  }
+  const deleteH = (id) => setDeleteConfirm({ type: 'h', id })
 
   // ── HCP CRUD ──
   const saveHcp = async () => {
@@ -175,10 +182,7 @@ export default function HcpWagr({ theme, t, user }) {
     setShowHcpModal(false)
     fetchAll()
   }
-  const deleteHcp = async (id) => {
-    await supabase.from('hcp_history').delete().eq('id', id)
-    fetchAll()
-  }
+  const deleteHcp = (id) => setDeleteConfirm({ type: 'hcp', id })
 
   // ── simulator tournament ──
   const addSimT = () => {
@@ -207,6 +211,21 @@ export default function HcpWagr({ theme, t, user }) {
 
   return (
     <div style={{ fontFamily: F, color: t.text }}>
+
+      {/* Delete confirm */}
+      {deleteConfirm && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
+          <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '14px', padding: '24px', width: '300px' }}>
+            <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '8px', color: t.text }}>Apagar este registo?</div>
+            <div style={{ fontSize: '12px', color: t.textMuted, marginBottom: '20px' }}>Esta acção não pode ser desfeita.</div>
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <button onClick={() => setDeleteConfirm(null)} style={btn(false)}>Cancelar</button>
+              <button onClick={doDelete} style={{ background: t.danger || '#f87171', border: 'none', borderRadius: '7px', color: '#fff', padding: '7px 14px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: F }}>Apagar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style>{`
         .hw-tabs { display:flex; gap:8px; margin-bottom:20px }
         .hw-grid { display:grid; grid-template-columns:1fr 320px; gap:16px }
