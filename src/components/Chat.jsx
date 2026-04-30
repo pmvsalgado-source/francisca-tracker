@@ -80,7 +80,20 @@ export default function Chat({ theme, t, user, profile, lang = 'en' }) {
     setDeleteConfirm(null); await fetchMessages()
   }
 
-  const isSafeUrl = (url) => typeof url === 'string' && /^https:\/\//i.test(url)
+  const SAFE_DOMAINS = [
+    'wccpgfgzdealwnuliesx.supabase.co',
+    'supabase.co',
+    'francisca-salgado.vercel.app',
+  ]
+  const isSafeUrl = (url) => {
+    if (typeof url !== 'string') return false
+    try {
+      const { protocol, hostname } = new URL(url)
+      return protocol === 'https:' && SAFE_DOMAINS.some(d => hostname === d || hostname.endsWith('.' + d))
+    } catch {
+      return false
+    }
+  }
 
   const fmt = (ts) => new Date(ts).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })
   const fmtDate = (ts) => {
