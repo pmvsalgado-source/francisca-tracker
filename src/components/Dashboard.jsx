@@ -121,31 +121,32 @@ function TeamModal({ t, F, onClose }) {
 
   useEffect(() => {
     const fetchTeam = async () => {
-      const { data: msgs } = await supabase.from('messages').select('user_email, user_name').limit(500)
+      const { data: msgs } = await supabase.from('messages').select('user_email, user_name, user_id').limit(500)
       const { data: entries } = await supabase.from('entries').select('updated_by').limit(500)
       const { data: plans } = await supabase.from('training_plans').select('created_by, updated_by').limit(100)
-      
+
       const map = {}
       ;[...(msgs||[])].forEach(r => {
-        if (r.user_email && !map[r.user_email]) map[r.user_email] = { email: r.user_email, name: r.user_name || r.user_email.split('@')[0] }
+        if (r.user_email && !map[r.user_email]) map[r.user_email] = { email: r.user_email, name: r.user_name || r.user_email.split('@')[0], userId: r.user_id || null }
       })
       ;[...(entries||[])].forEach(r => {
-        if (r.updated_by && !map[r.updated_by]) map[r.updated_by] = { email: r.updated_by, name: r.updated_by.split('@')[0] }
+        if (r.updated_by && !map[r.updated_by]) map[r.updated_by] = { email: r.updated_by, name: r.updated_by.split('@')[0], userId: null }
       })
       ;[...(plans||[])].forEach(r => {
-        if (r.created_by && !map[r.created_by]) map[r.created_by] = { email: r.created_by, name: r.created_by.split('@')[0] }
-        if (r.updated_by && !map[r.updated_by]) map[r.updated_by] = { email: r.updated_by, name: r.updated_by.split('@')[0] }
+        if (r.created_by && !map[r.created_by]) map[r.created_by] = { email: r.created_by, name: r.created_by.split('@')[0], userId: null }
+        if (r.updated_by && !map[r.updated_by]) map[r.updated_by] = { email: r.updated_by, name: r.updated_by.split('@')[0], userId: null }
       })
+
+      const userIds = Object.values(map).map(m => m.userId).filter(Boolean)
+      const profilesByUserId = {}
+      if (userIds.length > 0) {
+        const { data: profs } = await supabase.from('profiles').select('id, name, role, phone, athlete_club').in('id', userIds)
+        ;(profs || []).forEach(p => { profilesByUserId[p.id] = p })
+      }
+
       setMembers(Object.values(map).map(m => {
-        try {
-          const keys = Object.keys(localStorage).filter(k => k.startsWith('user_profile_'))
-          for (const k of keys) {
-            const p = JSON.parse(localStorage.getItem(k) || '{}')
-            if ((p.email || '').toLowerCase() === m.email.toLowerCase()) {
-              return { ...m, name: p.name || m.name, role: p.role, phone: p.phone, club: p.club }
-            }
-          }
-        } catch (_) {}
+        const prof = m.userId ? profilesByUserId[m.userId] : null
+        if (prof) return { ...m, name: prof.name || m.name, role: prof.role || null, phone: prof.phone || null, club: prof.athlete_club || null }
         return m
       }))
       setLoading(false)
