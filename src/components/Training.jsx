@@ -1,6 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { supabase } from '../lib/supabase'
 import { isCompetition } from '../lib/periodization'
+import {
+  getTrainingPlans,
+  saveTrainingPlan,
+  getTrainingTemplates,
+  saveTrainingTemplate,
+  deleteTrainingTemplate,
+  getPeriodizationOverrides,
+  savePeriodizationOverride,
+  deletePeriodizationOverride,
+} from '../services/trainingService'
 import Goals from './Goals'
 import { ACTIVITY_COLORS } from '../constants/eventCategories'
 
@@ -734,26 +743,30 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
 
   const fetchPlans = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase.from('training_plans').select('*').order('week_start',{ascending:false})
-    setPlans(data||[])
+    try {
+      const data = await getTrainingPlans()
+      setPlans(data || [])
+    } catch (_) { setPlans([]) }
     setLoading(false)
   }, [])
 
   useEffect(() => { fetchPlans() }, [fetchPlans])
   const fetchTemplates = useCallback(async () => {
-    const { data } = await supabase.from('training_plan_templates').select('*').order('created_at',{ascending:false})
-    setTemplates(data||[])
+    try {
+      const data = await getTrainingTemplates()
+      setTemplates(data || [])
+    } catch (_) { setTemplates([]) }
   }, [])
   useEffect(() => { fetchTemplates() }, [fetchTemplates])
 
   useEffect(() => {
-    supabase.from('periodization_overrides').select('*').then(({ data, error }) => {
-      if (!error && data) {
+    getPeriodizationOverrides()
+      .then(data => {
         const ov = {}
-        data.forEach(r => { ov[r.week_start] = r.phase })
+        ;(data || []).forEach(r => { ov[r.week_start] = r.phase })
         setPhaseOverrides(ov)
-      }
-    })
+      })
+      .catch(() => {})
   }, [])
 
   const focusDateRef = useRef(null)
@@ -792,11 +805,11 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
     setSaving(true)
     const existing = plans.find(p=>p.week_start===ws && p.plan_type===type)
     const payload = { week_start:ws, week_end:getWeekEnd(ws), plan_type:type, days:newDays, updated_at:new Date().toISOString(), updated_by:email }
-    const result = existing
-      ? await supabase.from('training_plans').update(payload).eq('id',existing.id)
-      : await supabase.from('training_plans').insert({...payload, created_by:email, status:'active', title:`${type==='golf'?'Golf':'Gym'} Plan`})
+    await saveTrainingPlan(
+      existing ? payload : {...payload, created_by:email, status:'active', title:`${type==='golf'?'Golf':'Gym'} Plan`},
+      existing ? existing.id : null
+    )
     setSaving(false)
-    if (result?.error) throw result.error
     fetchPlans()
     onPlansChanged?.()
   }
@@ -1067,10 +1080,12 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
       if (!newDays[dayIdx]) newDays[dayIdx]={sessions:[]}
       if (!newDays[dayIdx].sessions) newDays[dayIdx].sessions=[]
       newDays[dayIdx].sessions.push({ id:Date.now(), cat:'Campo', free:true, athlete:email, course:freeSession.course, notes:freeSession.notes, score:freeSession.score, holes:freeSession.holes, items:[] })
-      const result = existing
-        ? await supabase.from('training_plans').update({days:newDays,updated_at:new Date().toISOString(),updated_by:email}).eq('id',existing.id)
-        : await supabase.from('training_plans').insert({week_start:weekStart,week_end:getWeekEnd(weekStart),plan_type:'golf',days:newDays,created_by:email,status:'active',title:'Golf Plan'})
-      if (result?.error) throw result.error
+      await saveTrainingPlan(
+        existing
+          ? {days:newDays,updated_at:new Date().toISOString(),updated_by:email}
+          : {week_start:weekStart,week_end:getWeekEnd(weekStart),plan_type:'golf',days:newDays,created_by:email,status:'active',title:'Golf Plan'},
+        existing ? existing.id : null
+      )
       setShowFreeSession(false)
       fetchPlans()
       onPlansChanged?.()
@@ -1347,14 +1362,13 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
         if(items[0]?.isRest) return {items:[],session_type:null,isRest:true}
         return {items,session_type:wizardSessionTypes[ds]||null,isRest:false}
       })
-      const { error } = await supabase.from('training_plan_templates').insert({
+      await saveTrainingTemplate({
         name:name.trim(),
         plan_type:wizardType,
         days:tplDays,
         created_by:email,
         created_at:new Date().toISOString()
       })
-      if (error) throw error
       setShowSaveTemplate(false)
       setWizardTemplateName('')
       fetchTemplates()
@@ -1386,8 +1400,7 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
         created_by: email,
         created_at: new Date().toISOString(),
       }
-      const { error } = await supabase.from('training_plan_templates').insert(dailyPayload)
-      if (error) throw error
+      await saveTrainingTemplate(dailyPayload)
       setShowSaveTemplate(false)
       setWizardDailyTemplateName('')
       setWizardDailyTemplateFocus('')
@@ -1538,7 +1551,7 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
 
   const confirmDeleteTemplate = async () => {
     if (!deleteTemplateConfirm) return
-    await supabase.from('training_plan_templates').delete().eq('id', deleteTemplateConfirm)
+    await deleteTrainingTemplate(deleteTemplateConfirm)
     setDeleteTemplateConfirm(null)
     fetchTemplates()
   }
@@ -1552,17 +1565,14 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
 
   const savePhaseOverride = async (ws, phaseId) => {
     setSavingPhaseOverride(true)
-    await supabase.from('periodization_overrides').upsert(
-      { week_start:ws, phase:phaseId, created_by:email, created_at:new Date().toISOString() },
-      { onConflict:'week_start' }
-    )
+    await savePeriodizationOverride(ws, phaseId, email)
     setPhaseOverrides(prev => ({ ...prev, [ws]: phaseId }))
     setEditingPhaseWs(null)
     setSavingPhaseOverride(false)
   }
 
   const clearPhaseOverride = async (ws) => {
-    await supabase.from('periodization_overrides').delete().eq('week_start', ws)
+    await deletePeriodizationOverride(ws)
     setPhaseOverrides(prev => { const next = { ...prev }; delete next[ws]; return next })
     setEditingPhaseWs(null)
   }
@@ -2505,7 +2515,7 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
             <div style={{fontSize:'8px',letterSpacing:'3px',color:t.textMuted,marginBottom:'8px',fontWeight:600}}>NOTA DO DIA</div>
             <textarea value={athleteNote} onChange={e=>setAthleteNote(e.target.value)} placeholder='Como correu? Como te sentiste?' style={{...inp,minHeight:'64px',resize:'vertical'}}/>
             <div style={{display:'flex',justifyContent:'flex-end',marginTop:'8px'}}>
-              <button onClick={async()=>{const p=golfPlan||gymPlan;if(p)await supabase.from('training_plans').update({athlete_notes:athleteNote,updated_at:new Date().toISOString()}).eq('id',p.id)}}
+              <button onClick={async()=>{const p=golfPlan||gymPlan;if(p)await saveTrainingPlan({athlete_notes:athleteNote,updated_at:new Date().toISOString()},p.id)}}
                 style={{background:golfColor,border:'none',borderRadius:'8px',color:'#fff',padding:'8px 20px',cursor:'pointer',fontSize:'13px',fontWeight:700,fontFamily:F}}>
                 Guardar Nota
               </button>

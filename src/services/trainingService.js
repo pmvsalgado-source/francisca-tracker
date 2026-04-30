@@ -92,3 +92,31 @@ export async function deleteTrainingTemplate(id) {
     throw error
   }
 }
+
+export async function getPeriodizationOverrides() {
+  const { data, error } = await supabase.from('periodization_overrides').select('*')
+  if (error) {
+    Sentry.captureException(error, { extra: { context: 'trainingService.getPeriodizationOverrides' } })
+    throw error
+  }
+  return data
+}
+
+export async function savePeriodizationOverride(weekStart, phaseId, email) {
+  const { error } = await supabase.from('periodization_overrides').upsert(
+    { week_start: weekStart, phase: phaseId, created_by: email, created_at: new Date().toISOString() },
+    { onConflict: 'week_start' }
+  )
+  if (error) {
+    Sentry.captureException(error, { extra: { context: 'trainingService.savePeriodizationOverride', weekStart } })
+    throw error
+  }
+}
+
+export async function deletePeriodizationOverride(weekStart) {
+  const { error } = await supabase.from('periodization_overrides').delete().eq('week_start', weekStart)
+  if (error) {
+    Sentry.captureException(error, { extra: { context: 'trainingService.deletePeriodizationOverride', weekStart } })
+    throw error
+  }
+}
