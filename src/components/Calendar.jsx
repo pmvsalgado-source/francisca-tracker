@@ -3,8 +3,8 @@ import { supabase } from '../lib/supabase'
 import { SCHEDULE_TYPES, TOURNAMENT_CATEGORIES, DEFAULT_CATEGORIES, activityColor, activityColorFromCategory } from '../constants/eventCategories'
 import { calcWeekPhase, PHASE_COLORS } from '../lib/periodization'
 
-const MONTHS = ['Janeiro','Fevereiro','Maro','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
-const WEEKDAYS = ['Seg','Ter','Qua','Qui','Sex','Sb','Dom']
+const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
+const WEEKDAYS = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom']
 const STATUS = ['confirmed','optional','cancelled']
 
 const EXERCISE_PALETTE = ['#6366f1','#ec4899','#14b8a6','#f59e0b','#8b5cf6','#06b6d4','#f97316','#ef4444','#22c55e','#a855f7']
@@ -50,8 +50,8 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
   const todayDate = new Date()
   todayDate.setHours(0, 0, 0, 0)
   const todayIso = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, '0')}-${String(todayDate.getDate()).padStart(2, '0')}`
-  const monthLabels = ['Janeiro', 'Fevereiro', 'Maro', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
-  const weekdayLabels = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sb', 'Dom']
+  const monthLabels = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
+  const weekdayLabels = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
   const weekdayFullLabels = ['Domingo', 'Segunda', 'Tera', 'Quarta', 'Quinta', 'Sexta', 'Sbado']
 
   const fetchCategories = useCallback(async () => {
