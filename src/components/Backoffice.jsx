@@ -203,7 +203,7 @@ export default function Backoffice({ theme, t, user, userRole = '' }) {
                     <td style={{ ...td, color: t.textMuted, maxWidth: '200px' }}>{c.notes || '—'}</td>
                   </tr>
                 ))}
-                {!competitions.length && <tr><td colSpan={6} style={{ ...td, textAlign: 'center', color: t.textMuted, padding: '40px' }}>Sem competições.</td></tr>}
+                {!competitions.length && <tr><td colSpan={6}><EmptyState icon="🏆" message="Sem competições." t={t} compact /></td></tr>}
               </tbody>
             </table>
           )}
@@ -225,7 +225,7 @@ export default function Backoffice({ theme, t, user, userRole = '' }) {
                     <td style={{ ...td, color: t.textMuted }}>{g.created_by || '—'}</td>
                   </tr>
                 ))}
-                {!goals.length && <tr><td colSpan={6} style={{ ...td, textAlign: 'center', color: t.textMuted, padding: '40px' }}>Sem objectivos.</td></tr>}
+                {!goals.length && <tr><td colSpan={6}><EmptyState icon="🎯" message="Sem objectivos." t={t} compact /></td></tr>}
               </tbody>
             </table>
           )}

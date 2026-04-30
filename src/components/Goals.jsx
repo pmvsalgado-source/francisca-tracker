@@ -174,6 +174,7 @@ export default function Goals({ theme, t, user }) {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
   const [fetchError, setFetchError] = useState(null)
+  const [retrying, setRetrying] = useState(false)
   const [form, setForm] = useState({
     metric_id: 'swing_speed',
     metric_label: 'Swing Speed',
@@ -190,9 +191,10 @@ export default function Goals({ theme, t, user }) {
   const inp = { background: t.bg, border: `1px solid ${t.border}`, borderRadius: '6px', color: t.text, padding: '7px 10px', fontSize: '13px', fontFamily: F, outline: 'none', width: '100%', boxSizing: 'border-box' }
 
   const fetchGoals = useCallback(async () => {
-    setFetchError(null)
     const { data, error } = await supabase.from('goals').select('*').order('created_at', { ascending: false })
-    if (error) { console.error('fetchGoals:', error); setFetchError(error.message || 'Erro ao carregar objectivos.'); return }
+    if (error) { console.error('fetchGoals:', error); setFetchError(error.message || 'Erro ao carregar objectivos.'); setRetrying(false); return }
+    setFetchError(null)
+    setRetrying(false)
     setGoals(data || [])
   }, [])
 
@@ -372,7 +374,7 @@ export default function Goals({ theme, t, user }) {
       {fetchError && (
         <div style={{ color: t.danger, fontSize: '13px', padding: '12px 16px', background: t.dangerBg || '#1a0808', borderRadius: '8px', border: `1px solid ${t.danger}`, marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
           <span>⚠ {fetchError}</span>
-          <button onClick={fetchGoals} style={{ background: 'transparent', border: `1px solid ${t.danger}`, borderRadius: '6px', color: t.danger, padding: '4px 12px', cursor: 'pointer', fontSize: '12px', fontFamily: F, fontWeight: 600, whiteSpace: 'nowrap' }}>Tentar novamente</button>
+          <button onClick={() => { setRetrying(true); fetchGoals() }} disabled={retrying} style={{ background: 'transparent', border: `1px solid ${t.danger}`, borderRadius: '6px', color: t.danger, padding: '4px 12px', cursor: 'pointer', fontSize: '12px', fontFamily: F, fontWeight: 600, whiteSpace: 'nowrap' }}>{retrying ? 'A tentar...' : 'Tentar novamente'}</button>
         </div>
       )}
 

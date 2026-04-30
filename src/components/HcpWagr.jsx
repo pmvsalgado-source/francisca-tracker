@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import EmptyState from './EmptyState'
 
 // ── helpers ────────────────────────────────────────────────────────────────
 function getISOWeek(date) {
@@ -328,7 +329,7 @@ export default function HcpWagr({ theme, t, user }) {
                   </thead>
                   <tbody>
                     {wagrHistory.length === 0 && (
-                      <tr><td colSpan={5} style={{ ...td, textAlign: 'center', color: t.textMuted, padding: '20px' }}>Sem registos.</td></tr>
+                      <tr><td colSpan={5}><EmptyState icon="📊" message="Sem registos." t={t} compact /></td></tr>
                     )}
                     {[...wagrHistory].sort((a, b) => (b.year * 100 + b.week) - (a.year * 100 + a.week)).map(h => (
                       <tr key={h.id}>
@@ -457,7 +458,7 @@ export default function HcpWagr({ theme, t, user }) {
               </thead>
               <tbody>
                 {hcpHistory.length === 0 && (
-                  <tr><td colSpan={5} style={{ ...td, textAlign: 'center', color: t.textMuted, padding: '32px' }}>Sem registos de HCP.</td></tr>
+                  <tr><td colSpan={5}><EmptyState icon="📈" message="Sem registos de HCP." t={t} compact /></td></tr>
                 )}
                 {hcpHistory.map((h, i) => {
                   const prev = hcpHistory[i + 1]

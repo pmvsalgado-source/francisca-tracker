@@ -62,13 +62,13 @@ export default function CompStats({ theme, t, user, events = [] }) {
   // ── Fetch ──────────────────────────────────────────────────────────────────
   const fetchData = useCallback(async () => {
     setLoading(true)
-    setFetchError(null)
     try {
       const { data, error } = await supabase.from('competition_stats').select('*').order('event_date', { ascending: false }).range(0, PAGE_SIZE - 1)
       if (error) throw error
       const rows = data || []
       setStats(rows)
       setHasMore(rows.length === PAGE_SIZE)
+      setFetchError(null)
     } catch (err) {
       console.error('fetchData:', err)
       setFetchError(err.message || 'Erro ao carregar competições.')
@@ -644,7 +644,7 @@ export default function CompStats({ theme, t, user, events = [] }) {
       {fetchError && (
         <div style={{ color: t.danger, fontSize: '13px', padding: '12px 16px', background: t.dangerBg || '#1a0808', borderRadius: '8px', border: `1px solid ${t.danger}`, marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
           <span>⚠ {fetchError}</span>
-          <button onClick={fetchData} style={{ background: 'transparent', border: `1px solid ${t.danger}`, borderRadius: '6px', color: t.danger, padding: '4px 12px', cursor: 'pointer', fontSize: '12px', fontFamily: F, fontWeight: 600, whiteSpace: 'nowrap' }}>Tentar novamente</button>
+          <button onClick={fetchData} disabled={loading} style={{ background: 'transparent', border: `1px solid ${t.danger}`, borderRadius: '6px', color: t.danger, padding: '4px 12px', cursor: 'pointer', fontSize: '12px', fontFamily: F, fontWeight: 600, whiteSpace: 'nowrap' }}>{loading ? 'A tentar...' : 'Tentar novamente'}</button>
         </div>
       )}
       {loading ? (

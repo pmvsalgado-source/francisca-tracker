@@ -689,6 +689,7 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
   const [showFreeSession, setShowFreeSession] = useState(false)
   const [freeSession, setFreeSession] = useState({ date:new Date().toISOString().split('T')[0], course:'', notes:'', score:'', holes:'' })
   const [savingFree, setSavingFree] = useState(false)
+  const [freeSessionError, setFreeSessionError] = useState(null)
   const [athleteNote, setAthleteNote] = useState('')
 
   // Track Progress filters
@@ -791,9 +792,11 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
     setSaving(true)
     const existing = plans.find(p=>p.week_start===ws && p.plan_type===type)
     const payload = { week_start:ws, week_end:getWeekEnd(ws), plan_type:type, days:newDays, updated_at:new Date().toISOString(), updated_by:email }
-    if (existing) await supabase.from('training_plans').update(payload).eq('id',existing.id)
-    else await supabase.from('training_plans').insert({...payload, created_by:email, status:'active', title:`${type==='golf'?'Golf':'Gym'} Plan`})
+    const result = existing
+      ? await supabase.from('training_plans').update(payload).eq('id',existing.id)
+      : await supabase.from('training_plans').insert({...payload, created_by:email, status:'active', title:`${type==='golf'?'Golf':'Gym'} Plan`})
     setSaving(false)
+    if (result?.error) throw result.error
     fetchPlans()
     onPlansChanged?.()
   }
@@ -1009,21 +1012,28 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
       if (!weekMap[ws]) weekMap[ws]={}
       weekMap[ws][dayIdx] = { items: wizardDayPlans[dateStr] || [], session_type: wizardSessionTypes[dateStr] || null }
     })
-    for (const [ws, dayMap] of Object.entries(weekMap)) {
-      const newDays = Array(7).fill(null).map(()=>({sessions:[]}))
-      Object.entries(dayMap).forEach(([dayIdx, dayData]) => {
-        const idx = parseInt(dayIdx)
-        const items = dayData.items
-        const session_type = dayData.session_type
-        if (items.length > 0) {
-          if (items[0]?.isRest) {
-            newDays[idx].sessions.push({ id:Date.now()+idx, cat:'Descanso', isRest:true, items:[], notes:'' })
-          } else {
-            newDays[idx].sessions.push({ id:Date.now()+idx, cat:wizardType==='golf'?'Driving Range':'Ginásio', notes:wizardNote, items, session_type })
+    try {
+      for (const [ws, dayMap] of Object.entries(weekMap)) {
+        const newDays = Array(7).fill(null).map(()=>({sessions:[]}))
+        Object.entries(dayMap).forEach(([dayIdx, dayData]) => {
+          const idx = parseInt(dayIdx)
+          const items = dayData.items
+          const session_type = dayData.session_type
+          if (items.length > 0) {
+            if (items[0]?.isRest) {
+              newDays[idx].sessions.push({ id:Date.now()+idx, cat:'Descanso', isRest:true, items:[], notes:'' })
+            } else {
+              newDays[idx].sessions.push({ id:Date.now()+idx, cat:wizardType==='golf'?'Driving Range':'Ginásio', notes:wizardNote, items, session_type })
+            }
           }
-        }
-      })
-      await savePlan(newDays, wizardType, ws)
+        })
+        await savePlan(newDays, wizardType, ws)
+      }
+    } catch (err) {
+      console.error('saveWizard:', err)
+      setWizardError('Erro ao guardar o plano. Tenta novamente.')
+      setSaving(false)
+      return
     }
     setSaving(false)
     setWizard(false)
@@ -1047,20 +1057,29 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
 
   const addFreeSession = async () => {
     setSavingFree(true)
-    const dateObj = new Date(freeSession.date+'T12:00:00')
-    const dow = dateObj.getDay(); const dayIdx = dow===0?6:dow-1
-    const existing = golfPlan
-    const baseDays = existing?.days || Array(7).fill(null).map(()=>({sessions:[]}))
-    const newDays = JSON.parse(JSON.stringify(baseDays))
-    if (!newDays[dayIdx]) newDays[dayIdx]={sessions:[]}
-    if (!newDays[dayIdx].sessions) newDays[dayIdx].sessions=[]
-    newDays[dayIdx].sessions.push({ id:Date.now(), cat:'Campo', free:true, athlete:email, course:freeSession.course, notes:freeSession.notes, score:freeSession.score, holes:freeSession.holes, items:[] })
-    if (existing) await supabase.from('training_plans').update({days:newDays,updated_at:new Date().toISOString(),updated_by:email}).eq('id',existing.id)
-    else await supabase.from('training_plans').insert({week_start:weekStart,week_end:getWeekEnd(weekStart),plan_type:'golf',days:newDays,created_by:email,status:'active',title:'Golf Plan'})
-    setSavingFree(false)
-    setShowFreeSession(false)
-    fetchPlans()
-    onPlansChanged?.()
+    setFreeSessionError(null)
+    try {
+      const dateObj = new Date(freeSession.date+'T12:00:00')
+      const dow = dateObj.getDay(); const dayIdx = dow===0?6:dow-1
+      const existing = golfPlan
+      const baseDays = existing?.days || Array(7).fill(null).map(()=>({sessions:[]}))
+      const newDays = JSON.parse(JSON.stringify(baseDays))
+      if (!newDays[dayIdx]) newDays[dayIdx]={sessions:[]}
+      if (!newDays[dayIdx].sessions) newDays[dayIdx].sessions=[]
+      newDays[dayIdx].sessions.push({ id:Date.now(), cat:'Campo', free:true, athlete:email, course:freeSession.course, notes:freeSession.notes, score:freeSession.score, holes:freeSession.holes, items:[] })
+      const result = existing
+        ? await supabase.from('training_plans').update({days:newDays,updated_at:new Date().toISOString(),updated_by:email}).eq('id',existing.id)
+        : await supabase.from('training_plans').insert({week_start:weekStart,week_end:getWeekEnd(weekStart),plan_type:'golf',days:newDays,created_by:email,status:'active',title:'Golf Plan'})
+      if (result?.error) throw result.error
+      setShowFreeSession(false)
+      fetchPlans()
+      onPlansChanged?.()
+    } catch (err) {
+      console.error('addFreeSession:', err)
+      setFreeSessionError(err.message || 'Erro ao guardar a sessão.')
+    } finally {
+      setSavingFree(false)
+    }
   }
 
   const cats    = wizardType==='golf' ? GOLF_CATS : GYM_CATS
@@ -2025,7 +2044,7 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
                         <div style={{display:'flex',gap:'6px'}}>
                           <button onClick={saveAsDailyTemplate} disabled={savingTemplate||!wizardDailyTemplateName.trim()}
                             style={{background:savingTemplate?t.border:typeColor,border:'none',borderRadius:'6px',color:'#fff',padding:'7px 14px',cursor:'pointer',fontSize:'12px',fontWeight:700,fontFamily:F}}>
-                            {savingTemplate?'...':'Guardar'}
+                            {savingTemplate?'A guardar...':'Guardar'}
                           </button>
                           <button onClick={()=>setShowSaveTemplate(false)}
                             style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'6px',color:t.textMuted,padding:'7px 10px',cursor:'pointer',fontSize:'12px',fontFamily:F}}>
@@ -2048,7 +2067,7 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
                         <input value={wizardTemplateName} onChange={e=>setWizardTemplateName(e.target.value)} placeholder='Ex: Semana de Acumulação' style={{...inp,flex:1}}/>
                         <button onClick={()=>saveAsWeeklyTemplate(wizardTemplateName)} disabled={savingTemplate||!wizardTemplateName.trim()}
                           style={{background:savingTemplate?t.border:typeColor,border:'none',borderRadius:'6px',color:'#fff',padding:'7px 14px',cursor:'pointer',fontSize:'12px',fontWeight:700,fontFamily:F}}>
-                          {savingTemplate?'...':'OK'}
+                          {savingTemplate?'A guardar...':'OK'}
                         </button>
                         <button onClick={()=>setShowSaveTemplate(false)}
                           style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'6px',color:t.textMuted,padding:'7px 10px',cursor:'pointer',fontSize:'12px',fontFamily:F}}>
@@ -2135,9 +2154,14 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
                 <textarea value={freeSession.notes} onChange={e=>setFreeSession(p=>({...p,notes:e.target.value}))} placeholder='Como correu?' style={{...inp,minHeight:'56px',resize:'vertical'}}/>
               </div>
             </div>
+            {freeSessionError && (
+              <div style={{color:'#f87171',fontSize:'12px',padding:'8px 10px',background:'rgba(248,113,113,0.1)',borderRadius:'6px',marginBottom:'10px',borderLeft:'3px solid #f87171'}}>
+                ⚠ {freeSessionError}
+              </div>
+            )}
             <div style={{display:'flex',gap:'8px',justifyContent:'flex-end'}}>
-              <button onClick={()=>setShowFreeSession(false)} style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'8px',color:t.textMuted,padding:'8px 16px',cursor:'pointer',fontSize:'13px',fontFamily:F}}>Cancelar</button>
-              <button onClick={addFreeSession} disabled={savingFree} style={{background:savingFree?t.border:golfColor,border:'none',borderRadius:'8px',color:'#fff',padding:'8px 20px',cursor:'pointer',fontSize:'13px',fontWeight:700,fontFamily:F}}>{savingFree?'...':'Guardar'}</button>
+              <button onClick={()=>{setShowFreeSession(false);setFreeSessionError(null)}} style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'8px',color:t.textMuted,padding:'8px 16px',cursor:'pointer',fontSize:'13px',fontFamily:F}}>Cancelar</button>
+              <button onClick={addFreeSession} disabled={savingFree} style={{background:savingFree?t.border:golfColor,border:'none',borderRadius:'8px',color:'#fff',padding:'8px 20px',cursor:'pointer',fontSize:'13px',fontWeight:700,fontFamily:F}}>{savingFree?'A guardar...':'Guardar'}</button>
             </div>
           </div>
         </div>
