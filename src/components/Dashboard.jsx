@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
 import Calendar from './Calendar'
 import Goals from './Goals'
-import Training from './Training'
 import CompStats from './CompStats'
-import Home from './Home'
+
+const Home = lazy(() => import('./Home'))
+const Training = lazy(() => import('./Training'))
 import Performance from './Performance'
 import Chat from './Chat'
 import Microcycles from './Microcycles'
@@ -899,7 +900,11 @@ export default function Dashboard({ user }) {
           {/* Views */}
           {loading && <div style={{ padding:'60px', textAlign:'center', color:t.textMuted, fontSize:'14px' }}>{s.loading}</div>}
 
-          {!loading && view === 'home' && <Home theme={theme} t={t} onNavigate={(v, opts) => navigateToView(v, opts)} onRegister={() => setShowRegister(true)} user={user} profile={profile} lang={lang} events={events} trainingPlans={trainingPlans} />}
+          {!loading && view === 'home' && (
+            <Suspense fallback={<div style={{ padding:'60px', textAlign:'center', color:t.textMuted, fontSize:'14px' }}>{s.loading}</div>}>
+              <Home theme={theme} t={t} onNavigate={(v, opts) => navigateToView(v, opts)} onRegister={() => setShowRegister(true)} user={user} profile={profile} lang={lang} events={events} trainingPlans={trainingPlans} />
+            </Suspense>
+          )}
 
           <div style={{ padding: view === 'home' ? '0' : '24px 32px', flex:1 }}>
             {!loading && view === 'performance' && <Performance theme={theme} t={t} user={user} lang={lang} initialTab={perfTab} trainingPlans={trainingPlans} />}
@@ -965,7 +970,11 @@ export default function Dashboard({ user }) {
             )}
 
             {!loading && view === 'goals'       && <Goals       theme={theme} t={t} user={user} />}
-            {!loading && view === 'training'    && <Training    theme={theme} t={t} user={user} userRole={profile.role} lang={lang} focusDate={trainingFocusDate} onFocusConsumed={() => setTrainingFocusDate(null)} events={events} onPlansChanged={fetchTrainingPlans} />}
+            {!loading && view === 'training' && (
+              <Suspense fallback={<div style={{ padding:'60px', textAlign:'center', color:t.textMuted, fontSize:'14px' }}>{s.loading}</div>}>
+                <Training theme={theme} t={t} user={user} userRole={profile.role} lang={lang} focusDate={trainingFocusDate} onFocusConsumed={() => setTrainingFocusDate(null)} events={events} onPlansChanged={fetchTrainingPlans} />
+              </Suspense>
+            )}
             {!loading && view === 'competition' && <CompStats   theme={theme} t={t} user={user} events={events} />}
             {!loading && view === 'calendar'    && <Calendar    theme={theme} t={t} user={user} lang={lang} onNavigate={(v, opts) => navigateToView(v, opts)} events={events} trainingPlans={trainingPlans} onEventsChanged={fetchEvents} onPlansChanged={fetchTrainingPlans} initScheduleType={calendarInitSchedule} onInitConsumed={clearCalendarInitSchedule} focusDate={calendarFocusDate} onFocusConsumed={() => setCalendarFocusDate(null)} />}
             {!loading && view === 'chat'        && <Chat        theme={theme} t={t} user={user} profile={profile} lang={lang} />}

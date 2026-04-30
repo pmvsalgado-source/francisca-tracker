@@ -1,8 +1,19 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import { supabase } from './lib/supabase'
 import Login from './components/Login'
-import Dashboard from './components/Dashboard'
 import ErrorBoundary from './components/ErrorBoundary'
+
+const Dashboard = lazy(() => import('./components/Dashboard'))
+
+const AppLoader = () => (
+  <div style={{
+    minHeight: '100vh', background: '#0a1a0f',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    fontFamily: "'DM Mono', monospace", color: '#5cb86a', fontSize: '12px', letterSpacing: '3px',
+  }}>
+    A CARREGAR...
+  </div>
+)
 
 // Read URL hash synchronously — Supabase appends #access_token=...&type=recovery
 function isRecoveryUrl() {
@@ -51,5 +62,7 @@ export default function App() {
   )
 
   if (needsPasswordReset) return <Login initialMode="reset" onPasswordReset={() => setNeedsPasswordReset(false)} />
-  return user ? <ErrorBoundary><Dashboard user={user} /></ErrorBoundary> : <Login />
+  return user
+    ? <ErrorBoundary><Suspense fallback={<AppLoader />}><Dashboard user={user} /></Suspense></ErrorBoundary>
+    : <Login />
 }
