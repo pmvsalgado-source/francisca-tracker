@@ -40,16 +40,28 @@ export default class ErrorBoundary extends Component {
               {this.state.error.message}
             </div>
           )}
-          <button
-            onClick={() => window.location.reload()}
-            style={{
-              background: '#52E8A0', border: 'none', borderRadius: '8px',
-              color: '#000', padding: '11px 28px', cursor: 'pointer',
-              fontSize: '13px', fontWeight: 700,
-            }}
-          >
-            Recarregar página
-          </button>
+          <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => window.location.reload()}
+              style={{
+                background: '#52E8A0', border: 'none', borderRadius: '8px',
+                color: '#000', padding: '11px 28px', cursor: 'pointer',
+                fontSize: '13px', fontWeight: 700,
+              }}
+            >
+              Recarregar página
+            </button>
+            <button
+              onClick={() => { window.location.href = '/' }}
+              style={{
+                background: 'transparent', border: '1px solid #333', borderRadius: '8px',
+                color: '#888', padding: '11px 28px', cursor: 'pointer',
+                fontSize: '13px', fontWeight: 600,
+              }}
+            >
+              Voltar ao início
+            </button>
+          </div>
         </div>
       </div>
     )
