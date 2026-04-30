@@ -1,15 +1,15 @@
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
-import Calendar from './Calendar'
 import Goals from './Goals'
-import CompStats from './CompStats'
+import Chat from './Chat'
+import Microcycles from './Microcycles'
 
 const Home = lazy(() => import('./Home'))
 const Training = lazy(() => import('./Training'))
-import Performance from './Performance'
-import Chat from './Chat'
-import Microcycles from './Microcycles'
-import Backoffice from './Backoffice'
-import HcpWagr from './HcpWagr'
+const Calendar = lazy(() => import('./Calendar'))
+const CompStats = lazy(() => import('./CompStats'))
+const Performance = lazy(() => import('./Performance'))
+const Backoffice = lazy(() => import('./Backoffice'))
+const HcpWagr = lazy(() => import('./HcpWagr'))
 import {
   getProfile,
   saveProfile as saveProfileSvc,
@@ -907,7 +907,11 @@ export default function Dashboard({ user }) {
           )}
 
           <div style={{ padding: view === 'home' ? '0' : '24px 32px', flex:1 }}>
-            {!loading && view === 'performance' && <Performance theme={theme} t={t} user={user} lang={lang} initialTab={perfTab} trainingPlans={trainingPlans} />}
+            {!loading && view === 'performance' && (
+              <Suspense fallback={<div style={{ padding:'60px', textAlign:'center', color:t.textMuted, fontSize:'14px' }}>{s.loading}</div>}>
+                <Performance theme={theme} t={t} user={user} lang={lang} initialTab={perfTab} trainingPlans={trainingPlans} />
+              </Suspense>
+            )}
 
             {!loading && view === 'history' && (
               <div>
@@ -975,12 +979,28 @@ export default function Dashboard({ user }) {
                 <Training theme={theme} t={t} user={user} userRole={profile.role} lang={lang} focusDate={trainingFocusDate} onFocusConsumed={() => setTrainingFocusDate(null)} events={events} onPlansChanged={fetchTrainingPlans} />
               </Suspense>
             )}
-            {!loading && view === 'competition' && <CompStats   theme={theme} t={t} user={user} events={events} />}
-            {!loading && view === 'calendar'    && <Calendar    theme={theme} t={t} user={user} lang={lang} onNavigate={(v, opts) => navigateToView(v, opts)} events={events} trainingPlans={trainingPlans} onEventsChanged={fetchEvents} onPlansChanged={fetchTrainingPlans} initScheduleType={calendarInitSchedule} onInitConsumed={clearCalendarInitSchedule} focusDate={calendarFocusDate} onFocusConsumed={() => setCalendarFocusDate(null)} />}
+            {!loading && view === 'competition' && (
+              <Suspense fallback={<div style={{ padding:'60px', textAlign:'center', color:t.textMuted, fontSize:'14px' }}>{s.loading}</div>}>
+                <CompStats theme={theme} t={t} user={user} events={events} />
+              </Suspense>
+            )}
+            {!loading && view === 'calendar' && (
+              <Suspense fallback={<div style={{ padding:'60px', textAlign:'center', color:t.textMuted, fontSize:'14px' }}>{s.loading}</div>}>
+                <Calendar theme={theme} t={t} user={user} lang={lang} onNavigate={(v, opts) => navigateToView(v, opts)} events={events} trainingPlans={trainingPlans} onEventsChanged={fetchEvents} onPlansChanged={fetchTrainingPlans} initScheduleType={calendarInitSchedule} onInitConsumed={clearCalendarInitSchedule} focusDate={calendarFocusDate} onFocusConsumed={() => setCalendarFocusDate(null)} />
+              </Suspense>
+            )}
             {!loading && view === 'chat'        && <Chat        theme={theme} t={t} user={user} profile={profile} lang={lang} />}
-            {!loading && view === 'hcpwagr'     && <HcpWagr     theme={theme} t={t} user={user} />}
+            {!loading && view === 'hcpwagr' && (
+              <Suspense fallback={<div style={{ padding:'60px', textAlign:'center', color:t.textMuted, fontSize:'14px' }}>{s.loading}</div>}>
+                <HcpWagr theme={theme} t={t} user={user} />
+              </Suspense>
+            )}
             {!loading && view === 'microcycles' && <Microcycles theme={theme} t={t} user={user} lang={lang} />}
-            {!loading && view === 'backoffice'  && <Backoffice  theme={theme} t={t} user={user} userRole={profile.role} />}
+            {!loading && view === 'backoffice' && (
+              <Suspense fallback={<div style={{ padding:'60px', textAlign:'center', color:t.textMuted, fontSize:'14px' }}>{s.loading}</div>}>
+                <Backoffice theme={theme} t={t} user={user} userRole={profile.role} />
+              </Suspense>
+            )}
           </div>
         </div>
       </div>
