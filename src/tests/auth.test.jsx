@@ -33,4 +33,13 @@ describe('Login', () => {
     expect(screen.getByPlaceholderText('your@email.com')).toHaveAttribute('type', 'email')
     expect(screen.getByPlaceholderText('••••••••')).toHaveAttribute('type', 'password')
   })
+
+  it('email and password inputs are inside the same sign-in form', () => {
+    render(<Login />)
+    const emailInput = screen.getByPlaceholderText('your@email.com')
+    const passwordInput = screen.getByPlaceholderText('••••••••')
+    const form = emailInput.closest('form')
+    expect(form).not.toBeNull()
+    expect(passwordInput.closest('form')).toBe(form)
+  })
 })

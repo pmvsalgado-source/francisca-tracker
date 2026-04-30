@@ -52,4 +52,15 @@ describe('ErrorBoundary', () => {
     expect(screen.getByText('Test crash')).toBeInTheDocument()
     consoleSpy.mockRestore()
   })
+
+  it('shows the "Voltar ao início" navigation button in the fallback UI', () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    render(
+      <ErrorBoundary>
+        <Bomb />
+      </ErrorBoundary>
+    )
+    expect(screen.getByRole('button', { name: /voltar ao início/i })).toBeInTheDocument()
+    consoleSpy.mockRestore()
+  })
 })
