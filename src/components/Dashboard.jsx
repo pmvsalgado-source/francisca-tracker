@@ -154,17 +154,6 @@ function TeamModal({ t, F, onClose }) {
   }, [])
 
   const initials = (name) => name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0,2)
-  const roleLabel = (email) => {
-    try {
-      const keys = Object.keys(localStorage).filter(k => k.startsWith('user_profile_'))
-      for (const k of keys) {
-        const p = JSON.parse(localStorage.getItem(k) || '{}')
-        if ((p.email || '').toLowerCase() === email.toLowerCase() && p.role) return p.role
-      }
-    } catch (_) {}
-    if (email?.includes('francisca')) return 'Athlete'
-    return 'Coach'
-  }
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999, padding: '20px' }}>
@@ -194,7 +183,7 @@ function TeamModal({ t, F, onClose }) {
                   {m.phone && <div style={{ fontSize: '11px', color: t.textFaint, marginTop: '1px' }}>{m.phone}</div>}
                 </div>
                 <div style={{ fontSize: '10px', letterSpacing: '1px', color: t.accent, fontWeight: 600, background: t.accentBg, padding: '3px 10px', borderRadius: '10px', flexShrink: 0 }}>
-                  {m.role || roleLabel(m.email)}
+                  {m.role || '—'}
                 </div>
               </div>
             ))}
@@ -280,6 +269,7 @@ export default function Dashboard({ user }) {
   const t = theme === 'dark' ? dark : light
   const [view, setView] = useState('home')
   const [trainingFocusDate, setTrainingFocusDate] = useState(null)
+  const [calendarFocusDate, setCalendarFocusDate] = useState(null)
   const [calendarInitSchedule, setCalendarInitSchedule] = useState(null)
   const clearCalendarInitSchedule = useCallback(() => setCalendarInitSchedule(null), [])
   const [entries, setEntries] = useState([])
@@ -322,7 +312,7 @@ export default function Dashboard({ user }) {
     if (!user?.id) return
     supabase.from('profiles').select('name,role,phone,athlete_club,avatar_url').eq('id', user.id).single()
       .then(({ data }) => {
-        const base = { name: user.email.split('@')[0], role: s.profile.roles[0], club: '', phone: '' }
+        const base = { name: user.email.split('@')[0], role: 'athlete', club: '', phone: '' }
         const p = data ? { name: data.name || base.name, role: data.role || base.role, club: data.athlete_club || base.club, phone: data.phone || base.phone } : base
         setProfile(p); setProfileForm(p)
         // Load avatar from profiles table first, fallback to storage check
@@ -349,6 +339,7 @@ export default function Dashboard({ user }) {
 
   const navigateToView = useCallback((v, opts) => {
     if (opts?.date) setTrainingFocusDate(opts.date)
+    if (opts?.date && v === 'calendar') setCalendarFocusDate(opts.date)
     if (opts?.scheduleType) setCalendarInitSchedule(opts.scheduleType)
     setView(v)
     window.history.pushState({ appView: v }, '')
@@ -528,22 +519,31 @@ export default function Dashboard({ user }) {
     navItems.push([key, s.nav[i + 1]])
   }
 
+  const SIDEBAR_NAV = [
+    ['home',        lang === 'pt' ? 'Overview'       : 'Overview',      '▦'],
+    ['calendar',    lang === 'pt' ? 'Calendário'     : 'Calendar',      '▦'],
+    ['training',    lang === 'pt' ? 'Plano de Treino': 'Training Plan',  '▦'],
+    ['performance', 'Track Progress',                                    '▦'],
+    ['competition', lang === 'pt' ? 'Competições'    : 'Competitions',  '▦'],
+    ...(isAdmin ? [['backoffice', lang === 'pt' ? 'Atletas' : 'Athletes', '▦']] : []),
+    ['chat',        lang === 'pt' ? 'Mensagens'      : 'Messages',      '▦'],
+  ]
+
   return (
-    <div style={{ fontFamily: F, background: t.bg, minHeight: '100vh', color: t.text }}>
+    <div style={{ fontFamily: F, background: t.bg, minHeight: '100vh', color: t.text, display: 'flex', flexDirection: 'column' }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
         * { box-sizing: border-box; }
         .g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-        .pad { padding: 16px 40px; }
         input:focus, select:focus, textarea:focus { border-color: ${t.accent} !important; outline: none; }
-        .nav-tab { background: transparent; border: none; border-bottom: 2px solid transparent; color: ${t.navText}; padding: 12px 18px; cursor: pointer; font-size: 11px; font-family: ${F}; font-weight: 700; letter-spacing: 1px; transition: all 0.15s; white-space: nowrap; }
-        .nav-tab.active { border-bottom-color: ${t.navBorder}; color: ${t.navTextActive}; font-weight: 800; }
-        .nav-tab:hover { color: #ffffff; }
         .menu-item { display: block; width: 100%; background: transparent; border: none; color: #aaa; padding: 12px 16px; cursor: pointer; font-size: 12px; font-family: ${F}; text-align: left; letter-spacing: 0.5px; transition: all 0.1s; }
         .menu-item:hover { background: ${t.navActive}; color: ${t.text}; }
         .menu-item.danger { color: ${t.danger}; }
-        @media(max-width:720px) { .g2 { grid-template-columns: 1fr; } .pad { padding: 12px 16px; } }
-        @media(max-width:480px) { .nav-tab { padding: 10px 10px; font-size: 10px; letter-spacing: 0.5px; } }
+        .snav-btn { display:flex; align-items:center; gap:12px; width:100%; background:transparent; border:none; border-left:3px solid transparent; padding:12px 20px; cursor:pointer; font-family:${F}; font-size:14px; font-weight:600; color:${t.textMuted}; text-align:left; transition:all 0.12s; }
+        .snav-btn:hover:not(.snav-active) { background:${t.bg}; color:${t.text}; }
+        .snav-active { color:#ef4444 !important; border-left-color:#ef4444 !important; background:${theme==='dark'?'rgba(239,68,68,0.08)':'#fef2f2'} !important; font-weight:700 !important; }
+        @media(max-width:720px) { .g2 { grid-template-columns: 1fr; } }
+        @media(max-width:768px) { .db-sidebar { display:none !important; } }
       `}</style>
 
       {/* Language modal */}
@@ -709,194 +709,203 @@ export default function Dashboard({ user }) {
         </div>
       )}
 
-      {/* Header */}
-      <div style={{ borderBottom: `1px solid ${t.border}`, background: t.bg }} className="pad">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+      {/* ── TOP HEADER ── */}
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 24px', height:'64px', background:t.surface, borderBottom:`1px solid ${t.border}`, flexShrink:0, zIndex:10 }}>
+        {/* Logo */}
+        <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
+          <div style={{ width:'38px', height:'38px', borderRadius:'10px', background:'#ef4444', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'20px', color:'#fff', flexShrink:0 }}>⛳</div>
           <div>
-            <div style={{ fontSize: '10px', letterSpacing: '3px', color: t.success, marginBottom: '3px', fontWeight: 600 }}>{lang === 'pt' ? 'PERFORMANCE · GOLFE' : 'PERFORMANCE · GOLF'}</div>
-            <div style={{ fontSize: '20px', fontWeight: 800, letterSpacing: '-0.5px', color: t.text }}>Francisca Salgado</div>
+            <div style={{ fontSize:'12px', fontWeight:900, color:t.text, lineHeight:1.15, letterSpacing:'0.3px', textTransform:'uppercase' }}>Performance Golf</div>
+            <div style={{ fontSize:'11px', fontWeight:600, color:t.textMuted, lineHeight:1.1 }}>Francisca Salgado</div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <input ref={avatarInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => uploadAvatar(e.target.files[0])} />
-            <div ref={menuRef} style={{ position: 'relative' }}>
-              <button onClick={() => setShowMenu(!showMenu)}
-                style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '5px 10px 5px 12px', borderRadius: '20px', background: '#1a2744', border: 'none', cursor: 'pointer' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '3.5px' }}>
-                  <span style={{ display: 'block', width: '14px', height: '1.5px', background: '#9FE1CB', borderRadius: '1px' }}></span>
-                  <span style={{ display: 'block', width: '14px', height: '1.5px', background: '#9FE1CB', borderRadius: '1px' }}></span>
-                  <span style={{ display: 'block', width: '14px', height: '1.5px', background: '#9FE1CB', borderRadius: '1px' }}></span>
+        </div>
+        {/* Right: avatar + menu */}
+        <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
+          <input ref={avatarInputRef} type="file" accept="image/*" style={{ display:'none' }} onChange={e => uploadAvatar(e.target.files[0])} />
+          <div ref={menuRef} style={{ position:'relative' }}>
+            <button onClick={() => setShowMenu(!showMenu)}
+              style={{ display:'flex', alignItems:'center', gap:'10px', background:'transparent', border:`1px solid ${t.border}`, borderRadius:'10px', cursor:'pointer', padding:'6px 12px' }}>
+              <div style={{ width:'32px', height:'32px', borderRadius:'50%', overflow:'hidden', background:'#1a2744', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'12px', fontWeight:700, color:'#7eb8ff', flexShrink:0 }}>
+                {avatar ? <img src={avatar} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} /> : (initials || '?')}
+              </div>
+              <div style={{ textAlign:'left' }}>
+                <div style={{ fontSize:'13px', fontWeight:700, color:t.text, lineHeight:1.2 }}>{displayName}</div>
+                <div style={{ fontSize:'11px', color:t.textMuted, lineHeight:1.2 }}>{profile.role || s.profile.roles[0]}</div>
+              </div>
+              <span style={{ color:t.textMuted, fontSize:'10px' }}>▾</span>
+            </button>
+            {showTeam && <TeamModal t={t} F={F} onClose={() => setShowTeam(false)} />}
+            {showMenu && (
+              <div style={{ position:'absolute', right:0, top:'calc(100% + 8px)', background:t.surface, border:`1px solid ${t.border}`, borderRadius:'12px', minWidth:'200px', zIndex:100, overflow:'hidden', boxShadow:'0 8px 32px rgba(0,0,0,0.3)' }}>
+                <div style={{ padding:'12px 16px', borderBottom:`1px solid ${t.border}` }}>
+                  <div style={{ fontSize:'13px', fontWeight:700, color:t.text }}>{displayName}</div>
+                  <div style={{ fontSize:'11px', color:t.textMuted, marginTop:'2px' }}>{profile.role || s.profile.roles[0]}</div>
                 </div>
-                <div style={{ width: '1px', height: '16px', background: '#2e4a6a' }}></div>
-                <div style={{ width: '26px', height: '26px', borderRadius: '50%', overflow: 'hidden', background: '#243560', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 700, color: '#7eb8ff', flexShrink: 0 }}>
-                  {avatar ? <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (initials || '?')}
-                </div>
-              </button>
-              {showTeam && (
-        <TeamModal t={t} F={F} onClose={() => setShowTeam(false)} />
-      )}
+                {[
+                  { label: s.menu.editProfile, action: () => { setProfileForm({...profile}); setPwForm({ newPw:'', confirmPw:'' }); setPwMsg(''); setShowProfile(true); setShowMenu(false) } },
+                  { label: s.menu.team, action: () => { setShowTeam(true); setShowMenu(false) } },
+                  { label: theme === 'dark' ? s.menu.lightMode : s.menu.darkMode, action: () => { const next = theme === 'dark' ? 'light' : 'dark'; setTheme(next); localStorage.setItem('fs_theme', next); setShowMenu(false) } },
+                  { label: s.menu.exportExcel, action: () => { exportXLS(); setShowMenu(false) } },
+                  { label: `${s.menu.language}: ${lang === 'en' ? '🇬🇧 EN' : '🇵🇹 PT'}`, action: () => { setShowLangModal(true); setShowMenu(false) } },
+                  { label: s.menu.signOut, action: () => supabase.auth.signOut(), danger: true },
+                ].map((item, i) => (
+                  <button key={i} className={`menu-item${item.danger ? ' danger' : ''}`} onClick={item.action}
+                    style={{ borderTop: i > 0 ? `1px solid ${t.border}` : 'none' }}>
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
 
-      {showMenu && (
-                <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 8px)', background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', minWidth: '200px', zIndex: 100, overflow: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}>
-                  <div style={{ padding: '12px 16px', borderBottom: `1px solid ${t.border}` }}>
-                    <div style={{ fontSize: '13px', fontWeight: 700, color: t.text }}>{displayName}</div>
-                    <div style={{ fontSize: '11px', color: t.textMuted, marginTop: '2px' }}>{profile.role || s.profile.roles[0]}</div>
-                  </div>
-                  {[
-                    
-                    { label: s.menu.editProfile, action: () => { setProfileForm({...profile}); setPwForm({ newPw: '', confirmPw: '' }); setPwMsg(''); setShowProfile(true); setShowMenu(false) } },
-                    { label: s.menu.team, action: () => { setShowTeam(true); setShowMenu(false) } },
-                    { label: theme === 'dark' ? s.menu.lightMode : s.menu.darkMode, action: () => { const next = theme === 'dark' ? 'light' : 'dark'; setTheme(next); localStorage.setItem('fs_theme', next); setShowMenu(false) } },
-                    { label: s.menu.exportExcel, action: () => { exportXLS(); setShowMenu(false) } },
-                    { label: `${s.menu.language}: ${lang === 'en' ? '🇬🇧 EN' : '🇵🇹 PT'}`, action: () => { setShowLangModal(true); setShowMenu(false) } },
-                    { label: s.menu.signOut, action: () => supabase.auth.signOut(), danger: true },
-                  ].map((item, i) => (
-                    <button key={i} className={`menu-item${item.danger ? ' danger' : ''}`} onClick={item.action}
-                      style={{ borderTop: i > 0 ? `1px solid ${t.border}` : 'none' }}>
-                      {item.label}
-                    </button>
+      {/* ── BODY: sidebar + content ── */}
+      <div style={{ display:'flex', flex:1, overflow:'hidden', minHeight:0 }}>
+
+        {/* SIDEBAR */}
+        <div className="db-sidebar" style={{ width:'220px', background:t.surface, borderRight:`1px solid ${t.border}`, display:'flex', flexDirection:'column', flexShrink:0, overflowY:'auto' }}>
+          <nav style={{ flex:1, paddingTop:'8px' }}>
+            {SIDEBAR_NAV.map(([key, label]) => (
+              <button key={key} className={`snav-btn${view === key ? ' snav-active' : ''}`}
+                onClick={() => { navigateToView(key); if (key !== 'performance') setPerfTab('focus') }}>
+                <span>{label}</span>
+              </button>
+            ))}
+            {/* Record what I did */}
+            <button className="snav-btn" onClick={() => setShowRegister(true)}>
+              <span>{lang === 'pt' ? 'Registar Performance' : 'Record what I did'}</span>
+            </button>
+          </nav>
+        </div>
+
+        {/* MAIN CONTENT */}
+        <div style={{ flex:1, overflowY:'auto', background: theme === 'dark' ? t.bg : '#f0f4f8', display:'flex', flexDirection:'column' }}>
+          {/* KPI Panel */}
+          {showKpis && (
+            <div style={{ padding:'16px 32px 0' }}>
+              <div style={{ ...card, position:'relative' }}>
+                <button onClick={() => setShowKpis(false)} style={{ position:'absolute', top:'10px', right:'12px', background:'transparent', border:'none', color:t.textMuted, cursor:'pointer', fontSize:'18px', lineHeight:1 }}>×</button>
+                <div style={{ fontSize:'10px', letterSpacing:'3px', color:t.textMuted, marginBottom:'12px', fontWeight:600 }}>{s.kpi.title}</div>
+                <div style={{ display:'flex', flexDirection:'column', gap:'6px', marginBottom:'12px' }}>
+                  {metrics.map((m, i) => (
+                    <div key={m.id} style={{ display:'flex', gap:'6px', alignItems:'center', flexWrap:'wrap' }}>
+                      <input value={m.label} onChange={e => setMetrics(p => p.map((x, j) => j === i ? { ...x, label: e.target.value } : x))}
+                        style={{ flex:2, minWidth:'120px', background:t.bg, border:`1px solid ${t.border}`, borderRadius:'6px', color:t.text, padding:'5px 8px', fontSize:'12px', fontFamily:F, outline:'none' }} />
+                      <input value={m.unit} placeholder={s.kpi.unitHolder} onChange={e => setMetrics(p => p.map((x, j) => j === i ? { ...x, unit: e.target.value } : x))}
+                        style={{ width:'60px', background:t.bg, border:`1px solid ${t.border}`, borderRadius:'6px', color:t.text, padding:'5px 8px', fontSize:'12px', fontFamily:F, outline:'none' }} />
+                      <input value={m.target || ''} placeholder={s.kpi.targetHolder} onChange={e => setMetrics(p => p.map((x, j) => j === i ? { ...x, target: e.target.value ? parseFloat(e.target.value) : null } : x))}
+                        style={{ width:'64px', background:t.bg, border:`1px solid ${t.border}`, borderRadius:'6px', color:t.text, padding:'5px 8px', fontSize:'12px', fontFamily:F, outline:'none' }} />
+                      <button onClick={() => setMetrics(p => p.filter((_, j) => j !== i))} style={{ background:'transparent', border:'none', color:t.danger, cursor:'pointer', fontSize:'16px', padding:'2px 8px' }}>×</button>
+                    </div>
                   ))}
                 </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Nav */}
-      <div style={{ background: t.navBg, borderBottom: `1px solid ${t.navBg}` }} className="pad">
-        <div style={{ display: 'flex', overflowX: 'auto' }}>
-          {navItems.map(([v, lbl]) => (
-            <button key={v} className={`nav-tab${view === v ? ' active' : ''}`} onClick={() => { navigateToView(v); if (v !== 'performance') setPerfTab('focus') }}>{lbl}</button>
-          ))}
-        </div>
-      </div>
-
-      {/* KPI Panel */}
-      {showKpis && (
-        <div className="pad" style={{ paddingTop: '16px', paddingBottom: 0 }}>
-          <div style={{ ...card, position: 'relative' }}>
-            <button onClick={() => setShowKpis(false)} style={{ position: 'absolute', top: '10px', right: '12px', background: 'transparent', border: 'none', color: t.textMuted, cursor: 'pointer', fontSize: '18px', lineHeight: 1 }}>×</button>
-            <div style={{ fontSize: '10px', letterSpacing: '3px', color: t.textMuted, marginBottom: '12px', fontWeight: 600 }}>{s.kpi.title}</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '12px' }}>
-              {metrics.map((m, i) => (
-                <div key={m.id} style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
-                  <input value={m.label} onChange={e => setMetrics(p => p.map((x, j) => j === i ? { ...x, label: e.target.value } : x))}
-                    style={{ flex: 2, minWidth: '120px', background: t.bg, border: `1px solid ${t.border}`, borderRadius: '6px', color: t.text, padding: '5px 8px', fontSize: '12px', fontFamily: F, outline: 'none' }} />
-                  <input value={m.unit} placeholder={s.kpi.unitHolder} onChange={e => setMetrics(p => p.map((x, j) => j === i ? { ...x, unit: e.target.value } : x))}
-                    style={{ width: '60px', background: t.bg, border: `1px solid ${t.border}`, borderRadius: '6px', color: t.text, padding: '5px 8px', fontSize: '12px', fontFamily: F, outline: 'none' }} />
-                  <input value={m.target || ''} placeholder={s.kpi.targetHolder} onChange={e => setMetrics(p => p.map((x, j) => j === i ? { ...x, target: e.target.value ? parseFloat(e.target.value) : null } : x))}
-                    style={{ width: '64px', background: t.bg, border: `1px solid ${t.border}`, borderRadius: '6px', color: t.text, padding: '5px 8px', fontSize: '12px', fontFamily: F, outline: 'none' }} />
-
-                  <button onClick={() => setMetrics(p => p.filter((_, j) => j !== i))} style={{ background: 'transparent', border: 'none', color: t.danger, cursor: 'pointer', fontSize: '16px', padding: '2px 8px' }}>×</button>
+                <div style={{ display:'flex', gap:'6px', flexWrap:'wrap', paddingTop:'10px', borderTop:`1px solid ${t.border}` }}>
+                  <input placeholder={s.kpi.nameHolder} value={newMetric.label} onChange={e => setNewMetric(p => ({ ...p, label: e.target.value }))}
+                    style={{ flex:2, minWidth:'120px', background:t.bg, border:`1px solid ${t.border}`, borderRadius:'6px', color:t.text, padding:'5px 8px', fontSize:'12px', fontFamily:F, outline:'none' }} />
+                  <input placeholder={s.kpi.unitHolder} value={newMetric.unit} onChange={e => setNewMetric(p => ({ ...p, unit: e.target.value }))}
+                    style={{ width:'60px', background:t.bg, border:`1px solid ${t.border}`, borderRadius:'6px', color:t.text, padding:'5px 8px', fontSize:'12px', fontFamily:F, outline:'none' }} />
+                  <input placeholder={s.kpi.targetHolder} value={newMetric.target} onChange={e => setNewMetric(p => ({ ...p, target: e.target.value }))}
+                    style={{ width:'64px', background:t.bg, border:`1px solid ${t.border}`, borderRadius:'6px', color:t.text, padding:'5px 8px', fontSize:'12px', fontFamily:F, outline:'none' }} />
+                  <select value={newMetric.category} onChange={e => setNewMetric(p => ({ ...p, category: e.target.value }))}
+                    style={{ background:t.bg, border:`1px solid ${t.border}`, color:t.text, padding:'5px 8px', borderRadius:'6px', fontSize:'12px', fontFamily:F, outline:'none' }}>
+                    <option value="golfe">{s.kpi.golf}</option><option value="ginasio">{s.kpi.gym}</option>
+                  </select>
+                  <button onClick={() => {
+                    if (!newMetric.label) return
+                    setMetrics(p => [...p, { ...newMetric, id: newMetric.label.toLowerCase().replace(/\s+/g, '_') + '_' + Date.now(), target: newMetric.target ? parseFloat(newMetric.target) : null }])
+                    setNewMetric({ label:'', unit:'', category:'golfe', target:'' })
+                  }} style={{ ...btn(true), borderRadius:'6px' }}>{s.kpi.add}</button>
                 </div>
-              ))}
-            </div>
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', paddingTop: '10px', borderTop: `1px solid ${t.border}` }}>
-              <input placeholder={s.kpi.nameHolder} value={newMetric.label} onChange={e => setNewMetric(p => ({ ...p, label: e.target.value }))}
-                style={{ flex: 2, minWidth: '120px', background: t.bg, border: `1px solid ${t.border}`, borderRadius: '6px', color: t.text, padding: '5px 8px', fontSize: '12px', fontFamily: F, outline: 'none' }} />
-              <input placeholder={s.kpi.unitHolder} value={newMetric.unit} onChange={e => setNewMetric(p => ({ ...p, unit: e.target.value }))}
-                style={{ width: '60px', background: t.bg, border: `1px solid ${t.border}`, borderRadius: '6px', color: t.text, padding: '5px 8px', fontSize: '12px', fontFamily: F, outline: 'none' }} />
-              <input placeholder={s.kpi.targetHolder} value={newMetric.target} onChange={e => setNewMetric(p => ({ ...p, target: e.target.value }))}
-                style={{ width: '64px', background: t.bg, border: `1px solid ${t.border}`, borderRadius: '6px', color: t.text, padding: '5px 8px', fontSize: '12px', fontFamily: F, outline: 'none' }} />
-              <select value={newMetric.category} onChange={e => setNewMetric(p => ({ ...p, category: e.target.value }))}
-                style={{ background: t.bg, border: `1px solid ${t.border}`, color: t.text, padding: '5px 8px', borderRadius: '6px', fontSize: '12px', fontFamily: F, outline: 'none' }}>
-                <option value="golfe">{s.kpi.golf}</option><option value="ginasio">{s.kpi.gym}</option>
-              </select>
-              <button onClick={() => {
-                if (!newMetric.label) return
-                setMetrics(p => [...p, { ...newMetric, id: newMetric.label.toLowerCase().replace(/\s+/g, '_') + '_' + Date.now(), target: newMetric.target ? parseFloat(newMetric.target) : null }])
-                setNewMetric({ label: '', unit: '', category: 'golfe', target: '' })
-              }} style={{ ...btn(true), borderRadius: '6px' }}>{s.kpi.add}</button>
-            </div>
-            <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <button onClick={saveKpis} disabled={savingKpis}
-                style={{ background: savingKpis ? t.navActive : t.accent, border: 'none', borderRadius: '6px', color: savingKpis ? t.textMuted : '#fff', padding: '7px 18px', fontFamily: F, fontWeight: 600, fontSize: '12px', cursor: savingKpis ? 'not-allowed' : 'pointer' }}>
-                {savingKpis ? s.kpi.saving : s.kpi.saveBtn}
-              </button>
-              {kpiMsg && <span style={{ fontSize: '12px', color: kpiMsg.startsWith('Erro') || kpiMsg.startsWith('Error') ? t.danger : t.success, fontWeight: 600 }}>{kpiMsg}</span>}
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="pad" style={{ paddingTop: '20px' }}>
-        {loading && <div style={{ padding: '60px', textAlign: 'center', color: t.textMuted, fontSize: '14px' }}>{s.loading}</div>}
-
-        {!loading && view === 'performance' && <Performance theme={theme} t={t} user={user} lang={lang} initialTab={perfTab} trainingPlans={trainingPlans} />}
-
-        {!loading && view === 'home' && <Home theme={theme} t={t} onNavigate={(v, opts) => navigateToView(v, opts)} onRegister={() => setShowRegister(true)} user={user} profile={profile} lang={lang} events={events} trainingPlans={trainingPlans} />}
-
-        {!loading && view === 'history' && (
-          <div>
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
-              <button onClick={() => setChartView('chart')} style={btn(chartView === 'chart')}>{s.chart.chart}</button>
-              <button onClick={() => setChartView('table')} style={btn(chartView === 'table')}>{s.chart.table}</button>
-              {chartView === 'chart' && (
-                <select value={chartMetric} onChange={e => setChartMetric(e.target.value)}
-                  style={{ background: t.surface, border: `1px solid ${t.border}`, color: t.text, padding: '6px 10px', borderRadius: '6px', fontSize: '12px', fontFamily: F, outline: 'none' }}>
-                  {metrics.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
-                </select>
-              )}
-            </div>
-            {chartView === 'chart' && (
-              <div style={card}>
-                <div style={{ fontSize: '10px', letterSpacing: '2px', color: t.textMuted, marginBottom: '12px', fontWeight: 600 }}>
-                  {metrics.find(m => m.id === chartMetric)?.label?.toUpperCase()} — {s.chart.evolution}
+                <div style={{ marginTop:'12px', display:'flex', alignItems:'center', gap:'12px' }}>
+                  <button onClick={saveKpis} disabled={savingKpis}
+                    style={{ background: savingKpis ? t.navActive : t.accent, border:'none', borderRadius:'6px', color: savingKpis ? t.textMuted : '#fff', padding:'7px 18px', fontFamily:F, fontWeight:600, fontSize:'12px', cursor: savingKpis ? 'not-allowed' : 'pointer' }}>
+                    {savingKpis ? s.kpi.saving : s.kpi.saveBtn}
+                  </button>
+                  {kpiMsg && <span style={{ fontSize:'12px', color: kpiMsg.startsWith('Erro') || kpiMsg.startsWith('Error') ? t.danger : t.success, fontWeight:600 }}>{kpiMsg}</span>}
                 </div>
-                <SparkChart data={entries} metricId={chartMetric} unit={metrics.find(m => m.id === chartMetric)?.unit} target={metrics.find(m => m.id === chartMetric)?.target} theme={theme} noDataText={s.chart.noData} targetLabel={s.chart.target} />
+              </div>
+            </div>
+          )}
+
+          {/* Views */}
+          {loading && <div style={{ padding:'60px', textAlign:'center', color:t.textMuted, fontSize:'14px' }}>{s.loading}</div>}
+
+          {!loading && view === 'home' && <Home theme={theme} t={t} onNavigate={(v, opts) => navigateToView(v, opts)} onRegister={() => setShowRegister(true)} user={user} profile={profile} lang={lang} events={events} trainingPlans={trainingPlans} />}
+
+          <div style={{ padding: view === 'home' ? '0' : '24px 32px', flex:1 }}>
+            {!loading && view === 'performance' && <Performance theme={theme} t={t} user={user} lang={lang} initialTab={perfTab} trainingPlans={trainingPlans} />}
+
+            {!loading && view === 'history' && (
+              <div>
+                <div style={{ display:'flex', gap:'8px', marginBottom:'16px', flexWrap:'wrap', alignItems:'center' }}>
+                  <button onClick={() => setChartView('chart')} style={btn(chartView === 'chart')}>{s.chart.chart}</button>
+                  <button onClick={() => setChartView('table')} style={btn(chartView === 'table')}>{s.chart.table}</button>
+                  {chartView === 'chart' && (
+                    <select value={chartMetric} onChange={e => setChartMetric(e.target.value)}
+                      style={{ background:t.surface, border:`1px solid ${t.border}`, color:t.text, padding:'6px 10px', borderRadius:'6px', fontSize:'12px', fontFamily:F, outline:'none' }}>
+                      {metrics.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+                    </select>
+                  )}
+                </div>
+                {chartView === 'chart' && (
+                  <div style={card}>
+                    <div style={{ fontSize:'10px', letterSpacing:'2px', color:t.textMuted, marginBottom:'12px', fontWeight:600 }}>
+                      {metrics.find(m => m.id === chartMetric)?.label?.toUpperCase()} — {s.chart.evolution}
+                    </div>
+                    <SparkChart data={entries} metricId={chartMetric} unit={metrics.find(m => m.id === chartMetric)?.unit} target={metrics.find(m => m.id === chartMetric)?.target} theme={theme} noDataText={s.chart.noData} targetLabel={s.chart.target} />
+                  </div>
+                )}
+                {chartView === 'table' && (
+                  <div style={{ overflowX:'auto', border:`1px solid ${t.border}`, borderRadius:'10px' }}>
+                    <table style={{ width:'100%', borderCollapse:'collapse', fontSize:'13px', minWidth:'500px' }}>
+                      <thead>
+                        <tr style={{ background:t.surface }}>
+                          <th style={{ padding:'10px 14px', textAlign:'left', color:t.textMuted, fontWeight:600, fontSize:'10px', letterSpacing:'2px', borderBottom:`1px solid ${t.border}` }}>{s.table.date}</th>
+                          {metrics.map(m => <th key={m.id} style={{ padding:'10px 8px', textAlign:'center', color:t.textMuted, fontWeight:600, fontSize:'10px', letterSpacing:'1px', borderBottom:`1px solid ${t.border}` }}>{m.label.toUpperCase()}</th>)}
+                          <th style={{ padding:'10px 8px', textAlign:'center', color:t.textMuted, fontWeight:600, fontSize:'10px', borderBottom:`1px solid ${t.border}` }}>{s.table.notes}</th>
+                          <th style={{ borderBottom:`1px solid ${t.border}`, width:'40px' }}></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sortedDates.map(date => (
+                          <tr key={date} style={{ borderTop:`1px solid ${t.border}` }}>
+                            <td style={{ padding:'10px 14px', color:t.textMuted, whiteSpace:'nowrap' }}>{new Date(date + 'T12:00:00').toLocaleDateString('pt-PT')}</td>
+                            {metrics.map(m => {
+                              const entry = dateMap[date]?.[m.id]
+                              return <td key={m.id} style={{ padding:'10px 8px', textAlign:'center', color: entry ? t.accentLight : t.textFaint, fontWeight: entry ? 700 : 400 }}>{entry ? `${entry.value}${m.unit}` : '·'}</td>
+                            })}
+                            <td style={{ padding:'10px 8px', textAlign:'center', color:t.textMuted, fontSize:'12px', maxWidth:'120px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                              {dateMap[date]?.['__notes__']?.value || '·'}
+                            </td>
+                            <td style={{ padding:'10px 8px', textAlign:'center' }}>
+                              <button onClick={() => setDeleteConfirm(date)}
+                                style={{ background:'transparent', border:'none', color:t.textFaint, cursor:'pointer', fontSize:'16px', padding:'2px 6px', lineHeight:1 }}
+                                onMouseEnter={e => e.target.style.color = t.danger}
+                                onMouseLeave={e => e.target.style.color = t.textFaint}>×</button>
+                            </td>
+                          </tr>
+                        ))}
+                        {!sortedDates.length && (
+                          <tr><td colSpan={metrics.length + 3} style={{ padding:'48px', textAlign:'center', color:t.textMuted, fontStyle:'italic' }}>{s.table.empty}</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
-            {chartView === 'table' && (
-              <div style={{ overflowX: 'auto', border: `1px solid ${t.border}`, borderRadius: '10px' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', minWidth: '500px' }}>
-                  <thead>
-                    <tr style={{ background: t.surface }}>
-                      <th style={{ padding: '10px 14px', textAlign: 'left', color: t.textMuted, fontWeight: 600, fontSize: '10px', letterSpacing: '2px', borderBottom: `1px solid ${t.border}` }}>{s.table.date}</th>
-                      {metrics.map(m => <th key={m.id} style={{ padding: '10px 8px', textAlign: 'center', color: t.textMuted, fontWeight: 600, fontSize: '10px', letterSpacing: '1px', borderBottom: `1px solid ${t.border}` }}>{m.label.toUpperCase()}</th>)}
-                      <th style={{ padding: '10px 8px', textAlign: 'center', color: t.textMuted, fontWeight: 600, fontSize: '10px', borderBottom: `1px solid ${t.border}` }}>{s.table.notes}</th>
-                      <th style={{ borderBottom: `1px solid ${t.border}`, width: '40px' }}></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedDates.map(date => (
-                      <tr key={date} style={{ borderTop: `1px solid ${t.border}` }}>
-                        <td style={{ padding: '10px 14px', color: t.textMuted, whiteSpace: 'nowrap' }}>{new Date(date + 'T12:00:00').toLocaleDateString('pt-PT')}</td>
-                        {metrics.map(m => {
-                          const entry = dateMap[date]?.[m.id]
-                          return <td key={m.id} style={{ padding: '10px 8px', textAlign: 'center', color: entry ? t.accentLight : t.textFaint, fontWeight: entry ? 700 : 400 }}>{entry ? `${entry.value}${m.unit}` : '·'}</td>
-                        })}
-                        <td style={{ padding: '10px 8px', textAlign: 'center', color: t.textMuted, fontSize: '12px', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {dateMap[date]?.['__notes__']?.value || '·'}
-                        </td>
-                        <td style={{ padding: '10px 8px', textAlign: 'center' }}>
-                          <button onClick={() => setDeleteConfirm(date)}
-                            style={{ background: 'transparent', border: 'none', color: t.textFaint, cursor: 'pointer', fontSize: '16px', padding: '2px 6px', lineHeight: 1 }}
-                            onMouseEnter={e => e.target.style.color = t.danger}
-                            onMouseLeave={e => e.target.style.color = t.textFaint}>×</button>
-                        </td>
-                      </tr>
-                    ))}
-                    {!sortedDates.length && (
-                      <tr><td colSpan={metrics.length + 3} style={{ padding: '48px', textAlign: 'center', color: t.textMuted, fontStyle: 'italic' }}>{s.table.empty}</td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            )}
+
+            {!loading && view === 'goals'       && <Goals       theme={theme} t={t} user={user} />}
+            {!loading && view === 'training'    && <Training    theme={theme} t={t} user={user} userRole={profile.role} lang={lang} focusDate={trainingFocusDate} onFocusConsumed={() => setTrainingFocusDate(null)} events={events} onPlansChanged={fetchTrainingPlans} />}
+            {!loading && view === 'competition' && <CompStats   theme={theme} t={t} user={user} events={events} />}
+            {!loading && view === 'calendar'    && <Calendar    theme={theme} t={t} user={user} lang={lang} onNavigate={(v, opts) => navigateToView(v, opts)} events={events} trainingPlans={trainingPlans} onEventsChanged={fetchEvents} onPlansChanged={fetchTrainingPlans} initScheduleType={calendarInitSchedule} onInitConsumed={clearCalendarInitSchedule} focusDate={calendarFocusDate} onFocusConsumed={() => setCalendarFocusDate(null)} />}
+            {!loading && view === 'chat'        && <Chat        theme={theme} t={t} user={user} profile={profile} lang={lang} />}
+            {!loading && view === 'hcpwagr'     && <HcpWagr     theme={theme} t={t} user={user} />}
+            {!loading && view === 'microcycles' && <Microcycles theme={theme} t={t} user={user} lang={lang} />}
+            {!loading && view === 'backoffice'  && <Backoffice  theme={theme} t={t} user={user} userRole={profile.role} />}
           </div>
-        )}
-
-        {!loading && view === 'goals' && <Goals theme={theme} t={t} user={user} />}
-        {!loading && view === 'training' && <Training theme={theme} t={t} user={user} userRole={profile.role} lang={lang} focusDate={trainingFocusDate} onFocusConsumed={() => setTrainingFocusDate(null)} events={events} onPlansChanged={fetchTrainingPlans} />}
-        {!loading && view === 'competition' && <CompStats theme={theme} t={t} user={user} events={events} />}
-        {!loading && view === 'calendar' && <Calendar theme={theme} t={t} user={user} lang={lang} onNavigate={(v, opts) => navigateToView(v, opts)} events={events} trainingPlans={trainingPlans} onEventsChanged={fetchEvents} initScheduleType={calendarInitSchedule} onInitConsumed={clearCalendarInitSchedule} />}
-
-                {!loading && view === 'chat' && <Chat theme={theme} t={t} user={user} profile={profile} lang={lang} />}
-        {!loading && view === 'hcpwagr' && <HcpWagr theme={theme} t={t} user={user} />}
-        {!loading && view === 'microcycles' && <Microcycles theme={theme} t={t} user={user} lang={lang} />}
-        {!loading && view === 'backoffice' && <Backoffice theme={theme} t={t} user={user} userRole={profile.role} />}
-
-
+        </div>
       </div>
     </div>
   )
