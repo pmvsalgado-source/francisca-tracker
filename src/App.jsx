@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from './lib/supabase'
 import Login from './components/Login'
 import Dashboard from './components/Dashboard'
+import ErrorBoundary from './components/ErrorBoundary'
 
 // Read URL hash synchronously — Supabase appends #access_token=...&type=recovery
 function isRecoveryUrl() {
@@ -50,5 +51,5 @@ export default function App() {
   )
 
   if (needsPasswordReset) return <Login initialMode="reset" onPasswordReset={() => setNeedsPasswordReset(false)} />
-  return user ? <Dashboard user={user} /> : <Login />
+  return user ? <ErrorBoundary><Dashboard user={user} /></ErrorBoundary> : <Login />
 }
