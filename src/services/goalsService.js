@@ -34,3 +34,17 @@ export async function deleteGoal(id) {
     throw error
   }
 }
+
+// All performance entries, ordered by date — used by GoalChart to render progress.
+// Future: could move to entriesService/performanceService if other views need the same query.
+export async function getGoalEntries() {
+  const { data, error } = await supabase
+    .from('entries')
+    .select('*')
+    .order('entry_date')
+  if (error) {
+    Sentry.captureException(error, { extra: { context: 'goalsService.getGoalEntries' } })
+    throw error
+  }
+  return data
+}

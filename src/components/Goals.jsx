@@ -1,5 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { supabase } from '../lib/supabase'
+import {
+  getGoals,
+  saveGoal as saveGoalSvc,
+  deleteGoal as deleteGoalSvc,
+  getGoalEntries,
+} from '../services/goalsService'
 import { DEFAULT_METRICS } from '../constants/metrics'
 import EmptyState from './EmptyState'
 
@@ -191,17 +196,23 @@ export default function Goals({ theme, t, user }) {
   const inp = { background: t.bg, border: `1px solid ${t.border}`, borderRadius: '6px', color: t.text, padding: '7px 10px', fontSize: '13px', fontFamily: F, outline: 'none', width: '100%', boxSizing: 'border-box' }
 
   const fetchGoals = useCallback(async () => {
-    const { data, error } = await supabase.from('goals').select('*').order('created_at', { ascending: false })
-    if (error) { console.error('fetchGoals:', error); setFetchError(error.message || 'Erro ao carregar objectivos.'); setRetrying(false); return }
-    setFetchError(null)
-    setRetrying(false)
-    setGoals(data || [])
+    try {
+      const data = await getGoals()
+      setFetchError(null)
+      setRetrying(false)
+      setGoals(data || [])
+    } catch (err) {
+      console.error('fetchGoals:', err)
+      setFetchError(err.message || 'Erro ao carregar objectivos.')
+      setRetrying(false)
+    }
   }, [])
 
   const fetchEntries = useCallback(async () => {
-    const { data, error } = await supabase.from('entries').select('*').order('entry_date')
-    if (error) { console.error('fetchEntries:', error); return }
-    setEntries(data || [])
+    try {
+      const data = await getGoalEntries()
+      setEntries(data || [])
+    } catch (err) { console.error('fetchEntries:', err) }
   }, [])
 
   useEffect(() => { fetchGoals(); fetchEntries() }, [fetchGoals, fetchEntries])
@@ -225,26 +236,27 @@ export default function Goals({ theme, t, user }) {
     setSaving(true)
     setSaveError(null)
     const payload = { ...form, updated_by: user.email, updated_at: new Date().toISOString() }
-    let result
-    if (editGoal) {
-      result = await supabase.from('goals').update(payload).eq('id', editGoal.id)
-    } else {
-      result = await supabase.from('goals').insert({ ...payload, created_by: user.email })
+    try {
+      if (editGoal) {
+        await saveGoalSvc(payload, editGoal.id)
+      } else {
+        await saveGoalSvc({ ...payload, created_by: user.email })
+      }
+      setSaving(false)
+      setShowModal(false)
+      fetchGoals()
+    } catch (err) {
+      console.error('saveGoal:', err)
+      setSaving(false)
+      setSaveError(err.message || 'Erro ao guardar.')
     }
-    setSaving(false)
-    if (result?.error) {
-      console.error('saveGoal:', result.error)
-      setSaveError(result.error.message || 'Erro ao guardar.')
-      return
-    }
-    setShowModal(false)
-    fetchGoals()
   }
 
   const deleteGoal = async () => {
     if (!deleteConfirm) return
-    const { error } = await supabase.from('goals').delete().eq('id', deleteConfirm.id)
-    if (error) { console.error('deleteGoal:', error); return }
+    try {
+      await deleteGoalSvc(deleteConfirm.id)
+    } catch (err) { console.error('deleteGoal:', err); return }
     setDeleteConfirm(null)
     fetchGoals()
   }
