@@ -59,7 +59,7 @@ export default function CompStats({ theme, t, user, events = [] }) {
     setLoading(true)
     try {
       // RLS in Supabase should restrict competition_stats to the authenticated user.
-      const { data, error } = await supabase.from('competition_stats').select('*').order('event_date', { ascending: false })
+      const { data, error } = await supabase.from('competition_stats').select('*').order('event_date', { ascending: false }).limit(500)
       if (error) throw error
       setStats(data || [])
     } catch (err) {

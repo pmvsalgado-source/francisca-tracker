@@ -24,10 +24,10 @@ export default function Backoffice({ theme, t, user, userRole = '' }) {
   const fetchAll = useCallback(async () => {
     setLoading(true)
     const [e, m, c, g] = await Promise.all([
-      supabase.from('entries').select('*').order('entry_date', { ascending: false }),
-      supabase.from('messages').select('*').order('created_at', { ascending: false }),
-      supabase.from('competition_stats').select('*').order('event_date', { ascending: false }),
-      supabase.from('goals').select('*').order('created_at', { ascending: false }),
+      supabase.from('entries').select('*').order('entry_date', { ascending: false }).limit(500),
+      supabase.from('messages').select('*').order('created_at', { ascending: false }).limit(1000),
+      supabase.from('competition_stats').select('*').order('event_date', { ascending: false }).limit(500),
+      supabase.from('goals').select('*').order('created_at', { ascending: false }).limit(500),
     ])
     setEntries(e.data || [])
     setMessages(m.data || [])
