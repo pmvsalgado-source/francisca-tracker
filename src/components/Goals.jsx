@@ -171,6 +171,7 @@ export default function Goals({ theme, t, user }) {
   const [editGoal, setEditGoal] = useState(null)
   const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState(null)
   const [form, setForm] = useState({
     metric_id: 'swing_speed',
     metric_label: 'Swing Speed',
@@ -187,12 +188,14 @@ export default function Goals({ theme, t, user }) {
   const inp = { background: t.bg, border: `1px solid ${t.border}`, borderRadius: '6px', color: t.text, padding: '7px 10px', fontSize: '13px', fontFamily: F, outline: 'none', width: '100%', boxSizing: 'border-box' }
 
   const fetchGoals = useCallback(async () => {
-    const { data } = await supabase.from('goals').select('*').order('created_at', { ascending: false })
+    const { data, error } = await supabase.from('goals').select('*').order('created_at', { ascending: false })
+    if (error) { console.error('fetchGoals:', error); return }
     setGoals(data || [])
   }, [])
 
   const fetchEntries = useCallback(async () => {
-    const { data } = await supabase.from('entries').select('*').order('entry_date')
+    const { data, error } = await supabase.from('entries').select('*').order('entry_date')
+    if (error) { console.error('fetchEntries:', error); return }
     setEntries(data || [])
   }, [])
 
@@ -200,12 +203,14 @@ export default function Goals({ theme, t, user }) {
 
   const openNew = () => {
     setEditGoal(null)
+    setSaveError(null)
     setForm({ metric_id: 'swing_speed', metric_label: 'Swing Speed', unit: 'mph', start_value: '', target_value: '', start_date: new Date().toISOString().split('T')[0], end_date: '', notes: '' })
     setShowModal(true)
   }
 
   const openEdit = (g) => {
     setEditGoal(g)
+    setSaveError(null)
     setForm({ metric_id: g.metric_id, metric_label: g.metric_label, unit: g.unit || '', start_value: g.start_value, target_value: g.target_value, start_date: g.start_date, end_date: g.end_date, notes: g.notes || '' })
     setShowModal(true)
   }
@@ -213,20 +218,28 @@ export default function Goals({ theme, t, user }) {
   const saveGoal = async () => {
     if (!form.target_value || !form.end_date || !form.start_value) return
     setSaving(true)
+    setSaveError(null)
     const payload = { ...form, updated_by: user.email, updated_at: new Date().toISOString() }
+    let result
     if (editGoal) {
-      await supabase.from('goals').update(payload).eq('id', editGoal.id)
+      result = await supabase.from('goals').update(payload).eq('id', editGoal.id)
     } else {
-      await supabase.from('goals').insert({ ...payload, created_by: user.email })
+      result = await supabase.from('goals').insert({ ...payload, created_by: user.email })
     }
     setSaving(false)
+    if (result?.error) {
+      console.error('saveGoal:', result.error)
+      setSaveError(result.error.message || 'Erro ao guardar.')
+      return
+    }
     setShowModal(false)
     fetchGoals()
   }
 
   const deleteGoal = async () => {
     if (!deleteConfirm) return
-    await supabase.from('goals').delete().eq('id', deleteConfirm.id)
+    const { error } = await supabase.from('goals').delete().eq('id', deleteConfirm.id)
+    if (error) { console.error('deleteGoal:', error); return }
     setDeleteConfirm(null)
     fetchGoals()
   }
@@ -316,6 +329,12 @@ export default function Goals({ theme, t, user }) {
                   style={{ ...inp, minHeight: '60px', resize: 'vertical' }} />
               </div>
             </div>
+
+            {saveError && (
+              <div style={{ color: t.danger, fontSize: '12px', padding: '8px 10px', background: t.dangerBg || '#1a0808', borderRadius: '6px', marginTop: '12px', borderLeft: `3px solid ${t.danger}` }}>
+                ⚠ {saveError}
+              </div>
+            )}
 
             <div style={{ display: 'flex', gap: '10px', marginTop: '20px', justifyContent: 'space-between' }}>
               <div>
