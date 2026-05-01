@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { supabase } from '../lib/supabase'
+import { getBackofficeData, getMoreEntries, getMoreMessages } from '../services/backofficeService'
 
 import { COACH_ROLES } from '../constants/roles'
 import { PAGE_SIZE, MESSAGES_PAGE_SIZE } from '../constants/pagination'
@@ -29,25 +29,18 @@ export default function Backoffice({ theme, t, user, userRole = '' }) {
 
   const fetchAll = useCallback(async () => {
     setLoading(true)
-    const [e, m, c, g] = await Promise.all([
-      supabase.from('entries').select('*').order('entry_date', { ascending: false }).range(0, PAGE_SIZE - 1),
-      supabase.from('messages').select('*').order('created_at', { ascending: false }).range(0, MESSAGES_PAGE_SIZE - 1),
-      supabase.from('competition_stats').select('*').order('event_date', { ascending: false }).range(0, PAGE_SIZE - 1),
-      supabase.from('goals').select('*').order('created_at', { ascending: false }).range(0, PAGE_SIZE - 1),
-    ])
-    const eRows = e.data || []
-    const mRows = m.data || []
+    const { entries: eRows, messages: mRows, competitions: cRows, goals: gRows } = await getBackofficeData()
     setEntries(eRows)
     setMessages(mRows)
-    setCompetitions(c.data || [])
-    setGoals(g.data || [])
+    setCompetitions(cRows)
+    setGoals(gRows)
     setHasMoreEntries(eRows.length === PAGE_SIZE)
     setHasMoreMessages(mRows.length === MESSAGES_PAGE_SIZE)
 
     // Unique users from entries + messages
     const emailSet = new Set()
     const userList = []
-    ;[...(e.data || []), ...(m.data || [])].forEach(row => {
+    ;[...eRows, ...mRows].forEach(row => {
       const email = row.updated_by || row.user_email || ''
       if (email && !emailSet.has(email)) {
         emailSet.add(email)
@@ -63,8 +56,7 @@ export default function Backoffice({ theme, t, user, userRole = '' }) {
 
   const loadMoreEntries = async () => {
     setLoadingMoreEntries(true)
-    const { data } = await supabase.from('entries').select('*').order('entry_date', { ascending: false }).range(entries.length, entries.length + PAGE_SIZE - 1)
-    const rows = data || []
+    const rows = await getMoreEntries(entries.length)
     setEntries(prev => [...prev, ...rows])
     setHasMoreEntries(rows.length === PAGE_SIZE)
     setLoadingMoreEntries(false)
@@ -72,8 +64,7 @@ export default function Backoffice({ theme, t, user, userRole = '' }) {
 
   const loadMoreMessages = async () => {
     setLoadingMoreMessages(true)
-    const { data } = await supabase.from('messages').select('*').order('created_at', { ascending: false }).range(messages.length, messages.length + MESSAGES_PAGE_SIZE - 1)
-    const rows = data || []
+    const rows = await getMoreMessages(messages.length)
     setMessages(prev => [...prev, ...rows])
     setHasMoreMessages(rows.length === MESSAGES_PAGE_SIZE)
     setLoadingMoreMessages(false)
