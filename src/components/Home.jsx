@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { findCurrentPlan } from '../lib/trainingPlanUtils'
-import { supabase } from '../lib/supabase'
+import { getHomeEntries, getHomeCompStats, getHomeCompConfig, getHomeWagrHistory, getHomeProfile, getHomeGoals, getSwingGoal, updateAthleteProfile, updateKpiOrder, updateStatPrefs } from '../services/homeService'
 import { calcCurrentPhase, isCompetition, getUpcomingCompetitions } from '../lib/periodization'
 import { getPlansForDate } from '../lib/trainingUtils'
 import { ACTIVITY_COLORS } from '../constants/eventCategories'
@@ -518,38 +518,37 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   const [athleteSaving, setAthleteSaving] = useState(false)
 
   useEffect(() => {
-    supabase.from('entries').select('*').order('entry_date', { ascending: true }).then(({ data }) => setEntries(data || [])).catch(console.error)
-    supabase.from('competition_stats').select('*').order('event_date', { ascending: false }).then(({ data }) => setCompStats(data || [])).catch(console.error)
-    supabase.from('comp_config').select('*').order('sort_order', { ascending: true }).then(({ data }) => { if (data?.length) setCompConfig(data) }).catch(console.error)
+    getHomeEntries().then(data => setEntries(data)).catch(console.error)
+    getHomeCompStats().then(data => setCompStats(data)).catch(console.error)
+    getHomeCompConfig().then(data => { if (data.length) setCompConfig(data) }).catch(console.error)
     if (user?.id) {
-      supabase.from('wagr_history').select('*').eq('user_id', user.id).then(({ data }) => setWagrHistory(data || [])).catch(console.error)
-      supabase.from('profiles').select('hcp,wagr,prev_hcp,prev_wagr,athlete_club,category,fed,fed_num,home_kpi_order,home_stat_prefs').eq('id', user.id).single()
-        .then(({ data }) => {
-          if (data) {
-            const a = {
-              hcp: data.hcp || '1.1',
-              wagr: data.wagr || '—',
-              prev_hcp: data.prev_hcp || null,
-              prev_wagr: data.prev_wagr || null,
-              club: data.athlete_club || 'Vale de Janelas',
-              category: data.category || 'Sub-18',
-              fed: data.fed || 'FPG',
-              fed_num: data.fed_num || '43832',
-            }
-            setAthlete(a); setAthleteForm(a)
-            if (data.home_kpi_order) {
-              try { setKpiOrder(JSON.parse(data.home_kpi_order)) } catch (_) {}
-            }
-            if (data.home_stat_prefs) {
-              try { setStatPrefs(JSON.parse(data.home_stat_prefs)) } catch (_) {}
-            }
+      getHomeWagrHistory(user.id).then(data => setWagrHistory(data)).catch(console.error)
+      getHomeProfile(user.id).then(data => {
+        if (data) {
+          const a = {
+            hcp: data.hcp || '1.1',
+            wagr: data.wagr || '—',
+            prev_hcp: data.prev_hcp || null,
+            prev_wagr: data.prev_wagr || null,
+            club: data.athlete_club || 'Vale de Janelas',
+            category: data.category || 'Sub-18',
+            fed: data.fed || 'FPG',
+            fed_num: data.fed_num || '43832',
           }
-        })
+          setAthlete(a); setAthleteForm(a)
+          if (data.home_kpi_order) {
+            try { setKpiOrder(JSON.parse(data.home_kpi_order)) } catch (_) {}
+          }
+          if (data.home_stat_prefs) {
+            try { setStatPrefs(JSON.parse(data.home_stat_prefs)) } catch (_) {}
+          }
+        }
+      })
     }
   }, [user])
 
   useEffect(() => {
-    supabase.from('goals').select('*').order('created_at', { ascending: false }).then(({ data }) => setGoals(data || [])).catch(console.error)
+    getHomeGoals().then(data => setGoals(data)).catch(console.error)
   }, [])
 
   const saveAthlete = async () => {
@@ -567,8 +566,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
       }
       if (athlete.hcp !== athleteForm.hcp && toVal(athlete.hcp)) updatePayload.prev_hcp = toVal(athlete.hcp)
       if (athlete.wagr !== athleteForm.wagr && toVal(athlete.wagr)) updatePayload.prev_wagr = toVal(athlete.wagr)
-      const { error } = await supabase.from('profiles').update(updatePayload).eq('id', user.id)
-      if (error) throw error
+      await updateAthleteProfile(user.id, updatePayload)
       setAthlete(athleteForm); setEditingAthlete(false)
     } catch (err) {
       console.error('saveAthlete:', err)
@@ -581,7 +579,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
     if (!user?.id) return
     setSavingPrefs(true)
     try {
-      await supabase.from('profiles').update({ home_kpi_order: JSON.stringify(order) }).eq('id', user.id)
+      await updateKpiOrder(user.id, order)
     } catch (err) {
       console.error('saveKpiPrefs:', err)
     } finally {
@@ -592,7 +590,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   const saveStatPrefs = async (keys) => {
     if (!user?.id) return
     try {
-      await supabase.from('profiles').update({ home_stat_prefs: JSON.stringify(keys) }).eq('id', user.id)
+      await updateStatPrefs(user.id, keys)
     } catch (err) {
       console.error('saveStatPrefs:', err)
     }
@@ -615,8 +613,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
 
   const [swingGoal, setSwingGoal] = useState(null)
   useEffect(() => {
-    supabase.from('goals').select('*').eq('metric_id', 'swing_speed').order('created_at', { ascending: false }).limit(1)
-      .then(({ data }) => { if (data && data.length > 0) setSwingGoal(data[0]) })
+    getSwingGoal().then(goal => { if (goal) setSwingGoal(goal) })
   }, [])
   const swingTarget = swingGoal ? parseFloat(swingGoal.target_value) : 95
   const pct = lastSwing ? Math.min(100, Math.round((lastSwing / swingTarget) * 100)) : 0
