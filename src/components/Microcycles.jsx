@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { supabase } from '../lib/supabase'
+import { getMicrocycles, getRecentEntries, insertMicrocycle, deleteMicrocycle } from '../services/microcyclesService'
 
 export default function Microcycles({ theme, t, user, lang = 'en' }) {
   const [cycles, setCycles] = useState([])
@@ -44,8 +44,8 @@ export default function Microcycles({ theme, t, user, lang = 'en' }) {
 
   const fetchCycles = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase.from('microcycles').select('*').order('week_start', { ascending: false })
-    setCycles(data || [])
+    const data = await getMicrocycles()
+    setCycles(data)
     setLoading(false)
   }, [])
 
@@ -57,8 +57,8 @@ export default function Microcycles({ theme, t, user, lang = 'en' }) {
     const week = getWeekDates(weekOffset)
 
     // Fetch recent entries for context
-    const { data: entries } = await supabase.from('entries').select('*').order('entry_date', { ascending: false }).limit(30)
-    const summary = entries?.map(e => `${e.entry_date} ${e.metric_id}: ${e.value}`).join('\n') || 'Sem dados'
+    const entries = await getRecentEntries()
+    const summary = entries.map(e => `${e.entry_date} ${e.metric_id}: ${e.value}`).join('\n') || 'Sem dados'
 
     const prompt = `És um treinador de golfe e preparador físico especializado. Com base nos dados de performance abaixo, cria um microciclo semanal detalhado para a semana de ${week.start} a ${week.end}.
 
@@ -99,7 +99,7 @@ Responde APENAS com JSON válido neste formato exacto (sem markdown, sem explica
         return
       }
 
-      await supabase.from('microcycles').insert({
+      await insertMicrocycle({
         week_start: week.start, week_end: week.end,
         generated_plan: plan, created_by: user.email
       })
@@ -112,7 +112,7 @@ Responde APENAS com JSON válido neste formato exacto (sem markdown, sem explica
   }
 
   const deleteCycle = async (id) => {
-    await supabase.from('microcycles').delete().eq('id', id)
+    await deleteMicrocycle(id)
     fetchCycles()
   }
 
