@@ -107,3 +107,68 @@ export async function signOut() {
     throw error
   }
 }
+
+export async function getHcpWagrData() {
+  const [tournaments, wagrHistory, hcpHistory] = await Promise.all([
+    supabase.from('wagr_tournaments').select('*').order('year').then(r => r.data || []),
+    supabase.from('wagr_history').select('*').order('year').then(r => r.data || []),
+    supabase.from('hcp_history').select('*').order('date', { ascending: false }).then(r => r.data || []),
+  ])
+  return { tournaments, wagrHistory, hcpHistory }
+}
+
+export async function saveWagrTournament(payload, id = null) {
+  if (id) {
+    const { error } = await supabase.from('wagr_tournaments').update(payload).eq('id', id)
+    if (error) {
+      Sentry.captureException(error, { extra: { context: 'profileService.saveWagrTournament (update)', id } })
+      throw error
+    }
+    return
+  }
+  const { error } = await supabase.from('wagr_tournaments').insert(payload)
+  if (error) {
+    Sentry.captureException(error, { extra: { context: 'profileService.saveWagrTournament (insert)' } })
+    throw error
+  }
+}
+
+export async function deleteWagrTournament(id) {
+  const { error } = await supabase.from('wagr_tournaments').delete().eq('id', id)
+  if (error) {
+    Sentry.captureException(error, { extra: { context: 'profileService.deleteWagrTournament', id } })
+    throw error
+  }
+}
+
+export async function saveWagrHistory(payload) {
+  const { error } = await supabase.from('wagr_history').insert(payload)
+  if (error) {
+    Sentry.captureException(error, { extra: { context: 'profileService.saveWagrHistory' } })
+    throw error
+  }
+}
+
+export async function deleteWagrHistory(id) {
+  const { error } = await supabase.from('wagr_history').delete().eq('id', id)
+  if (error) {
+    Sentry.captureException(error, { extra: { context: 'profileService.deleteWagrHistory', id } })
+    throw error
+  }
+}
+
+export async function saveHcpEntry(payload) {
+  const { error } = await supabase.from('hcp_history').insert(payload)
+  if (error) {
+    Sentry.captureException(error, { extra: { context: 'profileService.saveHcpEntry' } })
+    throw error
+  }
+}
+
+export async function deleteHcpEntry(id) {
+  const { error } = await supabase.from('hcp_history').delete().eq('id', id)
+  if (error) {
+    Sentry.captureException(error, { extra: { context: 'profileService.deleteHcpEntry', id } })
+    throw error
+  }
+}

@@ -1,6 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
-import { supabase } from '../lib/supabase'
 import { PAGE_SIZE } from '../constants/pagination'
+import {
+  getCompetitions,
+  saveCompetition,
+  deleteCompetition,
+  getCompConfig,
+  saveCompConfig,
+} from '../services/competitionsService'
 
 // comp_config table needed: id (uuid pk), stat_fields (jsonb), visible_columns (jsonb), summary_cards (jsonb), updated_at (timestamptz)
 import EmptyState from './EmptyState'
@@ -63,9 +69,7 @@ export default function CompStats({ theme, t, user, events = [] }) {
   const fetchData = useCallback(async () => {
     setLoading(true)
     try {
-      const { data, error } = await supabase.from('competition_stats').select('*').order('event_date', { ascending: false }).range(0, PAGE_SIZE - 1)
-      if (error) throw error
-      const rows = data || []
+      const rows = await getCompetitions()
       setStats(rows)
       setHasMore(rows.length === PAGE_SIZE)
       setFetchError(null)
@@ -79,8 +83,7 @@ export default function CompStats({ theme, t, user, events = [] }) {
 
   const fetchConfig = useCallback(async () => {
     try {
-      const { data, error } = await supabase.from('comp_config').select('*').limit(1).maybeSingle()
-      if (error) throw error
+      const data = await getCompConfig()
       if (data) {
         setConfigId(data.id)
         if (data.stat_fields?.length) setStatFields(data.stat_fields)
@@ -97,9 +100,7 @@ export default function CompStats({ theme, t, user, events = [] }) {
   const loadMoreStats = async () => {
     setLoadingMore(true)
     try {
-      const { data, error } = await supabase.from('competition_stats').select('*').order('event_date', { ascending: false }).range(stats.length, stats.length + PAGE_SIZE - 1)
-      if (error) throw error
-      const rows = data || []
+      const rows = await getCompetitions({ offset: stats.length })
       setStats(prev => [...prev, ...rows])
       setHasMore(rows.length === PAGE_SIZE)
     } catch (err) {
@@ -121,14 +122,8 @@ export default function CompStats({ theme, t, user, events = [] }) {
   const persistConfig = async (fields, columns, cards) => {
     try {
       const payload = { stat_fields: fields, visible_columns: columns, summary_cards: cards, updated_at: new Date().toISOString() }
-      if (configId) {
-        const { error } = await supabase.from('comp_config').update(payload).eq('id', configId)
-        if (error) throw error
-      } else {
-        const { data, error } = await supabase.from('comp_config').insert(payload).select().maybeSingle()
-        if (error) throw error
-        if (data?.id) setConfigId(data.id)
-      }
+      const result = await saveCompConfig(payload, configId || null)
+      if (!configId && result?.id) setConfigId(result.id)
     } catch (err) {
       console.error('persistConfig:', err)
     }
@@ -172,16 +167,11 @@ export default function CompStats({ theme, t, user, events = [] }) {
       notes: form.notes || null,
     }
 
-    let result
-    if (editStat) {
-      result = await supabase.from('competition_stats').update(payload).eq('id', editStat.id)
-    } else {
-      result = await supabase.from('competition_stats').insert(payload)
-    }
-
-    if (result?.error) {
-      console.error('[CompStats] save error:', result.error)
-      setSaveError(result.error.message || 'Erro ao guardar. Verifica a consola.')
+    try {
+      await saveCompetition(payload, editStat ? editStat.id : null)
+    } catch (err) {
+      console.error('[CompStats] save error:', err)
+      setSaveError(err.message || 'Erro ao guardar. Verifica a consola.')
       setSaving(false)
       return
     }
@@ -194,8 +184,7 @@ export default function CompStats({ theme, t, user, events = [] }) {
   const confirmDelete = async () => {
     if (!deleteConfirm) return
     try {
-      const { error } = await supabase.from('competition_stats').delete().eq('id', deleteConfirm.id)
-      if (error) throw error
+      await deleteCompetition(deleteConfirm.id)
       setDeleteConfirm(null)
       fetchData()
     } catch (err) {

@@ -39,3 +39,29 @@ export async function deleteCompetition(id) {
     throw error
   }
 }
+
+export async function getCompConfig() {
+  const { data, error } = await supabase.from('comp_config').select('*').limit(1).maybeSingle()
+  if (error) {
+    Sentry.captureException(error, { extra: { context: 'competitionsService.getCompConfig' } })
+    throw error
+  }
+  return data
+}
+
+export async function saveCompConfig(payload, id = null) {
+  if (id) {
+    const { error } = await supabase.from('comp_config').update(payload).eq('id', id)
+    if (error) {
+      Sentry.captureException(error, { extra: { context: 'competitionsService.saveCompConfig (update)', id } })
+      throw error
+    }
+    return null
+  }
+  const { data, error } = await supabase.from('comp_config').insert(payload).select().maybeSingle()
+  if (error) {
+    Sentry.captureException(error, { extra: { context: 'competitionsService.saveCompConfig (insert)' } })
+    throw error
+  }
+  return data
+}

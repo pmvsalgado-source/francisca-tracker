@@ -1,6 +1,14 @@
 import { useState, useEffect, useCallback } from 'react'
-import { supabase } from '../lib/supabase'
 import EmptyState from './EmptyState'
+import {
+  getHcpWagrData,
+  saveWagrTournament,
+  deleteWagrTournament,
+  saveWagrHistory,
+  deleteWagrHistory,
+  saveHcpEntry,
+  deleteHcpEntry,
+} from '../services/profileService'
 
 // ── helpers ────────────────────────────────────────────────────────────────
 function getISOWeek(date) {
@@ -97,11 +105,7 @@ export default function HcpWagr({ theme, t, user }) {
   // ── fetch ──
   const fetchAll = useCallback(async () => {
     setLoading(true)
-    const [wt, wh, hh] = await Promise.all([
-      supabase.from('wagr_tournaments').select('*').order('year').then(r => r.data || []),
-      supabase.from('wagr_history').select('*').order('year').then(r => r.data || []),
-      supabase.from('hcp_history').select('*').order('date', { ascending: false }).then(r => r.data || []),
-    ])
+    const { tournaments: wt, wagrHistory: wh, hcpHistory: hh } = await getHcpWagrData()
     setTournaments(wt)
     setWagrHistory(wh)
     setHcpHistory(hh)
@@ -136,20 +140,16 @@ export default function HcpWagr({ theme, t, user }) {
       is_simulated: tForm.is_simulated,
       user_id: user?.id,
     }
-    if (editingT) {
-      await supabase.from('wagr_tournaments').update(payload).eq('id', editingT.id)
-    } else {
-      await supabase.from('wagr_tournaments').insert(payload)
-    }
+    await saveWagrTournament(payload, editingT ? editingT.id : null)
     setShowTModal(false)
     fetchAll()
   }
   const doDelete = async () => {
     if (!deleteConfirm) return
     const { type, id } = deleteConfirm
-    if (type === 't') await supabase.from('wagr_tournaments').delete().eq('id', id)
-    else if (type === 'h') await supabase.from('wagr_history').delete().eq('id', id)
-    else if (type === 'hcp') await supabase.from('hcp_history').delete().eq('id', id)
+    if (type === 't') await deleteWagrTournament(id)
+    else if (type === 'h') await deleteWagrHistory(id)
+    else if (type === 'hcp') await deleteHcpEntry(id)
     setDeleteConfirm(null)
     fetchAll()
   }
@@ -158,7 +158,7 @@ export default function HcpWagr({ theme, t, user }) {
 
   // ── WAGR History CRUD ──
   const saveH = async () => {
-    await supabase.from('wagr_history').insert({
+    await saveWagrHistory({
       week: parseInt(hForm.week),
       year: parseInt(hForm.year),
       reference_date: hForm.reference_date,
@@ -173,7 +173,7 @@ export default function HcpWagr({ theme, t, user }) {
 
   // ── HCP CRUD ──
   const saveHcp = async () => {
-    await supabase.from('hcp_history').insert({
+    await saveHcpEntry({
       date: hcpForm.date,
       hcp: parseFloat(hcpForm.hcp),
       notes: hcpForm.notes || null,
