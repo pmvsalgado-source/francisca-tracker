@@ -1,6 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { supabase } from '../lib/supabase'
 import Goals from './Goals'
+import {
+  getMetrics,
+  getEntries,
+  saveEntries,
+  deleteEntries,
+  saveMetrics,
+  upsertMetric,
+} from '../services/dashboardService'
 import HcpWagr from './HcpWagr'
 import { DEFAULT_METRICS } from '../constants/metrics'
 
@@ -100,8 +107,8 @@ export default function Performance({ theme, t, user, lang = 'en', initialTab = 
 
   const fetchMetrics = useCallback(async () => {
     try {
-      const { data, error } = await supabase.from('metrics').select('*').order('sort_order', { ascending: true })
-      if (!error && data && data.length > 0) {
+      const data = await getMetrics()
+      if (data && data.length > 0) {
         setMetrics(data.map(m => ({ id: m.metric_id, label: m.label, unit: m.unit || '', category: m.category || 'golfe', target: m.target ? parseFloat(m.target) : null, active: m.active !== false })))
       }
     } catch (_) {}
@@ -110,8 +117,7 @@ export default function Performance({ theme, t, user, lang = 'en', initialTab = 
   const fetchEntries = useCallback(async () => {
     setLoading(true)
     try {
-      const { data, error } = await supabase.from('entries').select('*').order('entry_date', { ascending: true })
-      if (error) throw error
+      const data = await getEntries()
       setEntries(data || [])
     } catch (e) {
       console.error('Erro ao carregar registos:', e)
@@ -130,8 +136,7 @@ export default function Performance({ theme, t, user, lang = 'en', initialTab = 
         .map(([metric_id, value]) => ({ metric_id, value: String(value), entry_date: form.date, updated_by: user.email, updated_at: new Date().toISOString() }))
       if (form.notes) rows.push({ metric_id: '__notes__', value: form.notes, entry_date: form.date, updated_by: user.email, updated_at: new Date().toISOString() })
       if (!rows.length) { setSaving(false); setSaveError('Nenhum valor introduzido.'); return }
-      const { error } = await supabase.from('entries').upsert(rows, { onConflict: 'entry_date,metric_id' })
-      if (error) throw error
+      await saveEntries(rows)
       setSavedMsg('Guardado ✓'); setTimeout(() => setSavedMsg(''), 3000)
       setForm(p => ({ ...p, values: {}, notes: '' }))
       fetchEntries()
@@ -146,7 +151,7 @@ export default function Performance({ theme, t, user, lang = 'en', initialTab = 
       const ids = dateMap[date] ? Object.values(dateMap[date]).map(e => e.id).filter(Boolean) : []
       const noteEntry = entries.find(e => e.entry_date === date && e.metric_id === '__notes__')
       if (noteEntry) ids.push(noteEntry.id)
-      for (const id of ids) await supabase.from('entries').delete().eq('id', id)
+      await deleteEntries(ids)
     } catch (e) {
       console.error('Erro ao apagar:', e)
     }
@@ -161,8 +166,7 @@ export default function Performance({ theme, t, user, lang = 'en', initialTab = 
         category: m.category || 'golfe', target: m.target || null,
         sort_order: i, created_by: user.email, active: m.active !== false,
       }))
-      const { error } = await supabase.rpc('save_metrics', { metrics_data: metricsData })
-      if (error) throw error
+      await saveMetrics(metricsData)
       setKpiMsg('Prioridades guardadas ✓')
     } catch (e) {
       const msg = e?.message || ''
@@ -170,11 +174,11 @@ export default function Performance({ theme, t, user, lang = 'en', initialTab = 
         // Fallback: upsert individually
         try {
           for (const m of metrics) {
-            await supabase.from('metrics').upsert({
+            await upsertMetric({
               metric_id: m.id, label: m.label, unit: m.unit || '',
               category: m.category || 'golfe', target: m.target || null,
               active: m.active !== false, created_by: user.email,
-            }, { onConflict: 'metric_id' })
+            })
           }
           setKpiMsg('Prioridades guardadas ✓')
         } catch (e2) {

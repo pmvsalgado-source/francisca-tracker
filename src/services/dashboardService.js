@@ -51,3 +51,11 @@ export async function deleteEntries(ids) {
     }
   }
 }
+
+export async function upsertMetric(payload) {
+  const { error } = await supabase.from('metrics').upsert(payload, { onConflict: 'metric_id' })
+  if (error) {
+    Sentry.captureException(error, { extra: { context: 'dashboardService.upsertMetric' } })
+    throw error
+  }
+}
