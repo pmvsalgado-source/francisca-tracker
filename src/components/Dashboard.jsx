@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
 import Goals from './Goals'
 import Chat from './Chat'
 import Microcycles from './Microcycles'
+import logo from '../assets/logo.png'
 
 const Home = lazy(() => import('./Home'))
 const Training = lazy(() => import('./Training'))
@@ -789,7 +790,7 @@ export default function Dashboard({ user }) {
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 24px', height:'64px', background:t.surface, borderBottom:`1px solid ${t.border}`, flexShrink:0, zIndex:10 }}>
         {/* Logo */}
         <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
-          <div style={{ width:'38px', height:'38px', borderRadius:'10px', background:'#ef4444', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'20px', color:'#fff', flexShrink:0 }}>⛳</div>
+          <img src={logo} alt="Team F1" style={{ height:'38px', width:'auto', objectFit:'contain', flexShrink:0 }} />
           <div>
             <div style={{ fontSize:'12px', fontWeight:900, color:t.text, lineHeight:1.15, letterSpacing:'0.3px', textTransform:'uppercase' }}>Performance Golf</div>
             <div style={{ fontSize:'11px', fontWeight:600, color:t.textMuted, lineHeight:1.1 }}>Francisca Salgado</div>
