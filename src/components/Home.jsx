@@ -3,20 +3,23 @@ import { findCurrentPlan } from '../lib/trainingPlanUtils'
 import { getHomeEntries, getHomeCompStats, getHomeCompConfig, getHomeWagrHistory, getHomeProfile, getHomeGoals, getSwingGoal, updateAthleteProfile, updateKpiOrder, updateStatPrefs } from '../services/homeService'
 import { calcCurrentPhase, isCompetition, getUpcomingCompetitions } from '../lib/periodization'
 import { getPlansForDate } from '../lib/trainingUtils'
+import { activeFocus, getOverviewFocusAlert, getFocusMetricOptions } from '../lib/focusProgress'
+import { saveEntries } from '../services/dashboardService'
+import { CheckCircle2 } from 'lucide-react'
 import { ACTIVITY_COLORS, getEventVisual } from '../constants/eventCategories'
 
 const golfColor = ACTIVITY_COLORS.golf
 const gymColor = ACTIVITY_COLORS.gym
 const compColor = ACTIVITY_COLORS.competition
 
-function PhaseIllustration({ phase }) {
+function PhaseIllustration({ phase, svgW = 210, svgH = 110 }) {
   const w  = 'rgba(255,255,255,0.30)'
   const wm = 'rgba(255,255,255,0.16)'
   const ws = 'rgba(255,255,255,0.50)'
 
   /* PEAK — bandeira no green + bola perto do buraco */
   if (phase === 'PEAK') return (
-    <svg width="210" height="110" viewBox="0 0 210 110" fill="none" aria-hidden="true">
+    <svg width={svgW} height={svgH} viewBox="0 0 210 110" fill="none" aria-hidden="true">
       {/* green surface */}
       <ellipse cx="110" cy="96" rx="90" ry="14" fill={wm} />
       {/* hole */}
@@ -40,7 +43,7 @@ function PhaseIllustration({ phase }) {
 
   /* AFINACAO — putter + bola encostada ao buraco */
   if (phase === 'AFINACAO') return (
-    <svg width="210" height="110" viewBox="0 0 210 110" fill="none" aria-hidden="true">
+    <svg width={svgW} height={svgH} viewBox="0 0 210 110" fill="none" aria-hidden="true">
       {/* ground */}
       <line x1="10" y1="98" x2="200" y2="98" stroke={wm} strokeWidth="1.5" />
       {/* putter shaft */}
@@ -61,7 +64,7 @@ function PhaseIllustration({ phase }) {
 
   /* DESENVOLVIMENTO — barra de pesos + taco cruzados */
   if (phase === 'DESENVOLVIMENTO') return (
-    <svg width="210" height="110" viewBox="0 0 210 110" fill="none" aria-hidden="true">
+    <svg width={svgW} height={svgH} viewBox="0 0 210 110" fill="none" aria-hidden="true">
       {/* golf club shaft (diagonal /) */}
       <line x1="50" y1="100" x2="160" y2="10" stroke={ws} strokeWidth="5" strokeLinecap="round" />
       {/* club head */}
@@ -79,7 +82,7 @@ function PhaseIllustration({ phase }) {
 
   /* DESENVOLVIMENTO_LIGHT — taco a bater bola no tee */
   if (phase === 'DESENVOLVIMENTO_LIGHT') return (
-    <svg width="210" height="110" viewBox="0 0 210 110" fill="none" aria-hidden="true">
+    <svg width={svgW} height={svgH} viewBox="0 0 210 110" fill="none" aria-hidden="true">
       {/* ground */}
       <line x1="20" y1="100" x2="200" y2="100" stroke={wm} strokeWidth="1.5" />
       {/* tee stick */}
@@ -100,7 +103,7 @@ function PhaseIllustration({ phase }) {
 
   /* ACUMULACAO — balde de bolas no range */
   if (phase === 'ACUMULACAO') return (
-    <svg width="210" height="110" viewBox="0 0 210 110" fill="none" aria-hidden="true">
+    <svg width={svgW} height={svgH} viewBox="0 0 210 110" fill="none" aria-hidden="true">
       {/* bucket body */}
       <path d="M65,38 L54,100 L156,100 L145,38 Z" fill={wm} stroke={w} strokeWidth="2" strokeLinejoin="round" />
       {/* bucket top ellipse */}
@@ -121,7 +124,7 @@ function PhaseIllustration({ phase }) {
 
   /* MANUTENCAO_B2B — putter + faixa de resistência */
   if (phase === 'MANUTENCAO_B2B') return (
-    <svg width="210" height="110" viewBox="0 0 210 110" fill="none" aria-hidden="true">
+    <svg width={svgW} height={svgH} viewBox="0 0 210 110" fill="none" aria-hidden="true">
       {/* putter shaft */}
       <line x1="30" y1="10" x2="108" y2="82" stroke={ws} strokeWidth="4" strokeLinecap="round" />
       {/* putter head */}
@@ -139,7 +142,7 @@ function PhaseIllustration({ phase }) {
 
   /* DESCARGA — colchão de yoga + faixa leve */
   if (phase === 'DESCARGA') return (
-    <svg width="210" height="110" viewBox="0 0 210 110" fill="none" aria-hidden="true">
+    <svg width={svgW} height={svgH} viewBox="0 0 210 110" fill="none" aria-hidden="true">
       {/* yoga mat flat */}
       <rect x="20" y="72" width="148" height="26" rx="6" fill={w} />
       {/* mat rolled end */}
@@ -157,7 +160,7 @@ function PhaseIllustration({ phase }) {
 
   /* DESCANSO — taco encostado à parede, pesos no chão */
   return (
-    <svg width="210" height="110" viewBox="0 0 210 110" fill="none" aria-hidden="true">
+    <svg width={svgW} height={svgH} viewBox="0 0 210 110" fill="none" aria-hidden="true">
       {/* wall */}
       <line x1="178" y1="8" x2="178" y2="102" stroke={w} strokeWidth="2" />
       {/* floor */}
@@ -510,9 +513,17 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   const [compConfig, setCompConfig] = useState([])
   const [todayChecked, setTodayChecked] = useState({})
   const [wagrHistory, setWagrHistory] = useState([])
+  const [showFocusRegister, setShowFocusRegister] = useState(false)
+  const [focusRegDate, setFocusRegDate] = useState(() => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}` })
+  const [focusRegValues, setFocusRegValues] = useState({})
+  const [focusSaving, setFocusSaving] = useState(false)
 
   const ATHLETE_DEFAULTS = { hcp: '1.1', wagr: '—', prev_hcp: null, prev_wagr: null, club: 'Vale de Janelas', category: 'Sub-18', fed: 'FPG', fed_num: '43832' }
-  const [athlete, setAthlete] = useState(ATHLETE_DEFAULTS)
+  const [athlete, setAthlete] = useState(() => ({
+    ...ATHLETE_DEFAULTS,
+    hcp: localStorage.getItem('ftr_hcp') || ATHLETE_DEFAULTS.hcp,
+    wagr: localStorage.getItem('ftr_wagr') || ATHLETE_DEFAULTS.wagr,
+  }))
   const [editingAthlete, setEditingAthlete] = useState(false)
   const [athleteForm, setAthleteForm] = useState(ATHLETE_DEFAULTS)
   const [athleteSaving, setAthleteSaving] = useState(false)
@@ -522,7 +533,11 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
     getHomeCompStats().then(data => setCompStats(data)).catch(console.error)
     getHomeCompConfig().then(data => { if (data.length) setCompConfig(data) }).catch(console.error)
     if (user?.id) {
-      getHomeWagrHistory(user.id).then(data => setWagrHistory(data)).catch(console.error)
+      getHomeWagrHistory(user.id).then(data => {
+        setWagrHistory(data)
+        const sorted = [...data].sort((a, b) => (b.year * 100 + b.week) - (a.year * 100 + a.week))
+        if (sorted[0]?.rank != null) localStorage.setItem('ftr_wagr_rank', String(sorted[0].rank))
+      }).catch(console.error)
       getHomeProfile(user.id).then(data => {
         if (data) {
           const a = {
@@ -536,6 +551,8 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
             fed_num: data.fed_num || '43832',
           }
           setAthlete(a); setAthleteForm(a)
+          if (data.hcp) localStorage.setItem('ftr_hcp', String(data.hcp))
+          if (data.wagr && data.wagr !== '—') localStorage.setItem('ftr_wagr', String(data.wagr))
           if (data.home_kpi_order) {
             try { setKpiOrder(JSON.parse(data.home_kpi_order)) } catch (_) {}
           }
@@ -626,7 +643,8 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   const golfSessions = [...new Set(filteredEntries.filter(e => golfMetrics.includes(e.metric_id)).map(e => e.entry_date))].length
   const gymSessions = [...new Set(filteredEntries.filter(e => gymMetrics.includes(e.metric_id)).map(e => e.entry_date))].length
 
-  const todayStr = new Date().toISOString().split('T')[0]
+  const toLocalStr = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+  const todayStr = toLocalStr(new Date())
   const upcomingEvents = events.filter(e => e.start_date >= todayStr && e.status !== 'cancelled' && e.status !== 'cancelado').slice(0, 6)
   const nextComp = upcomingEvents[0]
   const daysToNext = nextComp ? Math.ceil((new Date(nextComp.start_date) - new Date()) / 86400000) : null
@@ -658,7 +676,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   _baseWeekStart.setDate(todayDate.getDate() - (todayDate.getDay() === 0 ? 6 : todayDate.getDay() - 1))
   const weekStartDate = new Date(_baseWeekStart)
   weekStartDate.setDate(_baseWeekStart.getDate() + weekOffset * 7)
-  const weekStartStr = weekStartDate.toISOString().split('T')[0]
+  const weekStartStr = toLocalStr(weekStartDate)
   const DAYS_PT_SHORT = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb']
   const todayDayPT = DAYS_PT_SHORT[todayDate.getDay()]
 
@@ -696,7 +714,8 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   const prevWagrH   = sortedWagrH[1]
   const wagrRank    = latestWagrH?.rank ?? null
   const wagrDeltaH  = (wagrRank != null && prevWagrH?.rank != null) ? wagrRank - prevWagrH.rank : null
-  const displayWagr = wagrRank != null ? String(wagrRank) : (athlete.wagr || '—')
+  const cachedWagrRank = localStorage.getItem('ftr_wagr_rank')
+  const displayWagr = wagrRank != null ? String(wagrRank) : cachedWagrRank ?? (athlete.wagr || '—')
   const displayWagrDelta = wagrDeltaH ?? wagrDelta
 
   const latestPlanEnd = trainingPlans.length > 0
@@ -1132,11 +1151,19 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
     ? Math.max(0, Math.ceil((new Date(nextCompetition.start_date) - new Date()) / 86400000))
     : null
 
-  // Civil-day comparison in local timezone — avoids UTC midnight edge cases
-  const _ln = new Date()
-  const localTodayStr = `${_ln.getFullYear()}-${String(_ln.getMonth()+1).padStart(2,'0')}-${String(_ln.getDate()).padStart(2,'0')}`
   const isNextCompToday = nextCompetition != null &&
-    normDate(nextCompetition.start_date || nextCompetition.date || nextCompetition.start) === localTodayStr
+    normDate(nextCompetition.start_date || nextCompetition.date || nextCompetition.start) === todayStr
+
+  // Torneio em curso hoje (R2, R3…) — começou antes de hoje mas end_date >= hoje
+  const ongoingComp = events
+    .filter(e => isCompetition(e) && !['cancelled','cancelado'].includes(e.status || ''))
+    .find(e => {
+      const sd = normDate(e.start_date || e.date || e.start)
+      const ed = normDate(e.end_date || e.start_date || e.date || e.start)
+      return sd < todayStr && ed >= todayStr
+    }) || null
+
+  const isGameDay = ongoingComp != null || isNextCompToday
 
   const upcomingCompsAll = getUpcomingCompetitions(
     events.filter(e => !['cancelled','cancelado'].includes(e.status || '')),
@@ -1282,7 +1309,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
       </div>
       <div style={{ display:'flex', flexDirection:'column', gap:'4px' }}>
         {weekDays.map((day, i) => {
-          const ds = day.toISOString().split('T')[0]
+          const ds = toLocalStr(day)
           const dayEvts = events.filter(e => {
             const start = normDate(e.start_date || e.date || e.start)
             const end = normDate(e.end_date || e.end) || start
@@ -1353,6 +1380,8 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
       </div>
     </div>
   )
+  const focusAlert = getOverviewFocusAlert(activeFocus, entries)
+
   return (
     <div style={{ fontFamily:F, color:t.text, minHeight:'100%', background: t.bg }}>
       <style>{`
@@ -1361,7 +1390,8 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
         .hm2-grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
         .hm-athlete-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
         .hm-row{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:16px;margin-bottom:16px;align-items:start}
-        .hm-row3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:16px;align-items:stretch}
+        .hm-row3{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:16px;margin-bottom:16px;align-items:stretch}
+        .hm-today-pair{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:stretch}
         .hm-week-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
         .hm-week-slide{overflow:hidden}
         @keyframes hmSlideRight{from{transform:translateX(-28px);opacity:0}to{transform:translateX(0);opacity:1}}
@@ -1369,7 +1399,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
         .hm-slide-right{animation:hmSlideRight 0.32s cubic-bezier(.25,.46,.45,.94)}
         .hm-slide-left{animation:hmSlideLeft 0.32s cubic-bezier(.25,.46,.45,.94)}
         .hm-btn-reset{background:transparent;border:none;padding:0;cursor:pointer;font-family:inherit;text-align:left;width:100%}
-        @media(max-width:900px){.hm-row{grid-template-columns:1fr}.hm-row3{grid-template-columns:1fr}}
+        @media(max-width:900px){.hm-row{grid-template-columns:1fr}.hm-row3{grid-template-columns:1fr}.hm-today-pair{grid-template-columns:1fr}}
         @media(max-width:768px){
           .hm-page-shell{padding:16px 14px 28px}
           .hm2-grid3{grid-template-columns:1fr 1fr}
@@ -1457,55 +1487,51 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
       ) : (
         <div style={{
           borderRadius:'16px',
-          padding:'20px 40px',
+          padding:'14px 34px',
           marginBottom:'16px',
           background:`linear-gradient(125deg, ${phaseInfo.phaseColor} 0%, ${phaseInfo.phaseColor}d0 55%, ${phaseInfo.phaseColor}90 100%)`,
+          transition:'background 0.4s ease',
           position:'relative',
           overflow:'hidden',
-          minHeight:'126px',
+          height:'110px',
           display:'flex',
           flexDirection:'column',
           justifyContent:'center',
         }}>
           {/* edit button */}
           <button onClick={() => { setAthleteForm({...athlete}); setEditingAthlete(true) }}
-            style={{ position:'absolute', top:'12px', right:'12px', background:'rgba(255,255,255,0.18)', border:'1px solid rgba(255,255,255,0.30)', borderRadius:'8px', color:heroTextColor, padding:'5px 10px', cursor:'pointer', fontSize:'13px', fontFamily:F, opacity:0.85 }} title="Editar perfil">✎</button>
+            style={{ position:'absolute', top:'10px', right:'10px', background:'rgba(255,255,255,0.18)', border:'1px solid rgba(255,255,255,0.30)', borderRadius:'7px', color:heroTextColor, padding:'4px 8px', cursor:'pointer', fontSize:'11px', fontFamily:F, opacity:0.85 }} title="Editar perfil">✎</button>
           {/* crown + phase name */}
-          <div style={{ display:'flex', alignItems:'center', gap:'14px', marginBottom:'8px', position:'relative', zIndex:1 }}>
-            <span style={{ fontSize:'24px', lineHeight:1 }}>👑</span>
-            <div style={{ fontSize:'clamp(30px,4vw,52px)', fontWeight:950, color:heroTextColor, lineHeight:0.92, letterSpacing:'-0.02em', textTransform:'uppercase' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:'10px', marginBottom:'5px', position:'relative', zIndex:1 }}>
+            <span style={{ fontSize:'20px', lineHeight:1 }}>👑</span>
+            <div style={{ fontSize:'clamp(25px,3.4vw,44px)', fontWeight:950, color:heroTextColor, lineHeight:0.92, letterSpacing:'-0.02em', textTransform:'uppercase' }}>
               {currentPhase.name}
             </div>
           </div>
-          {/* subtitle */}
-          {currentPhase.situation && (
-            <div style={{ fontSize:'clamp(13px,1.4vw,17px)', fontWeight:700, color:heroTextColor, opacity:0.95, position:'relative', zIndex:1 }}>
-              {currentPhase.situation}
+          {/* subtitle — always rendered to hold space */}
+          <div style={{ fontSize:'clamp(11px,1.2vw,14px)', fontWeight:700, color:heroTextColor, opacity: currentPhase.situation ? 0.95 : 0, position:'relative', zIndex:1, minHeight:'1em' }}>
+            {currentPhase.situation || ''}
+          </div>
+          {/* ilustração — posição fixa, independente dos badges */}
+          <div style={{ position:'absolute', right:'14px', top:'50%', transform:'translateY(-50%)', zIndex:1, pointerEvents:'none', opacity:0.85, lineHeight:0 }}>
+            <PhaseIllustration phase={phaseInfo.phase} svgW={179} svgH={94} />
+          </div>
+          {/* badges — elemento separado, cresce para a esquerda sem tocar na ilustração */}
+          <div style={{ position:'absolute', right:'207px', bottom:'10px', display:'flex', alignItems:'flex-end', gap:'8px', zIndex:2, pointerEvents:'none' }}>
+            <div style={{ background:'rgba(255,255,255,0.22)', border:'1px solid rgba(255,255,255,0.35)', borderRadius:'999px', padding:'3px 10px', display:'flex', alignItems:'center', gap:'5px', pointerEvents:'auto', minWidth:'52px', justifyContent:'center' }}>
+              <span style={{ fontSize:'9px', fontWeight:800, color:heroTextColor, opacity:0.75, letterSpacing:'1px' }}>HCP</span>
+              <span style={{ fontSize:'13px', fontWeight:900, color:heroTextColor }}>{athlete.hcp || '—'}</span>
             </div>
-          )}
-          {/* illustration + HCP + WAGR — right side, vertically centred */}
-          <div style={{ position:'absolute', right:'16px', bottom:'14px', display:'flex', alignItems:'flex-end', gap:'12px', zIndex:1, pointerEvents:'none' }}>
-            <div style={{ opacity:0.85 }}>
-              <PhaseIllustration phase={phaseInfo.phase} />
+            <div style={{ background:'rgba(255,255,255,0.22)', border:'1px solid rgba(255,255,255,0.35)', borderRadius:'999px', padding:'3px 10px', display:'flex', alignItems:'center', gap:'5px', pointerEvents:'auto', minWidth:'68px', justifyContent:'center' }}>
+              <span style={{ fontSize:'9px', fontWeight:800, color:heroTextColor, opacity:0.75, letterSpacing:'1px' }}>WAGR</span>
+              <span style={{ fontSize:'13px', fontWeight:900, color:heroTextColor }}>{displayWagr && displayWagr !== '—' ? `#${displayWagr}` : '—'}</span>
             </div>
-            {athlete.hcp && athlete.hcp !== '—' && (
-              <div style={{ background:'rgba(255,255,255,0.22)', border:'1px solid rgba(255,255,255,0.35)', borderRadius:'999px', padding:'4px 14px', display:'flex', alignItems:'center', gap:'6px', pointerEvents:'auto' }}>
-                <span style={{ fontSize:'10px', fontWeight:800, color:heroTextColor, opacity:0.75, letterSpacing:'1px' }}>HCP</span>
-                <span style={{ fontSize:'15px', fontWeight:900, color:heroTextColor }}>{athlete.hcp}</span>
-              </div>
-            )}
-            {displayWagr && displayWagr !== '—' && (
-              <div style={{ background:'rgba(255,255,255,0.22)', border:'1px solid rgba(255,255,255,0.35)', borderRadius:'999px', padding:'4px 14px', display:'flex', alignItems:'center', gap:'6px', pointerEvents:'auto' }}>
-                <span style={{ fontSize:'10px', fontWeight:800, color:heroTextColor, opacity:0.75, letterSpacing:'1px' }}>WAGR</span>
-                <span style={{ fontSize:'15px', fontWeight:900, color:heroTextColor }}>#{displayWagr}</span>
-              </div>
-            )}
           </div>
         </div>
       )}
 
-      {/* ─── ROW 1: HOJE | AMANHÃ | PRÓXIMA COMPETIÇÃO ─── */}
       <div className="hm-row3">
+        <div className="hm-today-pair">
 
         {/* HOJE */}
         <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'16px', padding:'20px' }}>
@@ -1543,62 +1569,68 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
           </div>
         </div>
 
-        {/* PRÓXIMA COMPETIÇÃO */}
+                </div>
+
+{/* PRÓXIMA COMPETIÇÃO */}
         <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'16px', padding:'20px' }}>
           <div style={{ fontSize:'11px', letterSpacing:'2px', color: daysToNextComp != null && daysToNextComp <= 7 ? '#ef4444' : '#f59e0b', fontWeight:800, textTransform:'uppercase', marginBottom:'16px' }}>
             PRÓXIMA COMPETIÇÃO
           </div>
-          {upcomingCompsAll.length > 0 ? (
-            <>
-              {isNextCompToday ? (
-                <div style={{ display:'flex', flexDirection:'column', gap:'10px', marginBottom:'16px' }}>
-                  <div style={{ fontSize:'26px', fontWeight:950, color:'#ef4444', lineHeight:1.2 }}>
-                    Dia de jogo. Vamos!
-                  </div>
-                  <div style={{ minWidth:0 }}>
-                    <div style={{ fontSize:'16px', fontWeight:900, color:t.text, lineHeight:1.25 }}>{upcomingCompsAll[0].title}</div>
-                    <div style={{ fontSize:'13px', color:t.textMuted, fontWeight:600, marginTop:'5px' }}>
-                      {formatDate(upcomingCompsAll[0].start_date)}
-                      {upcomingCompsAll[0].end_date && upcomingCompsAll[0].end_date !== upcomingCompsAll[0].start_date
-                        ? ` — ${formatDate(upcomingCompsAll[0].end_date)}` : ''}
+          {(ongoingComp || upcomingCompsAll.length > 0) ? (() => {
+            const featuredComp = ongoingComp || upcomingCompsAll[0]
+            const restComps = ongoingComp ? upcomingCompsAll.slice(0, 3) : upcomingCompsAll.slice(1, 4)
+            return (
+              <>
+                {isGameDay ? (
+                  <div style={{ display:'flex', flexDirection:'column', gap:'10px', marginBottom:'16px' }}>
+                    <div style={{ fontSize:'26px', fontWeight:950, color:'#ef4444', lineHeight:1.2 }}>
+                      Dia de jogo. Vamos!
+                    </div>
+                    <div style={{ minWidth:0 }}>
+                      <div style={{ fontSize:'16px', fontWeight:900, color:t.text, lineHeight:1.25 }}>{featuredComp.title}</div>
+                      <div style={{ fontSize:'13px', color:t.textMuted, fontWeight:600, marginTop:'5px' }}>
+                        {formatDate(featuredComp.start_date)}
+                        {featuredComp.end_date && featuredComp.end_date !== featuredComp.start_date
+                          ? ` — ${formatDate(featuredComp.end_date)}` : ''}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ) : (
-                <div style={{ display:'flex', alignItems:'flex-start', gap:'20px', marginBottom:'16px' }}>
-                  <div style={{ textAlign:'center', flexShrink:0 }}>
-                    <div style={{ fontSize:'64px', fontWeight:950, color:'#ef4444', lineHeight:0.88 }}>{daysToNextComp ?? '—'}</div>
-                    <div style={{ fontSize:'10px', letterSpacing:'2px', color:t.textMuted, fontWeight:800, marginTop:'6px' }}>DIAS</div>
-                  </div>
-                  <div style={{ minWidth:0 }}>
-                    <div style={{ fontSize:'16px', fontWeight:900, color:t.text, lineHeight:1.25 }}>{upcomingCompsAll[0].title}</div>
-                    <div style={{ fontSize:'13px', color:t.textMuted, fontWeight:600, marginTop:'5px' }}>
-                      {formatDate(upcomingCompsAll[0].start_date)}
-                      {upcomingCompsAll[0].end_date && upcomingCompsAll[0].end_date !== upcomingCompsAll[0].start_date
-                        ? ` — ${formatDate(upcomingCompsAll[0].end_date)}` : ''}
+                ) : (
+                  <div style={{ display:'flex', alignItems:'flex-start', gap:'20px', marginBottom:'16px' }}>
+                    <div style={{ textAlign:'center', flexShrink:0 }}>
+                      <div style={{ fontSize:'64px', fontWeight:950, color:'#ef4444', lineHeight:0.88 }}>{daysToNextComp ?? '—'}</div>
+                      <div style={{ fontSize:'10px', letterSpacing:'2px', color:t.textMuted, fontWeight:800, marginTop:'6px' }}>DIAS</div>
+                    </div>
+                    <div style={{ minWidth:0 }}>
+                      <div style={{ fontSize:'16px', fontWeight:900, color:t.text, lineHeight:1.25 }}>{featuredComp.title}</div>
+                      <div style={{ fontSize:'13px', color:t.textMuted, fontWeight:600, marginTop:'5px' }}>
+                        {formatDate(featuredComp.start_date)}
+                        {featuredComp.end_date && featuredComp.end_date !== featuredComp.start_date
+                          ? ` — ${formatDate(featuredComp.end_date)}` : ''}
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
-              {upcomingCompsAll.length > 1 && (
-                <div style={{ borderTop:`1px solid ${t.border}`, paddingTop:'12px', display:'flex', flexDirection:'column', gap:'8px' }}>
-                  {upcomingCompsAll.slice(1, 4).map((comp, i) => {
-                    const d = Math.max(0, Math.ceil((new Date(normDate(comp.start_date) + 'T12:00:00') - new Date()) / 86400000))
-                    return (
-                      <button key={i} className="hm-btn-reset" onClick={() => onNavigate && onNavigate('calendar')}
-                        style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:'8px' }}>
-                        <div style={{ display:'flex', alignItems:'center', gap:'8px', minWidth:0 }}>
-                          <span style={{ fontSize:'13px' }}>🏆</span>
-                          <div style={{ fontSize:'13px', color:t.textMuted, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontWeight:650 }}>{comp.title}</div>
-                        </div>
-                        <div style={{ fontSize:'12px', color:t.textMuted, flexShrink:0, fontWeight:750 }}>{d}d</div>
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-            </>
-          ) : (
+                )}
+                {restComps.length > 0 && (
+                  <div style={{ borderTop:`1px solid ${t.border}`, paddingTop:'12px', display:'flex', flexDirection:'column', gap:'8px' }}>
+                    {restComps.map((comp, i) => {
+                      const d = Math.max(0, Math.ceil((new Date(normDate(comp.start_date) + 'T12:00:00') - new Date()) / 86400000))
+                      return (
+                        <button key={i} className="hm-btn-reset" onClick={() => onNavigate && onNavigate('calendar')}
+                          style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:'8px' }}>
+                          <div style={{ display:'flex', alignItems:'center', gap:'8px', minWidth:0 }}>
+                            <span style={{ fontSize:'13px' }}>🏆</span>
+                            <div style={{ fontSize:'13px', color:t.textMuted, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontWeight:650 }}>{comp.title}</div>
+                          </div>
+                          <div style={{ fontSize:'12px', color:t.textMuted, flexShrink:0, fontWeight:750 }}>{d}d</div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </>
+            )
+          })() : (
             <div style={{ fontSize:'14px', color:t.textMuted }}>Sem competições agendadas</div>
           )}
         </div>
@@ -1607,7 +1639,8 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
       {/* ─── ROW 2: ESTA SEMANA | AGENDA ─── */}
       <div className="hm-row">
 
-        {/* ESTA SEMANA */}
+        {/* ESTA SEMANA + ALERTA FOCO — coluna esquerda empilhada */}
+        <div style={{ display:'flex', flexDirection:'column', gap:'16px' }}>
         <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'16px', padding:'20px' }}>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'16px' }}>
             <div style={{ fontSize:'16px', fontWeight:900, color:t.text }}>
@@ -1633,7 +1666,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
           <div className="hm-week-slide">
           <div key={weekOffset} className={`hm-week-grid${weekSlideDir === 'left' ? ' hm-slide-left' : weekSlideDir === 'right' ? ' hm-slide-right' : ''}`}>
             {weekDays.map((day, i) => {
-              const ds = day.toISOString().split('T')[0]
+              const ds = toLocalStr(day)
               const isToday = ds === todayStr
               const isPast  = ds < todayStr
               const dayEvts = events.filter(e => {
@@ -1682,6 +1715,55 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
           </div>
         </div>
 
+        {/* ALERTA FOCO ATIVO */}
+        {focusAlert.status === 'ok' ? (
+          <div style={{ display:'flex', alignItems:'center', gap:'8px', padding:'12px 14px', borderRadius:'12px', background:'#F0FDF4', border:'1px solid #BBF7D0', marginTop:'14px' }}>
+            <CheckCircle2 size={16} color='#16A34A' strokeWidth={2} />
+            <span style={{ fontSize:'13px', fontWeight:650, color:'#166534' }}>Foco em dia - continua assim.</span>
+          </div>
+        ) : (
+          <div style={{ background:'#FFFFFF', border:'1px solid #E5E7EB', borderRadius:'16px', padding:'20px', marginTop:'14px' }}>
+            <div>
+              <div style={{ display:'flex', alignItems:'center', gap:'8px', marginBottom:'4px' }}>
+                <span style={{ fontSize:'15px', fontWeight:850, color:'#111827' }}>
+                  Execução da semana
+                </span>
+              </div>
+              <div style={{ fontSize:'12px', color:'#6B7280', marginBottom: focusAlert.lines?.length ? '16px' : 0 }}>
+                Ainda faltam registos para cumprir o plano
+              </div>
+              {focusAlert.lines && focusAlert.lines.length > 0 && (
+                <div style={{ display:'flex', flexDirection:'column', gap:'10px' }}>
+                  {focusAlert.lines.map((line, i) => {
+                    const colon = line.indexOf(':')
+                    const label = colon >= 0 ? line.slice(0, colon).trim() : line
+                    const rest  = colon >= 0 ? line.slice(colon + 1).trim().split(' ')[0] : ''
+                    const [done, expected] = rest.split('/').map(Number)
+                    const complete = Number.isFinite(done) && Number.isFinite(expected) && done >= expected
+                    return (
+                      <div key={i} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:'18px' }}>
+                        <span style={{ fontSize:'13px', color:'#374151', fontWeight:500, lineHeight:1.25 }}>{label}</span>
+                        <span style={{ fontSize:'13px', color: complete ? '#16A34A' : '#EA580C', fontWeight:700, textAlign:'right', whiteSpace:'nowrap', lineHeight:1.25 }}>{rest}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+            <div style={{ display:'flex', justifyContent:'flex-end', marginTop:'16px', paddingRight:'2px' }}>
+              <button onClick={() => {
+                setFocusRegValues({})
+                setFocusRegDate(toLocalStr(new Date()))
+                setShowFocusRegister(true)
+              }} style={{ background:'#EA580C', border:'none', borderRadius:'8px', color:'#FFFFFF', padding:'10px 15px', fontFamily:F, fontSize:'12px', fontWeight:750, cursor:'pointer', whiteSpace:'nowrap' }}>
+                Registar agora
+              </button>
+            </div>
+          </div>
+        )}
+
+        </div>{/* fim coluna esquerda */}
+
         {/* AGENDA */}
         <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'16px', padding:'20px' }}>
           <div style={{ fontSize:'16px', fontWeight:900, color:t.text, marginBottom:'16px' }}>AGENDA</div>
@@ -1725,6 +1807,73 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
       </div>
 
       </div>
+
+      {/* MODAL: Registar foco rápido */}
+      {showFocusRegister && (() => {
+        const focusMetrics = getFocusMetricOptions(activeFocus)
+        const hasAny = focusMetrics.some(m => focusRegValues[m.value])
+        return (
+          <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:'16px' }}
+            onClick={e => { if (e.target === e.currentTarget) setShowFocusRegister(false) }}>
+            <div style={{ background:t.surface, borderRadius:'16px', padding:'24px', width:'100%', maxWidth:'380px', boxShadow:'0 20px 60px rgba(0,0,0,0.3)' }}>
+              <div style={{ fontSize:'16px', fontWeight:900, color:t.text, marginBottom:'20px' }}>Registar — {activeFocus.name}</div>
+
+              <div style={{ marginBottom:'16px' }}>
+                <label style={{ display:'block', fontSize:'12px', fontWeight:700, color:t.textMuted, marginBottom:'6px', textTransform:'uppercase', letterSpacing:'0.5px' }}>Data</label>
+                <input type="date" value={focusRegDate}
+                  onChange={e => setFocusRegDate(e.target.value)}
+                  style={{ width:'100%', padding:'10px 12px', borderRadius:'8px', border:`1px solid ${t.border}`, background:t.bg, color:t.text, fontFamily:F, fontSize:'14px' }} />
+              </div>
+
+              <div style={{ display:'flex', flexDirection:'column', gap:'10px', marginBottom:'20px' }}>
+                {focusMetrics.map(m => (
+                  <div key={m.value}>
+                    <label style={{ display:'block', fontSize:'12px', fontWeight:700, color:t.textMuted, marginBottom:'5px' }}>
+                      {m.label}{m.unit ? ` (${m.unit})` : ''}
+                    </label>
+                    <input type="number" step="any" placeholder="—"
+                      value={focusRegValues[m.value] || ''}
+                      onChange={e => setFocusRegValues(p => ({ ...p, [m.value]: e.target.value }))}
+                      style={{ width:'100%', padding:'10px 12px', borderRadius:'8px', border:`1px solid ${t.border}`, background:t.bg, color:t.text, fontFamily:F, fontSize:'14px' }} />
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display:'flex', gap:'10px' }}>
+                <button onClick={() => setShowFocusRegister(false)}
+                  style={{ flex:1, padding:'11px', borderRadius:'8px', border:`1px solid ${t.border}`, background:'transparent', color:t.textMuted, fontFamily:F, fontSize:'14px', fontWeight:700, cursor:'pointer' }}>
+                  Cancelar
+                </button>
+                <button disabled={!hasAny || focusSaving} onClick={async () => {
+                  const rows = getFocusMetricOptions(activeFocus)
+                    .filter(m => focusRegValues[m.value])
+                    .map(m => ({
+                      metric_id: m.value,
+                      value: String(focusRegValues[m.value]),
+                      entry_date: focusRegDate,
+                      updated_by: user?.email,
+                      updated_at: new Date().toISOString(),
+                    }))
+                  if (!rows.length) return
+                  setFocusSaving(true)
+                  try {
+                    await saveEntries(rows)
+                    setShowFocusRegister(false)
+                    setFocusRegValues({})
+                    getHomeEntries().then(data => setEntries(data)).catch(console.error)
+                  } catch(err) { console.error(err) }
+                  setFocusSaving(false)
+                }}
+                  style={{ flex:1, padding:'11px', borderRadius:'8px', border:'none', background:'#F97316', color:'#FFFFFF', fontFamily:F, fontSize:'14px', fontWeight:850, cursor:'pointer', opacity: (!hasAny || focusSaving) ? 0.5 : 1 }}>
+                  {focusSaving ? 'A guardar…' : 'Guardar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
     </div>
   )
 }
+

@@ -100,19 +100,13 @@ export default function Help({ theme, t }) {
   return (
     <div style={{ maxWidth: '900px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '28px', fontFamily: F }}>
 
-      {/* Hero */}
-      <div style={{ background: 'linear-gradient(135deg, #1a2744, #0f172a)', borderRadius: '22px', padding: '36px 32px', color: '#fff' }}>
-        <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '3px', color: '#52E8A0', marginBottom: '10px', textTransform: 'uppercase' }}>Manual da Plataforma</div>
-        <h1 style={{ margin: '0 0 10px', fontSize: '26px', fontWeight: 900, lineHeight: 1.2 }}>Ajuda & Manual da Plataforma</h1>
-        <p style={{ margin: '0 0 18px', fontSize: '15px', opacity: 0.8, lineHeight: 1.6 }}>
-          Guia rápido para perceber como usar a plataforma de acompanhamento da performance da Francisca.
-        </p>
-        <p style={{ margin: 0, fontSize: '14px', opacity: 0.65, lineHeight: 1.7 }}>
-          Esta plataforma foi criada para acompanhar a evolução desportiva da atleta, centralizando calendário, competições,
-          estatísticas, plano de treino e progresso numa única ferramenta.
-          O objetivo não é apenas guardar dados — é transformar esses dados em informação útil para melhorar decisões de treino,
-          preparação e competição.
-        </p>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
+        <div>
+          <div style={{ fontSize: '10px', letterSpacing: '3px', color: t.accent, marginBottom: '4px', fontWeight: 700 }}>AJUDA</div>
+          <div style={{ fontSize: '24px', fontWeight: 800, color: t.text, lineHeight: 1.15 }}>Guia de Utilização</div>
+          <div style={{ fontSize: '12px', color: t.textMuted, marginTop: '4px' }}>Guia completo das funcionalidades — o que há em cada secção e como usar a plataforma</div>
+        </div>
       </div>
 
       {/* Objetivo */}

@@ -374,10 +374,11 @@ export default function Goals({ theme, t, user }) {
       )}
 
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
         <div>
-          <div style={{ fontSize: '10px', letterSpacing: '3px', color: t.accent, marginBottom: '3px', fontWeight: 600 }}>PERFORMANCE</div>
-          <div style={{ fontSize: '18px', fontWeight: 800 }}>Goals & Milestones</div>
+          <div style={{ fontSize: '10px', letterSpacing: '3px', color: t.accent, marginBottom: '4px', fontWeight: 700 }}>PRIORIDADES</div>
+          <div style={{ fontSize: '24px', fontWeight: 800, color: t.text, lineHeight: 1.15 }}>Objetivos de Performance</div>
+          <div style={{ fontSize: '12px', color: t.textMuted, marginTop: '4px' }}>Acompanha objetivos de longo prazo e a evolução por indicador de performance</div>
         </div>
         <button onClick={openNew}
           style={{ background: 'transparent', border: `1px solid ${t.accent}`, borderRadius: '8px', color: t.accent, padding: '8px 16px', fontSize: '12px', fontWeight: 700, cursor: 'pointer', fontFamily: F }}>

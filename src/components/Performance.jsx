@@ -1,21 +1,88 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
-import Goals from './Goals'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Check, ChevronRight, CalendarDays } from 'lucide-react'
+import { getEntries, saveEntries } from '../services/dashboardService'
 import {
-  getMetrics,
-  getEntries,
-  saveEntries,
-  deleteEntries,
-  saveMetrics,
-  upsertMetric,
-} from '../services/dashboardService'
-import HcpWagr from './HcpWagr'
-import { DEFAULT_METRICS } from '../constants/metrics'
+  activeFocus as defaultFocus,
+  getFocusCompliance,
+  getFocusAnalysis,
+  getFocusMetricOptions,
+  getDriverDisplay,
+} from '../lib/focusProgress'
 
-function SparkChart({ data, metricId, unit, target, theme, t }) {
+const F = "'Inter', system-ui, -apple-system, sans-serif"
+
+const MONTHS_PT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
+function fmtShortDate(d) {
+  return `${d.getDate()} ${MONTHS_PT[d.getMonth()]}`
+}
+function formatDate(d) {
+  if (!d) return 'Sem registo'
+  const dt = new Date(d + 'T12:00:00')
+  return `${dt.getDate()} ${MONTHS_PT[dt.getMonth()]} ${dt.getFullYear()}`
+}
+
+function daysUntilNextCheck(lastDate) {
+  if (!lastDate) return 0
+  const next = new Date(lastDate + 'T12:00:00')
+  next.setDate(next.getDate() + 7)
+  return Math.max(0, Math.ceil((next - new Date()) / 86400000))
+}
+
+// ─── Field helper ─────────────────────────────────────────────────────────────
+function Field({ label, children }) {
+  return (
+    <label style={{ display: 'block' }}>
+      <div style={{ fontSize: '12px', fontWeight: 800, color: '#475569', marginBottom: '6px' }}>{label}</div>
+      {children}
+    </label>
+  )
+}
+
+const OVR = {
+  position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.42)',
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  zIndex: 1000, padding: '20px',
+}
+const modalBase = {
+  background: '#fff', border: '1px solid #E2E8F0', borderRadius: '12px',
+  width: '100%', padding: '24px', maxHeight: '90vh', overflowY: 'auto', fontFamily: F,
+}
+
+function FocusGoalChart({ entries, focus, onEdit }) {
   const canvasRef = useRef(null)
+  const focusEntries = useMemo(() => entries
+    .filter(e => e.metric_id === focus.metric && e.value && e.entry_date)
+    .sort((a, b) => a.entry_date.localeCompare(b.entry_date))
+  , [entries, focus.metric])
+  const startDate = useMemo(() => {
+    const first = focusEntries[0]?.entry_date || focus.startDate
+    return new Date(first + 'T12:00:00')
+  }, [focus.startDate, focusEntries])
+  const endDate = useMemo(() => {
+    const sorted = (focus.milestones || []).slice().sort((a, b) => a.targetDate.localeCompare(b.targetDate))
+    const last = sorted[sorted.length - 1]
+    return last ? new Date(last.targetDate + 'T12:00:00') : new Date(startDate.getTime() + 180 * 86400000)
+  }, [focus.milestones, startDate])
+  const startVal = Number(focus.startValue ?? focus.currentValue)
+  const targetVal = Number(focus.targetValue)
+  const totalMs = endDate - startDate || 1
+  const pts = useMemo(() => focusEntries
+    .filter(e => new Date(e.entry_date + 'T12:00:00') >= startDate)
+    .map(e => ({ date: new Date(e.entry_date + 'T12:00:00'), value: Number(e.value) }))
+  , [focusEntries, startDate])
+
+  const latest = pts[pts.length - 1]
+  const latestRatio = latest ? (latest.date - startDate) / totalMs : 0
+  const expectedLatest = latest ? startVal + (targetVal - startVal) * latestRatio : startVal
+  const delta = latest ? latest.value - expectedLatest : 0
+  const isBehind = latest ? delta < 0 : false
+  const todayRatio = Math.min(1, Math.max(0, (new Date() - startDate) / totalMs))
+  const daysLeft = Math.max(0, Math.ceil((endDate - new Date()) / 86400000))
+  const title = focus.metric === 'swing_speed' ? 'Swing Speed' : focus.name
+
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas) return
+    if (!canvas || !focus) return
     const dpr = window.devicePixelRatio || 1
     const rect = canvas.getBoundingClientRect()
     canvas.width = rect.width * dpr
@@ -24,609 +91,648 @@ function SparkChart({ data, metricId, unit, target, theme, t }) {
     ctx.scale(dpr, dpr)
     const W = rect.width, H = rect.height
     ctx.clearRect(0, 0, W, H)
-    const pts = data.filter(d => d.metric_id === metricId && d.value && !isNaN(parseFloat(d.value)) && d.entry_date)
-      .sort((a, b) => a.entry_date.localeCompare(b.entry_date))
-    if (!pts.length) {
-      ctx.fillStyle = t.textMuted; ctx.font = '12px Inter,system-ui'; ctx.textAlign = 'center'
-      ctx.fillText('Sem dados ainda', W / 2, H / 2); return
-    }
-    const vals = pts.map(d => parseFloat(d.value))
-    const allVals = target ? [...vals, target] : vals
-    const minV = Math.min(...allVals) * 0.97, maxV = Math.max(...allVals) * 1.03
+
+    const pad = { t: 34, r: 32, b: 44, l: 74 }
+    const cw = W - pad.l - pad.r
+    const ch = H - pad.t - pad.b
+    const allVals = [startVal, targetVal, ...pts.map(p => p.value)]
+    const minV = Math.min(...allVals) * 0.96
+    const maxV = Math.max(...allVals) * 1.04
     const range = maxV - minV || 1
-    const pad = { t: 28, r: 20, b: 48, l: 56 }
-    const cw = W - pad.l - pad.r, ch = H - pad.t - pad.b
-    const xOf = i => pad.l + (pts.length > 1 ? (i / (pts.length - 1)) * cw : cw / 2)
-    const yOf = v => pad.t + ch - ((v - minV) / range) * ch
-    for (let i = 0; i <= 4; i++) {
-      const v = minV + (range * i / 4), y = yOf(v)
-      ctx.strokeStyle = t.border; ctx.lineWidth = 0.5
-      ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + cw, y); ctx.stroke()
-      ctx.fillStyle = t.textMuted; ctx.font = '10px Inter,system-ui'; ctx.textAlign = 'right'
-      ctx.fillText(v.toFixed(1) + (unit || ''), pad.l - 6, y + 4)
+    const xOfRatio = r => pad.l + Math.min(1, Math.max(0, r)) * cw
+    const xOfDate = date => xOfRatio((date - startDate) / totalMs)
+    const yOf = value => pad.t + ch - ((value - minV) / range) * ch
+
+    for (let i = 0; i <= 4; i += 1) {
+      const v = minV + (range * i / 4)
+      const y = yOf(v)
+      ctx.strokeStyle = '#DCE5F4'
+      ctx.lineWidth = 0.7
+      ctx.beginPath()
+      ctx.moveTo(pad.l, y)
+      ctx.lineTo(pad.l + cw, y)
+      ctx.stroke()
+      ctx.fillStyle = '#2F58B8'
+      ctx.font = '12px Inter,system-ui'
+      ctx.textAlign = 'right'
+      ctx.fillText(`${v.toFixed(1)}${focus.unit}`, pad.l - 8, y + 4)
     }
-    if (target) {
-      const y = yOf(target)
-      ctx.strokeStyle = '#52E8A0'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4])
-      ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + cw, y); ctx.stroke()
-      ctx.setLineDash([])
-      ctx.fillStyle = '#52E8A0'; ctx.font = 'bold 10px Inter,system-ui'; ctx.textAlign = 'left'
-      ctx.fillText('Objectivo: ' + target + (unit || ''), pad.l + 4, y - 5)
+
+    const milestones = []
+    let d = new Date(startDate)
+    d.setMonth(d.getMonth() + 1)
+    while (d < endDate) {
+      const ratio = (d - startDate) / totalMs
+      milestones.push({ date: new Date(d), ratio, value: startVal + (targetVal - startVal) * ratio })
+      d = new Date(d)
+      d.setMonth(d.getMonth() + 1)
     }
-    pts.forEach((d, i) => {
-      const x = xOf(i)
-      const lbl = new Date(d.entry_date + 'T12:00:00').toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' })
-      ctx.fillStyle = t.textMuted; ctx.font = '10px Inter,system-ui'; ctx.textAlign = 'center'
-      ctx.fillText(lbl, x, pad.t + ch + 18)
+
+    const xLabels = [
+      { ratio: 0, label: fmtShortDate(startDate) },
+      ...milestones.map(m => ({ ratio: m.ratio, label: fmtShortDate(m.date) })),
+      { ratio: 1, label: fmtShortDate(endDate) },
+    ]
+    xLabels.forEach(({ ratio, label }) => {
+      const x = xOfRatio(ratio)
+      ctx.strokeStyle = '#DCE5F4'
+      ctx.lineWidth = 0.7
+      ctx.beginPath()
+      ctx.moveTo(x, pad.t)
+      ctx.lineTo(x, pad.t + ch)
+      ctx.stroke()
+      ctx.fillStyle = '#2F58B8'
+      ctx.font = '12px Inter,system-ui'
+      ctx.textAlign = 'center'
+      ctx.fillText(label, x, pad.t + ch + 24)
     })
+
     ctx.beginPath()
-    pts.forEach((d, i) => { i === 0 ? ctx.moveTo(xOf(i), yOf(parseFloat(d.value))) : ctx.lineTo(xOf(i), yOf(parseFloat(d.value))) })
-    ctx.lineTo(xOf(pts.length - 1), pad.t + ch); ctx.lineTo(xOf(0), pad.t + ch); ctx.closePath()
-    ctx.fillStyle = 'rgba(61,107,255,0.08)'; ctx.fill()
-    ctx.beginPath()
-    pts.forEach((d, i) => { i === 0 ? ctx.moveTo(xOf(i), yOf(parseFloat(d.value))) : ctx.lineTo(xOf(i), yOf(parseFloat(d.value))) })
-    ctx.strokeStyle = t.accent; ctx.lineWidth = 2.5; ctx.lineJoin = 'round'; ctx.stroke()
-    pts.forEach((d, i) => {
-      const x = xOf(i), y = yOf(parseFloat(d.value))
-      ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2)
-      ctx.fillStyle = t.accent; ctx.fill()
-      ctx.fillStyle = t.accentLight; ctx.font = 'bold 10px Inter,system-ui'; ctx.textAlign = 'center'
-      ctx.fillText(d.value + (unit || ''), x, y - 10)
+    ctx.moveTo(xOfRatio(0), yOf(startVal))
+    ctx.lineTo(xOfRatio(1), yOf(targetVal))
+    ctx.strokeStyle = '#C9CDD3'
+    ctx.lineWidth = 1.5
+    ctx.setLineDash([6, 6])
+    ctx.stroke()
+    ctx.setLineDash([])
+
+    milestones.forEach(m => {
+      const x = xOfRatio(m.ratio)
+      const y = yOf(m.value)
+      ctx.beginPath()
+      ctx.arc(x, y, 4, 0, Math.PI * 2)
+      ctx.fillStyle = '#9CA3AF'
+      ctx.fill()
+      ctx.fillStyle = '#2F58B8'
+      ctx.font = '12px Inter,system-ui'
+      ctx.textAlign = 'center'
+      ctx.fillText(`${m.value.toFixed(1)}${focus.unit}`, x, y - 12)
     })
-  }, [data, metricId, theme, unit, target, t])
-  return <canvas ref={canvasRef} style={{ width: '100%', height: '220px', display: 'block' }} />
-}
 
-export default function Performance({ theme, t, user, lang = 'en', initialTab = 'focus', trainingPlans = [] }) {
-  // Normalise: evolution tab no longer exists as separate — map it to focus
-  const [subTab, setSubTab] = useState(initialTab === 'evolution' ? 'focus' : initialTab)
-  const [entries, setEntries] = useState([])
-  const [metrics, setMetrics] = useState(DEFAULT_METRICS)
-  const [loading, setLoading] = useState(true)
-  const [chartMetric, setChartMetric] = useState('swing_speed')
-  const [chartView, setChartView] = useState('chart')
-  const [form, setForm] = useState({ date: new Date().toISOString().split('T')[0], values: {}, notes: '' })
-  const [saving, setSaving] = useState(false)
-  const [savedMsg, setSavedMsg] = useState('')
-  const [deleteConfirm, setDeleteConfirm] = useState(null)
-  const [newMetric, setNewMetric] = useState({ label: '', unit: '', category: 'golfe', target: '' })
-  const [savingKpis, setSavingKpis] = useState(false)
-  const [kpiMsg, setKpiMsg] = useState('')
-  const [saveError, setSaveError] = useState('')
-  const [goalsError, setGoalsError] = useState(false)
+    if (!pts.length) {
+      ctx.fillStyle = '#64748B'
+      ctx.font = '13px Inter,system-ui'
+      ctx.textAlign = 'center'
+      ctx.fillText('Sem dados', W / 2, H / 2)
+      return
+    }
 
-  const F = "'Inter', system-ui, sans-serif"
-  const card = { background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '20px 22px' }
-  const inp = { background: t.bg, border: `1px solid ${t.border}`, borderRadius: '6px', color: t.text, padding: '7px 10px', fontSize: '13px', fontFamily: F, outline: 'none', width: '100%', boxSizing: 'border-box' }
-  const btn = (active) => ({
-    background: active ? t.text : 'transparent',
-    border: `1px solid ${active ? t.text : t.border}`,
-    borderRadius: '20px', color: active ? t.bg : t.textMuted,
-    padding: '6px 18px', cursor: 'pointer', fontSize: '11px', fontFamily: F, fontWeight: 700, letterSpacing: '1px',
-  })
+    pts.forEach((pt, i) => {
+      if (i === 0) return
+      const prev = pts[i - 1]
+      const prevRatio = (prev.date - startDate) / totalMs
+      const ratio = (pt.date - startDate) / totalMs
+      const prevExpected = startVal + (targetVal - startVal) * prevRatio
+      const expected = startVal + (targetVal - startVal) * ratio
+      ctx.beginPath()
+      ctx.moveTo(xOfDate(prev.date), yOf(prev.value))
+      ctx.lineTo(xOfDate(pt.date), yOf(pt.value))
+      ctx.lineTo(xOfDate(pt.date), yOf(expected))
+      ctx.lineTo(xOfDate(prev.date), yOf(prevExpected))
+      ctx.closePath()
+      ctx.fillStyle = pt.value >= expected ? 'rgba(74,222,128,0.18)' : 'rgba(248,113,113,0.18)'
+      ctx.fill()
+    })
 
-  const fetchMetrics = useCallback(async () => {
-    try {
-      const data = await getMetrics()
-      if (data && data.length > 0) {
-        setMetrics(data.map(m => ({ id: m.metric_id, label: m.label, unit: m.unit || '', category: m.category || 'golfe', target: m.target ? parseFloat(m.target) : null, active: m.active !== false })))
+    ctx.beginPath()
+    pts.forEach((pt, i) => {
+      const x = xOfDate(pt.date)
+      const y = yOf(pt.value)
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
+    })
+    ctx.strokeStyle = '#2563EB'
+    ctx.lineWidth = 2.5
+    ctx.lineJoin = 'round'
+    ctx.stroke()
+
+    pts.forEach((pt, i) => {
+      const ratio = (pt.date - startDate) / totalMs
+      const expected = startVal + (targetVal - startVal) * ratio
+      const x = xOfDate(pt.date)
+      const y = yOf(pt.value)
+      ctx.beginPath()
+      ctx.arc(x, y, 6, 0, Math.PI * 2)
+      ctx.fillStyle = pt.value >= expected ? '#4ADE80' : '#F87171'
+      ctx.fill()
+      if (i === pts.length - 1) {
+        ctx.fillStyle = '#0F172A'
+        ctx.font = 'bold 13px Inter,system-ui'
+        ctx.textAlign = 'center'
+        ctx.fillText(`${pt.value}${focus.unit}`, x, y - 12)
       }
-    } catch (_) {}
-  }, [])
+    })
 
-  const fetchEntries = useCallback(async () => {
-    setLoading(true)
-    try {
-      const data = await getEntries()
-      setEntries(data || [])
-    } catch (e) {
-      console.error('Erro ao carregar registos:', e)
-    }
-    setLoading(false)
-  }, [])
-
-  useEffect(() => { fetchMetrics(); fetchEntries() }, [fetchMetrics, fetchEntries])
-
-
-  const saveEntry = async () => {
-    setSaving(true); setSaveError('')
-    try {
-      const rows = Object.entries(form.values)
-        .filter(([, v]) => v !== '' && v !== undefined)
-        .map(([metric_id, value]) => ({ metric_id, value: String(value), entry_date: form.date, updated_by: user.email, updated_at: new Date().toISOString() }))
-      if (form.notes) rows.push({ metric_id: '__notes__', value: form.notes, entry_date: form.date, updated_by: user.email, updated_at: new Date().toISOString() })
-      if (!rows.length) { setSaving(false); setSaveError('Nenhum valor introduzido.'); return }
-      await saveEntries(rows)
-      setSavedMsg('Guardado ✓'); setTimeout(() => setSavedMsg(''), 3000)
-      setForm(p => ({ ...p, values: {}, notes: '' }))
-      fetchEntries()
-    } catch (e) {
-      setSaveError('Erro ao guardar: ' + (e.message || 'tente novamente'))
-    }
-    setSaving(false)
-  }
-
-  const doDelete = async (date) => {
-    try {
-      const ids = dateMap[date] ? Object.values(dateMap[date]).map(e => e.id).filter(Boolean) : []
-      const noteEntry = entries.find(e => e.entry_date === date && e.metric_id === '__notes__')
-      if (noteEntry) ids.push(noteEntry.id)
-      await deleteEntries(ids)
-    } catch (e) {
-      console.error('Erro ao apagar:', e)
-    }
-    setDeleteConfirm(null); fetchEntries()
-  }
-
-  const saveKpis = async () => {
-    setSavingKpis(true); setKpiMsg('')
-    try {
-      const metricsData = metrics.map((m, i) => ({
-        metric_id: m.id, label: m.label, unit: m.unit || '',
-        category: m.category || 'golfe', target: m.target || null,
-        sort_order: i, created_by: user.email, active: m.active !== false,
-      }))
-      await saveMetrics(metricsData)
-      setKpiMsg('Prioridades guardadas ✓')
-    } catch (e) {
-      const msg = e?.message || ''
-      if (msg.includes('function') || msg.includes('does not exist')) {
-        // Fallback: upsert individually
-        try {
-          for (const m of metrics) {
-            await upsertMetric({
-              metric_id: m.id, label: m.label, unit: m.unit || '',
-              category: m.category || 'golfe', target: m.target || null,
-              active: m.active !== false, created_by: user.email,
-            })
-          }
-          setKpiMsg('Prioridades guardadas ✓')
-        } catch (e2) {
-          setKpiMsg('Erro ao guardar: ' + (e2.message || 'tente novamente'))
-        }
-      } else {
-        setKpiMsg('Erro: ' + msg)
-      }
-    }
-    setSavingKpis(false)
-    setTimeout(() => setKpiMsg(''), 5000)
-  }
-
-  const dateMap = {}
-  entries.forEach(e => { if (!e.entry_date) return; if (!dateMap[e.entry_date]) dateMap[e.entry_date] = {}; dateMap[e.entry_date][e.metric_id] = { value: e.value, id: e.id } })
-  const sortedDates = Object.keys(dateMap).sort().reverse()
-
-  const swingPts = entries.filter(e => e.metric_id === 'swing_speed' && e.value).sort((a, b) => a.entry_date.localeCompare(b.entry_date))
-  const lastSwing = swingPts.length ? parseFloat(swingPts[swingPts.length - 1].value) : null
-  const bestSwing = swingPts.length ? Math.max(...swingPts.map(e => parseFloat(e.value))) : null
-  const swingTarget = metrics.find(m => m.id === 'swing_speed')?.target || 95
-  const pct = lastSwing ? Math.min(100, Math.round((lastSwing / swingTarget) * 100)) : 0
-  const delta = swingPts.length > 1 ? (parseFloat(swingPts[swingPts.length - 1].value) - parseFloat(swingPts[swingPts.length - 2].value)).toFixed(1) : null
-
-  // Training context
-  const nextTraining = (() => {
-    for (let offset = 0; offset <= 14; offset++) {
-      const d = new Date(); d.setDate(d.getDate() + offset)
-      const dow = d.getDay(); const dayIdx = dow === 0 ? 6 : dow - 1
-      const monday = new Date(d); monday.setDate(d.getDate() - dayIdx); monday.setHours(12, 0, 0, 0)
-      const ws = monday.toISOString().split('T')[0]
-      const plan = trainingPlans.find(p => p.week_start === ws)
-      if (plan?.days?.[dayIdx]?.sessions?.some(s => !s.isRest)) {
-        return { offset, dayIdx }
-      }
-    }
-    return null
-  })()
-
-  const daysSinceLastEntry = (() => {
-    const last = entries.filter(e => e.entry_date && e.metric_id !== '__notes__')
-      .sort((a, b) => b.entry_date.localeCompare(a.entry_date))[0]
-    if (!last) return null
-    return Math.floor((new Date() - new Date(last.entry_date + 'T12:00:00')) / 86400000)
-  })()
-
-  const subTabs = [
-    [lang === 'pt' ? 'Prioridades' : 'Priorities', 'focus'],
-    ['HCP & WAGR', 'hcpwagr'],
-    [lang === 'pt' ? 'Registar' : 'Register', 'register'],
-    [lang === 'pt' ? 'Editar KPIs' : 'Edit KPIs', 'kpis'],
-  ]
+    ctx.fillStyle = '#2F58B8'
+    ctx.font = 'bold 13px Inter,system-ui'
+    ctx.textAlign = 'left'
+    ctx.fillText(`Target: ${targetVal}${focus.unit}`, xOfRatio(1) - 102, yOf(targetVal) - 10)
+  }, [focus, pts, startDate, endDate, startVal, targetVal, totalMs])
 
   return (
-    <div style={{ fontFamily: F, color: t.text }}>
-      <style>{`
-        .perf-ctx-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-        @media(max-width:480px){.perf-ctx-grid{grid-template-columns:1fr}}
-      `}</style>
-
-      {/* Delete modal */}
-      {deleteConfirm && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
-          <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '14px', padding: '28px 32px', maxWidth: '380px', width: '90%' }}>
-            <div style={{ fontSize: '16px', fontWeight: 700, color: t.text, marginBottom: '8px' }}>Apagar este registo?</div>
-            <div style={{ fontSize: '13px', color: t.textMuted, marginBottom: '24px', lineHeight: 1.6 }}>
-              Todos os dados de <b style={{ color: t.text }}>{new Date(deleteConfirm + 'T12:00:00').toLocaleDateString('pt-PT')}</b> serão eliminados permanentemente.
-            </div>
-            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-              <button onClick={() => setDeleteConfirm(null)} style={btn(false)}>Cancelar</button>
-              <button onClick={() => doDelete(deleteConfirm)} style={{ background: t.danger, border: 'none', borderRadius: '6px', color: '#fff', padding: '8px 20px', fontFamily: F, fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}>Apagar</button>
-            </div>
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '18px', alignItems: 'flex-start', marginBottom: '24px' }}>
+        <div>
+          <div style={{ fontSize: '20px', fontWeight: 900, color: '#0F172A', marginBottom: '8px' }}>{title}</div>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'baseline', fontSize: '16px', color: '#3158B9' }}>
+            <span>{startVal}{focus.unit} → <strong style={{ color: '#0F172A' }}>{targetVal}{focus.unit}</strong></span>
+            <span style={{ color: '#22C55E' }}>+{(targetVal - startVal).toFixed(1)}{focus.unit}</span>
           </div>
         </div>
-      )}
-
-      {/* Tab header */}
-      <div style={{ marginBottom: '20px' }}>
-        <div style={{ fontSize: '9px', letterSpacing: '3px', color: t.accent, fontWeight: 700, marginBottom: '3px' }}>PERFORMANCE</div>
-        <div style={{ fontSize: '11px', color: t.textMuted }}>{lang === 'pt' ? 'Evolução, métricas e objetivos' : 'Evolution, metrics and goals'}</div>
-      </div>
-
-      {/* Sub-nav (compact pills) */}
-      <div style={{ display: 'flex', gap: '6px', marginBottom: '22px', flexWrap: 'wrap', paddingBottom: '14px', borderBottom: `1px solid ${t.border}` }}>
-        {subTabs.map(([lbl, key]) => (
-          <button key={key} onClick={() => setSubTab(key)}
-            style={{ padding: '5px 14px', borderRadius: '20px', border: `1px solid ${subTab === key ? t.accent : t.border}`,
-              background: subTab === key ? t.accent + '18' : 'transparent', color: subTab === key ? t.accent : t.textMuted,
-              cursor: 'pointer', fontSize: '11px', fontWeight: subTab === key ? 700 : 500, fontFamily: F, whiteSpace: 'nowrap' }}>
-            {lbl}
-          </button>
-        ))}
-      </div>
-
-      {loading && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '8px 0' }}>
-          {[1,2,3].map(i => (
-            <div key={i} style={{ height: i === 1 ? '120px' : '72px', borderRadius: '12px', background: t.surface, border: `1px solid ${t.border}`, position: 'relative', overflow: 'hidden' }}>
-              <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(90deg, transparent 0%, ${t.border} 50%, transparent 100%)`, animation: 'shimmer 1.4s infinite', backgroundSize: '200% 100%' }} />
-            </div>
-          ))}
-          <style>{`@keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }`}</style>
-        </div>
-      )}
-
-      {/* ── PRIORIDADES (Focus + Evolution merged) ── */}
-      {!loading && subTab === 'focus' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-
-          {/* KPI Strip */}
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            {metrics.filter(m => m.id !== '__notes__').map(m => {
-              const last = entries.filter(e => e.metric_id === m.id && e.value).sort((a,b) => b.entry_date.localeCompare(a.entry_date))[0]
-              const prev = entries.filter(e => e.metric_id === m.id && e.value).sort((a,b) => b.entry_date.localeCompare(a.entry_date))[1]
-              const delta = last && prev ? (parseFloat(last.value) - parseFloat(prev.value)) : null
-              const pctOfTarget = last && m.target ? Math.min(100, Math.round((parseFloat(last.value) / m.target) * 100)) : null
-              return (
-                <div key={m.id} style={{ flex: '1 1 120px', minWidth: '110px', background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '10px 12px' }}>
-                  <div style={{ fontSize: '8px', letterSpacing: '1.5px', color: t.textMuted, fontWeight: 700, marginBottom: '4px', textTransform: 'uppercase' }}>{m.label}</div>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
-                    <div style={{ fontSize: '18px', fontWeight: 900, color: last ? t.text : t.textFaint, lineHeight: 1 }}>{last ? last.value : '—'}</div>
-                    {m.unit && last && <div style={{ fontSize: '10px', color: t.textMuted }}>{m.unit}</div>}
-                  </div>
-                  {delta !== null && (
-                    <div style={{ fontSize: '10px', color: delta >= 0 ? t.success : t.danger, fontWeight: 600, marginTop: '2px' }}>
-                      {delta >= 0 ? '+' : ''}{delta.toFixed(1)}{m.unit}
-                    </div>
-                  )}
-                  {pctOfTarget !== null && (
-                    <div style={{ marginTop: '5px', height: '2px', background: t.border, borderRadius: '1px', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${pctOfTarget}%`, background: pctOfTarget >= 100 ? t.success : t.accent, borderRadius: '1px' }} />
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-
-          {/* Training context banner */}
-          <div style={{ ...card, padding: '14px 18px' }}>
-            <div style={{ fontSize: '9px', letterSpacing: '2px', color: t.textMuted, fontWeight: 600, marginBottom: '10px' }}>CONTEXTO DE TREINO</div>
-            <div className="perf-ctx-grid">
-              <div>
-                <div style={{ fontSize: '9px', letterSpacing: '1px', color: t.textMuted, marginBottom: '3px', fontWeight: 600 }}>PRÓXIMO TREINO</div>
-                {nextTraining !== null ? (
-                  <div style={{ fontSize: '15px', fontWeight: 800, color: nextTraining.offset === 0 ? '#52E8A0' : t.text }}>
-                    {nextTraining.offset === 0 ? 'Hoje' : nextTraining.offset === 1 ? 'Amanhã' : `+${nextTraining.offset} dias`}
-                  </div>
-                ) : (
-                  <div style={{ fontSize: '13px', color: '#f59e0b', fontWeight: 600 }}>Sem plano</div>
-                )}
-              </div>
-              <div>
-                <div style={{ fontSize: '9px', letterSpacing: '1px', color: t.textMuted, marginBottom: '3px', fontWeight: 600 }}>ÚLTIMO REGISTO</div>
-                {daysSinceLastEntry !== null ? (
-                  <div style={{ fontSize: '15px', fontWeight: 800, color: daysSinceLastEntry > 7 ? '#f59e0b' : t.text }}>
-                    {daysSinceLastEntry === 0 ? 'Hoje' : daysSinceLastEntry === 1 ? 'Ontem' : `${daysSinceLastEntry}d atrás`}
-                    {daysSinceLastEntry > 7 && <span style={{ display: 'block', fontSize: '10px', color: '#f59e0b', fontWeight: 600 }}>⚠ sem registo recente</span>}
-                  </div>
-                ) : (
-                  <div style={{ fontSize: '13px', color: t.textMuted }}>Sem dados</div>
-                )}
-              </div>
-              <div>
-                <div style={{ fontSize: '9px', letterSpacing: '1px', color: t.textMuted, marginBottom: '3px', fontWeight: 600 }}>TENDÊNCIA SWING</div>
-                {delta !== null ? (
-                  <div style={{ fontSize: '15px', fontWeight: 800, color: parseFloat(delta) >= 0 ? '#52E8A0' : '#f87171' }}>
-                    {parseFloat(delta) >= 0 ? '↑' : '↓'} {Math.abs(delta)} mph
-                  </div>
-                ) : (
-                  <div style={{ fontSize: '13px', color: t.textMuted }}>— mph</div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Main focus card */}
-          <div style={{ ...card, background: t.surface, border: '1px solid #378ADD33' }}>
-            <div style={{ fontSize: '10px', letterSpacing: '3px', color: t.accent, marginBottom: '6px', fontWeight: 600 }}>OBJECTIVO PRINCIPAL</div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '12px' }}>
-              <div>
-                <div style={{ fontSize: '28px', fontWeight: 900, letterSpacing: '-0.5px', color: t.text }}>Velocidade de Swing</div>
-                <div style={{ fontSize: '14px', color: t.textMuted, marginTop: '4px' }}>
-                  {lastSwing ? lastSwing.toFixed(1) : '—'} mph → <span style={{ color: '#52E8A0', fontWeight: 700 }}>{swingTarget} mph</span>
-                </div>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: '52px', fontWeight: 900, color: '#378ADD', lineHeight: 1, letterSpacing: '-2px' }}>{pct}%</div>
-                <div style={{ fontSize: '11px', color: t.textMuted }}>do objectivo</div>
-              </div>
-            </div>
-            <div style={{ marginTop: '14px', height: '6px', background: t.border, borderRadius: '3px', overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: `${pct}%`, background: `linear-gradient(90deg, ${t.accent}, #52E8A0)`, borderRadius: '3px', transition: 'width 0.5s' }} />
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px', fontSize: '10px', color: t.textMuted }}>
-              <span>0 mph</span>
-              <span style={{ color: lastSwing ? t.accent : t.textMuted }}>{lastSwing ? `Actual: ${lastSwing} mph` : 'Sem dados'}</span>
-              <span>{swingTarget} mph</span>
-            </div>
-          </div>
-
-          {/* KPI summary grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '10px' }}>
-            {metrics.filter(m => m.id !== 'swing_speed' && m.active !== false).map(m => {
-              const pts = entries.filter(e => e.metric_id === m.id && e.value).sort((a, b) => a.entry_date.localeCompare(b.entry_date))
-              const last = pts.length ? pts[pts.length - 1] : null
-              const prev = pts.length > 1 ? pts[pts.length - 2] : null
-              const delta = last && prev ? (parseFloat(last.value) - parseFloat(prev.value)).toFixed(1) : null
-              const nextRecord = last ? (() => { const d=new Date(last.entry_date+'T12:00:00'); d.setDate(d.getDate()+7); return d.toISOString().split('T')[0] })() : null
-              const todayStr = new Date().toISOString().split('T')[0]
-              const isOverdue = !!(nextRecord && nextRecord < todayStr)
-              return (
-                <div key={m.id} style={card}>
-                  <div style={{ fontSize: '9px', letterSpacing: '2px', color: t.textMuted, marginBottom: '4px', fontWeight: 600 }}>{m.label.toUpperCase()}</div>
-                  <div style={{ fontSize: '20px', fontWeight: 700, color: t.text }}>
-                    {last ? last.value : '—'}<span style={{ fontSize: '10px', color: t.textMuted, marginLeft: '2px' }}>{m.unit}</span>
-                  </div>
-                  {delta !== null && (
-                    <div style={{ fontSize: '11px', color: parseFloat(delta) >= 0 ? '#52E8A0' : t.danger, marginTop: '2px' }}>
-                      {parseFloat(delta) >= 0 ? '+' : ''}{delta} {m.unit}
-                    </div>
-                  )}
-                  {last && (
-                    <div style={{ marginTop:'6px', fontSize:'9px', color:isOverdue?t.danger:t.textMuted, fontWeight:isOverdue?700:400, borderTop:`1px solid ${t.border}`, paddingTop:'5px' }}>
-                      {isOverdue ? '⚠️ Registo em atraso' : `📅 Próximo: ${new Date(nextRecord+'T12:00:00').toLocaleDateString('pt-PT',{day:'2-digit',month:'short'})}`}
-                    </div>
-                  )}
-                  {m.target && last && (() => {
-                    const val = parseFloat(last.value)
-                    const tgt = parseFloat(m.target)
-                    const exceeded = val >= tgt
-                    const barPct = Math.min(100, Math.max(0, (val / tgt) * 100))
-                    return (
-                      <div style={{ marginTop: '6px' }}>
-                        <div style={{ height: '3px', background: t.border, borderRadius: '2px', overflow: 'hidden' }}>
-                          <div style={{ height: '100%', width: `${barPct}%`, background: exceeded ? '#52E8A0' : '#378ADD', borderRadius: '2px', transition: 'width 0.4s' }} />
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '3px', fontSize: '9px', color: t.textMuted }}>
-                          <span style={{ color: exceeded ? '#52E8A0' : t.textMuted }}>{val.toFixed(1)}{m.unit}</span>
-                          <span style={{ color: exceeded ? '#52E8A0' : '#378ADD' }}>{exceeded ? '✓ ' : ''}{tgt}{m.unit}</span>
-                        </div>
-                      </div>
-                    )
-                  })()}
-                </div>
-              )
-            })}
-          </div>
-
-          {/* ── EVOLUÇÃO (inline, previously separate tab) ── */}
-          <div>
-            <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-              <div style={{ fontSize: '10px', letterSpacing: '2px', color: t.textMuted, fontWeight: 600, flex: 1 }}>EVOLUÇÃO</div>
-              <button onClick={() => setChartView('chart')} style={btn(chartView === 'chart')}>Gráfico</button>
-              <button onClick={() => setChartView('table')} style={btn(chartView === 'table')}>Tabela</button>
-              {chartView === 'chart' && (
-                <select value={chartMetric} onChange={e => setChartMetric(e.target.value)}
-                  style={{ background: t.surface, border: `1px solid ${t.border}`, color: t.text, padding: '6px 10px', borderRadius: '6px', fontSize: '12px', fontFamily: F, outline: 'none' }}>
-                  {metrics.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
-                </select>
-              )}
-            </div>
-            {chartView === 'chart' && (
-              <div style={card}>
-                <div style={{ fontSize: '10px', letterSpacing: '2px', color: t.textMuted, marginBottom: '12px', fontWeight: 600 }}>
-                  {metrics.find(m => m.id === chartMetric)?.label?.toUpperCase()} — EVOLUÇÃO
-                </div>
-                <SparkChart data={entries} metricId={chartMetric} unit={metrics.find(m => m.id === chartMetric)?.unit} target={metrics.find(m => m.id === chartMetric)?.target} theme={theme} t={t} />
-              </div>
-            )}
-            {chartView === 'table' && (
-              <div style={{ overflowX: 'auto', border: `1px solid ${t.border}`, borderRadius: '10px' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', minWidth: '500px' }}>
-                  <thead>
-                    <tr style={{ background: t.surface }}>
-                      <th style={{ padding: '10px 14px', textAlign: 'left', color: t.textMuted, fontWeight: 600, fontSize: '10px', letterSpacing: '2px', borderBottom: `1px solid ${t.border}` }}>DATA</th>
-                      {metrics.map(m => <th key={m.id} style={{ padding: '10px 8px', textAlign: 'center', color: t.textMuted, fontWeight: 600, fontSize: '10px', letterSpacing: '1px', borderBottom: `1px solid ${t.border}` }}>{m.label.toUpperCase()}</th>)}
-                      <th style={{ padding: '10px 8px', textAlign: 'center', color: t.textMuted, fontWeight: 600, fontSize: '10px', borderBottom: `1px solid ${t.border}` }}>NOTAS</th>
-                      <th style={{ borderBottom: `1px solid ${t.border}`, width: '40px' }}></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedDates.map(date => (
-                      <tr key={date} style={{ borderTop: `1px solid ${t.border}` }}>
-                        <td style={{ padding: '10px 14px', color: t.textMuted, whiteSpace: 'nowrap' }}>{new Date(date + 'T12:00:00').toLocaleDateString('pt-PT')}</td>
-                        {metrics.map(m => {
-                          const entry = dateMap[date]?.[m.id]
-                          return <td key={m.id} style={{ padding: '10px 8px', textAlign: 'center', color: entry ? t.accent : t.textMuted, fontWeight: entry ? 700 : 400 }}>{entry ? `${entry.value}${m.unit}` : '·'}</td>
-                        })}
-                        <td style={{ padding: '10px 8px', textAlign: 'center', color: t.textMuted, fontSize: '12px', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {dateMap[date]?.['__notes__']?.value || '·'}
-                        </td>
-                        <td style={{ padding: '10px 8px', textAlign: 'center' }}>
-                          <button onClick={() => setDeleteConfirm(date)}
-                            style={{ background: 'transparent', border: 'none', color: t.textMuted, cursor: 'pointer', fontSize: '16px', padding: '2px 6px' }}
-                            onMouseEnter={e => e.target.style.color = t.danger}
-                            onMouseLeave={e => e.target.style.color = t.textMuted}>×</button>
-                        </td>
-                      </tr>
-                    ))}
-                    {!sortedDates.length && (
-                      <tr><td colSpan={metrics.length + 3} style={{ padding: '48px', textAlign: 'center', color: t.textMuted, fontStyle: 'italic' }}>
-                        Sem registos ainda.
-                      </td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-
-          {/* Goals — with error guard */}
-          {!goalsError ? (
-            <div>
-              <div style={{ fontSize: '10px', letterSpacing: '2px', color: t.textMuted, fontWeight: 600, marginBottom: '12px' }}>OBJECTIVOS</div>
-              <GoalsWrapper theme={theme} t={t} user={user} entries={entries} lang={lang} onError={() => setGoalsError(true)} />
-            </div>
-          ) : (
-            <div style={{ ...card, textAlign: 'center', padding: '24px', color: t.textMuted, fontSize: '13px' }}>
-              Não foi possível carregar os objectivos.{' '}
-              <button onClick={() => setGoalsError(false)} style={{ background: 'transparent', border: 'none', color: t.accent, cursor: 'pointer', fontFamily: F, fontSize: '13px' }}>Tentar novamente</button>
+        <div style={{ textAlign: 'right', display: 'grid', justifyItems: 'end', gap: '4px' }}>
+          {latest && (
+            <div style={{ display: 'inline-flex', alignItems: 'center', border: `1px solid ${isBehind ? '#FECACA' : '#BBF7D0'}`, background: isBehind ? '#FEF2F2' : '#F0FDF4', color: isBehind ? '#F87171' : '#16A34A', borderRadius: '999px', padding: '6px 13px', fontSize: '14px', fontWeight: 850 }}>
+              {isBehind ? 'Behind' : 'Ahead'} {delta >= 0 ? '+' : ''}{delta.toFixed(1)}{focus.unit}
             </div>
           )}
+          <div style={{ fontSize: '12px', color: '#3158B9', fontWeight: 650 }}>{daysLeft}d left</div>
+          <button onClick={onEdit} style={{ marginTop: '-28px', marginLeft: '116px', border: '1px solid #CBD5E1', background: '#FFFFFF', color: '#3158B9', borderRadius: '8px', padding: '8px 16px', fontFamily: F, fontSize: '13px', cursor: 'pointer' }}>Edit</button>
         </div>
-      )}
+      </div>
 
-      {/* ── REGISTAR ── */}
-      {!loading && subTab === 'register' && (
-        <div style={card}>
-          <div style={{ marginBottom: '16px' }}>
-            <div style={{ fontSize: '9px', letterSpacing: '2px', color: t.textMuted, marginBottom: '6px', fontWeight: 600 }}>DATA</div>
-            <input type="date" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} style={{ ...inp, width: 'auto' }} />
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-            {['golfe', 'ginasio'].map(cat => (
-              <div key={cat}>
-                <div style={{ fontSize: '9px', letterSpacing: '3px', color: t.textMuted, marginBottom: '10px', borderBottom: `1px solid ${t.border}`, paddingBottom: '8px', fontWeight: 600 }}>{cat === 'golfe' ? 'GOLFE' : 'GINÁSIO'}</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {metrics.filter(m => m.category === cat).map(metric => (
-                    <div key={metric.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: t.bg, border: `1px solid ${t.border}`, borderRadius: '8px' }}>
-                      <span style={{ fontSize: '12px', color: t.textMuted, fontWeight: 500, flex: 1, marginRight: '8px' }}>
-                        {metric.label}
-                        {metric.unit ? <span style={{ color: t.textMuted, marginLeft: '4px', fontSize: '10px' }}>{metric.unit}</span> : ''}
-                      </span>
-                      <input type="number" step="0.01" placeholder="—" value={form.values[metric.id] || ''}
-                        onChange={e => setForm(p => ({ ...p, values: { ...p.values, [metric.id]: e.target.value } }))}
-                        style={{ width: '90px', background: t.surface, border: `1px solid ${t.border}`, borderRadius: '6px', color: t.text, padding: '5px 8px', fontSize: '15px', fontWeight: 700, fontFamily: F, outline: 'none', textAlign: 'right' }} />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-          <div style={{ marginTop: '14px' }}>
-            <div style={{ fontSize: '9px', letterSpacing: '2px', color: t.textMuted, marginBottom: '6px', fontWeight: 600 }}>NOTAS DA SESSÃO</div>
-            <textarea placeholder="Observações, condições, sensações..." value={form.notes}
-              onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
-              style={{ ...inp, minHeight: '64px', resize: 'vertical' }} />
-          </div>
-          <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-            <button onClick={saveEntry} disabled={saving}
-              style={{ background: saving ? t.border : t.accent, border: 'none', borderRadius: '8px', color: saving ? t.textMuted : '#fff', padding: '10px 24px', fontSize: '13px', fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', fontFamily: F }}>
-              {saving ? 'A guardar...' : 'Guardar Sessão'}
-            </button>
-            {savedMsg && <span style={{ fontSize: '13px', color: '#52E8A0', fontWeight: 600 }}>{savedMsg}</span>}
-            {saveError && (
-              <div style={{ fontSize: '12px', color: t.danger, fontWeight: 600, background: t.dangerBg || '#fef2f2', border: `1px solid ${t.danger}44`, borderRadius: '6px', padding: '6px 12px' }}>
-                ⚠ {saveError}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '8px' }}>
+        <div style={{ fontSize: '12px', letterSpacing: '2.6px', fontWeight: 800, color: '#3158B9' }}>TIME ELAPSED</div>
+        <div style={{ fontSize: '12px', color: '#3158B9', fontWeight: 650 }}>{formatDate(focus.startDate)} → {formatDate(endDate.toISOString().split('T')[0])}</div>
+      </div>
+      <div style={{ height: '5px', background: '#D7E2F4', borderRadius: '999px', overflow: 'hidden', marginBottom: '64px' }}>
+        <div style={{ width: `${todayRatio * 100}%`, height: '100%', background: '#2F86E8', borderRadius: '999px' }} />
+      </div>
 
-      {/* ── EDITAR KPIs ── */}
-      {!loading && subTab === 'kpis' && (
-        <div style={card}>
-          <div style={{ fontSize: '10px', letterSpacing: '3px', color: t.textMuted, marginBottom: '14px', fontWeight: 600 }}>GERIR KPIs</div>
-          <div style={{ fontSize: '9px', color: t.textMuted, letterSpacing: '1px', display: 'flex', gap: '6px', marginBottom: '4px', paddingLeft: '2px' }}>
-            <div style={{ flex: 1 }}>NOME</div>
-            <div style={{ width: '52px' }}>UNID.</div>
-            <div style={{ width: '56px' }}>OBJ.</div>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', marginBottom: '14px' }}>
-            {metrics.map((m, i) => (
-              <div key={m.id} style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                <input value={m.label} onChange={e => setMetrics(p => p.map((x, j) => j === i ? { ...x, label: e.target.value } : x))}
-                  style={{ flex: 1, background: t.bg, border: `1px solid ${t.border}`, borderRadius: '5px', color: t.text, padding: '5px 8px', fontSize: '12px', fontFamily: F, outline: 'none' }} />
-                <input value={m.unit} placeholder="—" onChange={e => setMetrics(p => p.map((x, j) => j === i ? { ...x, unit: e.target.value } : x))}
-                  style={{ width: '52px', background: t.bg, border: `1px solid ${t.border}`, borderRadius: '5px', color: t.text, padding: '5px 6px', fontSize: '12px', fontFamily: F, outline: 'none' }} />
-                <input value={m.target || ''} placeholder="—" onChange={e => setMetrics(p => p.map((x, j) => j === i ? { ...x, target: e.target.value ? parseFloat(e.target.value) : null } : x))}
-                  style={{ width: '56px', background: t.bg, border: `1px solid ${t.border}`, borderRadius: '5px', color: t.text, padding: '5px 6px', fontSize: '12px', fontFamily: F, outline: 'none' }} />
-                <button onClick={() => setMetrics(p => p.map((x, j) => j === i ? { ...x, active: !x.active } : x))}
-                  title={m.active !== false ? 'Desactivar' : 'Activar'}
-                  style={{ background: m.active !== false ? '#52E8A022' : t.bg, border: `1px solid ${m.active !== false ? '#52E8A0' : t.border}`, borderRadius: '4px', color: m.active !== false ? '#52E8A0' : t.textMuted, cursor: 'pointer', fontSize: '10px', padding: '3px 7px', fontFamily: F, fontWeight: 600 }}>
-                  {m.active !== false ? 'ON' : 'OFF'}
-                </button>
-                <button onClick={() => setMetrics(p => p.filter((_, j) => j !== i))}
-                  style={{ background: 'transparent', border: 'none', color: t.textMuted, cursor: 'pointer', fontSize: '16px', padding: '0', width: '24px', lineHeight: 1 }}
-                  onMouseEnter={e => e.target.style.color='#f87171'} onMouseLeave={e => e.target.style.color=t.textMuted}>×</button>
-              </div>
-            ))}
-          </div>
-          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', paddingTop: '12px', borderTop: `1px solid ${t.border}`, marginBottom: '14px' }}>
-            <input placeholder="Nome do KPI" value={newMetric.label} onChange={e => setNewMetric(p => ({ ...p, label: e.target.value }))}
-              style={{ flex: 2, minWidth: '120px', ...inp, padding: '5px 8px', fontSize: '12px' }} />
-            <input placeholder="unid." value={newMetric.unit} onChange={e => setNewMetric(p => ({ ...p, unit: e.target.value }))}
-              style={{ width: '60px', ...inp, padding: '5px 8px', fontSize: '12px' }} />
-            <input placeholder="obj." value={newMetric.target} onChange={e => setNewMetric(p => ({ ...p, target: e.target.value }))}
-              style={{ width: '64px', ...inp, padding: '5px 8px', fontSize: '12px' }} />
-            <button onClick={() => {
-              if (!newMetric.label) return
-              setMetrics(p => [...p, { ...newMetric, id: newMetric.label.toLowerCase().replace(/\s+/g, '_') + '_' + Date.now(), target: newMetric.target ? parseFloat(newMetric.target) : null }])
-              setNewMetric({ label: '', unit: '', category: 'golfe', target: '' })
-            }} style={{ background: t.accent, border: 'none', borderRadius: '6px', color: t.onAccent, padding: '5px 14px', cursor: 'pointer', fontSize: '12px', fontFamily: F, fontWeight: 600 }}>+ Adicionar</button>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-            <button onClick={saveKpis} disabled={savingKpis}
-              style={{ background: savingKpis ? t.border : t.accent, border: 'none', borderRadius: '6px', color: savingKpis ? t.textMuted : '#fff', padding: '8px 20px', fontFamily: F, fontWeight: 600, fontSize: '13px', cursor: savingKpis ? 'not-allowed' : 'pointer' }}>
-              {savingKpis ? 'A guardar...' : 'Guardar KPIs na BD'}
-            </button>
-            {kpiMsg && (
-              <div style={{ fontSize: '12px', color: kpiMsg.startsWith('Erro') ? t.danger : '#52E8A0', fontWeight: 600,
-                background: kpiMsg.startsWith('Erro') ? (t.dangerBg || '#fef2f2') : '#0a2a1a',
-                border: `1px solid ${kpiMsg.startsWith('Erro') ? t.danger+'44' : '#52E8A044'}`,
-                borderRadius: '6px', padding: '6px 12px' }}>
-                {kpiMsg.startsWith('Erro') ? '⚠ ' : '✓ '}{kpiMsg}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      <canvas ref={canvasRef} style={{ width: '100%', height: '280px', display: 'block' }} />
 
-      {/* ── HCP & WAGR ── */}
-      {subTab === 'hcpwagr' && <HcpWagr theme={theme} t={t} user={user} />}
-
+      <div style={{ display: 'flex', alignItems: 'center', gap: '24px', marginTop: '22px', color: '#3158B9', fontSize: '13px', flexWrap: 'wrap' }}>
+        <span>Expected progression</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}><span style={{ width: '30px', height: '2px', background: '#2563EB', display: 'inline-block' }} />Actual</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', color: '#22C55E' }}><span style={{ width: '14px', height: '14px', border: '1px solid #86EFAC', background: '#DCFCE7', borderRadius: '3px', display: 'inline-block' }} />Ahead of target</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', color: '#F87171' }}><span style={{ width: '14px', height: '14px', border: '1px solid #FCA5A5', background: '#FEE2E2', borderRadius: '3px', display: 'inline-block' }} />Behind target</span>
+      </div>
     </div>
   )
 }
 
-// Goals wrapper with error boundary pattern
-function GoalsWrapper({ theme, t, user, entries, lang, onError }) {
-  const [errored, setErrored] = useState(false)
-  if (errored) { onError?.(); return null }
-  try {
-    return <Goals theme={theme} t={t} user={user} entries={entries} lang={lang} />
-  } catch {
-    setErrored(true)
-    return null
+// ─── EditFocusModal ─────────────────────────────────────────────────────────────
+function EditFocusModal({ focus, onSave, onClose, inp, primary, secondary }) {
+  const [d, setD] = useState({
+    name: focus.name, metric: focus.metric,
+    startValue: String(focus.startValue ?? focus.currentValue),
+    currentValue: String(focus.currentValue),
+    targetValue: String(focus.targetValue),
+    unit: focus.unit, startDate: focus.startDate, objective: focus.objective || '',
+  })
+  const [err, setErr] = useState('')
+  const set = (k, v) => setD(p => ({ ...p, [k]: v }))
+
+  const save = () => {
+    if (!d.name.trim() || !d.metric.trim() || !d.unit.trim() || !d.startDate) { setErr('Preenche todos os campos.'); return }
+    const sv = Number(d.startValue), cv = Number(d.currentValue), tv = Number(d.targetValue)
+    if (isNaN(sv) || isNaN(tv) || sv >= tv) { setErr('Valor objetivo deve ser maior que valor de partida.'); return }
+    onSave({ ...focus, ...d, startValue: sv, currentValue: cv, targetValue: tv })
   }
+
+  return (
+    <div style={OVR}>
+      <div style={{ ...modalBase, maxWidth: '480px' }}>
+        <div style={{ fontSize: '18px', fontWeight: 900, marginBottom: '20px' }}>Alterar foco</div>
+        <div style={{ display: 'grid', gap: '12px' }}>
+          <Field label="Nome do foco"><input value={d.name} onChange={e => set('name', e.target.value)} style={inp} /></Field>
+          <Field label="Métrica principal (id)"><input value={d.metric} onChange={e => set('metric', e.target.value)} style={inp} placeholder="ex: swing_speed" /></Field>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+            <Field label="Partida"><input type="number" value={d.startValue}   onChange={e => set('startValue',   e.target.value)} style={inp} /></Field>
+            <Field label="Atual">  <input type="number" value={d.currentValue} onChange={e => set('currentValue', e.target.value)} style={inp} /></Field>
+            <Field label="Objetivo"><input type="number" value={d.targetValue} onChange={e => set('targetValue',  e.target.value)} style={inp} /></Field>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+            <Field label="Unidade"><input value={d.unit} onChange={e => set('unit', e.target.value)} style={inp} placeholder="mph, m, kg…" /></Field>
+            <Field label="Data de início"><input type="date" value={d.startDate} onChange={e => set('startDate', e.target.value)} style={inp} /></Field>
+          </div>
+          <Field label="Objetivo (descrição)"><input value={d.objective} onChange={e => set('objective', e.target.value)} style={inp} /></Field>
+        </div>
+        {err && <div style={{ color: '#DC2626', fontSize: '12px', marginTop: '8px' }}>{err}</div>}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
+          <button onClick={onClose} style={secondary}>Cancelar</button>
+          <button onClick={save} style={primary}>Guardar</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── EditTasksModal ─────────────────────────────────────────────────────────────
+function EditTasksModal({ tasks, onSave, onClose, inp, primary, secondary }) {
+  const [draft, setDraft] = useState(tasks.map(t => ({ ...t })))
+  const set = (i, k, v) => setDraft(p => p.map((t, idx) => idx === i ? { ...t, [k]: v } : t))
+
+  return (
+    <div style={OVR}>
+      <div style={{ ...modalBase, maxWidth: '520px' }}>
+        <div style={{ fontSize: '18px', fontWeight: 900, marginBottom: '20px' }}>Editar tarefas</div>
+        <div style={{ display: 'grid', gap: '14px' }}>
+          {draft.map((task, i) => (
+            <div key={task.id || i} style={{ border: '1px solid #E2E8F0', borderRadius: '10px', padding: '14px' }}>
+              <div style={{ fontSize: '11px', fontWeight: 800, color: '#94A3B8', marginBottom: '10px', letterSpacing: '1px' }}>TAREFA {i + 1}</div>
+              <div style={{ display: 'grid', gap: '10px' }}>
+                <Field label="Nome da tarefa"><input value={task.label} onChange={e => set(i, 'label', e.target.value)} style={inp} /></Field>
+                <Field label="Label curto (overview)"><input value={task.shortLabel || ''} onChange={e => set(i, 'shortLabel', e.target.value)} style={inp} placeholder="ex: Velocidade" /></Field>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px' }}>
+                  <Field label="Métrica (id)"><input value={task.metric} onChange={e => set(i, 'metric', e.target.value)} style={inp} /></Field>
+                  <Field label="Vezes/semana"><input type="number" min="1" max="14" value={task.expectedPerWeek ?? 1} onChange={e => set(i, 'expectedPerWeek', Number(e.target.value))} style={inp} /></Field>
+                  <Field label="Unidade"><input value={task.unit || ''} onChange={e => set(i, 'unit', e.target.value)} style={inp} /></Field>
+                </div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', color: '#334155', fontWeight: 650 }}>
+                  <input type="checkbox" checked={!!task.required} onChange={e => set(i, 'required', e.target.checked)} style={{ width: '16px', height: '16px', cursor: 'pointer' }} />
+                  Obrigatória (afeta compliance)
+                </label>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
+          <button onClick={onClose} style={secondary}>Cancelar</button>
+          <button onClick={() => onSave(draft)} style={primary}>Guardar</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── EditDriversModal ──────────────────────────────────────────────────────────
+function EditDriversModal({ drivers, onSave, onClose, inp, primary, secondary }) {
+  const [draft, setDraft] = useState(drivers.map(d => ({ ...d })))
+  const set = (i, k, v) => setDraft(p => p.map((d, idx) => idx === i ? { ...d, [k]: v } : d))
+
+  const STATUS_OPTIONS = ['Bom', 'Médio', 'Fraco']
+  const TREND_OPTIONS  = [{ value: 'up', label: '↑' }, { value: 'flat', label: '→' }, { value: 'down', label: '↓' }]
+
+  return (
+    <div style={OVR}>
+      <div style={{ ...modalBase, maxWidth: '520px' }}>
+        <div style={{ fontSize: '18px', fontWeight: 900, marginBottom: '20px' }}>Editar drivers</div>
+        <div style={{ display: 'grid', gap: '14px' }}>
+          {draft.map((drv, i) => (
+            <div key={drv.id || i} style={{ border: '1px solid #E2E8F0', borderRadius: '10px', padding: '14px' }}>
+              <div style={{ fontSize: '11px', fontWeight: 800, color: '#94A3B8', marginBottom: '10px', letterSpacing: '1px' }}>DRIVER {i + 1}</div>
+              <div style={{ display: 'grid', gap: '10px' }}>
+                <Field label="Nome"><input value={drv.label} onChange={e => set(i, 'label', e.target.value)} style={inp} /></Field>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <Field label="Modo">
+                    <select value={drv.mode} onChange={e => set(i, 'mode', e.target.value)} style={inp}>
+                      <option value="manual">Manual (coach define)</option>
+                      <option value="metric">Métrica (calculado)</option>
+                    </select>
+                  </Field>
+                  <Field label="Métrica ligada (id)"><input value={drv.linkedMetric || ''} onChange={e => set(i, 'linkedMetric', e.target.value || null)} style={inp} placeholder="opcional" /></Field>
+                </div>
+                {drv.mode === 'manual' && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <Field label="Estado">
+                      <select value={drv.status || ''} onChange={e => set(i, 'status', e.target.value)} style={inp}>
+                        <option value="">—</option>
+                        {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </Field>
+                    <Field label="Tendência">
+                      <select value={drv.trend || 'flat'} onChange={e => set(i, 'trend', e.target.value)} style={inp}>
+                        {TREND_OPTIONS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                      </select>
+                    </Field>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
+          <button onClick={onClose} style={secondary}>Cancelar</button>
+          <button onClick={() => onSave(draft)} style={primary}>Guardar</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── MilestonesModal ────────────────────────────────────────────────────────────
+function MilestonesModal({ focus, currentValue, onClose, secondary }) {
+  const milestones = focus.milestones || []
+  return (
+    <div style={OVR}>
+      <div style={{ ...modalBase, maxWidth: '440px' }}>
+        <div style={{ fontSize: '18px', fontWeight: 900, marginBottom: '20px' }}>Milestones — {focus.name}</div>
+        {milestones.length === 0 ? (
+          <div style={{ color: '#94A3B8', fontSize: '14px' }}>Sem milestones definidos.</div>
+        ) : (
+          <div style={{ display: 'grid', gap: '10px' }}>
+            {milestones.map((m, i) => {
+              const achieved = currentValue >= m.value
+              const isNext   = !achieved && milestones.slice(0, i).every(prev => currentValue >= prev.value)
+              const color  = achieved ? '#16A34A' : isNext ? '#2563EB' : '#94A3B8'
+              const border = achieved ? '#BBF7D0' : isNext ? '#BFDBFE' : '#E2E8F0'
+              const bg     = achieved ? '#F0FDF4' : isNext ? '#EFF6FF' : '#F8FAFC'
+              const status = achieved ? 'Concluído' : isNext ? 'Em progresso' : 'Por atingir'
+              return (
+                <div key={i} style={{ border: `1px solid ${border}`, borderRadius: '10px', padding: '14px 16px', background: bg, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: '16px', color }}>{m.value} {m.unit}</div>
+                    <div style={{ fontSize: '13px', color: '#475569', marginTop: '2px' }}>{m.label}</div>
+                    {m.targetDate && <div style={{ fontSize: '11px', color: '#94A3B8', marginTop: '2px' }}>Alvo: {formatDate(m.targetDate)}</div>}
+                  </div>
+                  <div style={{ fontSize: '11px', fontWeight: 800, color, background: '#fff', borderRadius: '6px', padding: '4px 10px', border: `1px solid ${border}`, flexShrink: 0 }}>{status}</div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
+          <button onClick={onClose} style={secondary}>Fechar</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Performance (main) ─────────────────────────────────────────────────────────
+export default function Performance({ t, user }) {
+  const [focus, setFocus] = useState(defaultFocus)
+  const [entries, setEntries] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  const [showRegister,    setShowRegister]    = useState(false)
+  const [showEditFocus,   setShowEditFocus]   = useState(false)
+  const [showEditTasks,   setShowEditTasks]   = useState(false)
+  const [showEditDrivers, setShowEditDrivers] = useState(false)
+  const [showMilestones,  setShowMilestones]  = useState(false)
+
+  const [regForm, setRegForm] = useState({
+    metric: defaultFocus.metric,
+    date:   new Date().toISOString().split('T')[0],
+    value:  '',
+    unit:   defaultFocus.unit,
+    notes:  '',
+  })
+
+  const fetchEntries = useCallback(async () => {
+    setLoading(true)
+    try { setEntries((await getEntries()) || []) } finally { setLoading(false) }
+  }, [])
+  useEffect(() => { fetchEntries() }, [fetchEntries])
+
+  // ── Derived ───────────────────────────────────────────────────────────────
+  const focusPoints = useMemo(() =>
+    entries.filter(e => e.metric_id === focus.metric && e.value && e.entry_date)
+           .sort((a, b) => a.entry_date.localeCompare(b.entry_date))
+  , [entries, focus.metric])
+
+  const lastPoint    = focusPoints[focusPoints.length - 1]
+  const currentValue = lastPoint ? Number(lastPoint.value) : focus.currentValue
+
+  const twoWeeksAgo  = useMemo(() => { const d = new Date(); d.setDate(d.getDate() - 14); return d }, [])
+  const previousPoint = focusPoints.filter(p => new Date(p.entry_date + 'T12:00:00') <= twoWeeksAgo).pop() ?? focusPoints[focusPoints.length - 2] ?? null
+  const trend = previousPoint != null ? currentValue - Number(previousPoint.value) : null
+
+  const compliance   = useMemo(() => getFocusCompliance(focus, entries), [focus, entries])
+  const metricOptions = useMemo(() => getFocusMetricOptions(focus), [focus])
+
+  const startValue    = focus.startValue ?? focus.currentValue
+  const progressRange = focus.targetValue - startValue
+  const progressPct   = progressRange === 0 ? 0 : Math.min(100, Math.max(0, ((currentValue - startValue) / progressRange) * 100))
+  const missing       = Math.max(0, focus.targetValue - currentValue)
+
+  const focusAnalysis = useMemo(() => getFocusAnalysis(focus, compliance, trend), [focus, compliance, trend])
+
+  // ── Save entry ────────────────────────────────────────────────────────────
+  const saveValue = async () => {
+    if (!regForm.value) return
+    setSaving(true)
+    const rows = [{
+      metric_id: regForm.metric, value: String(regForm.value),
+      entry_date: regForm.date, updated_by: user.email, updated_at: new Date().toISOString(),
+    }]
+    if (regForm.notes) rows.push({
+      metric_id: '__notes__', value: regForm.notes,
+      entry_date: regForm.date, updated_by: user.email, updated_at: new Date().toISOString(),
+    })
+    await saveEntries(rows)
+    setSaving(false); setShowRegister(false)
+    setRegForm(p => ({ ...p, value: '', notes: '' }))
+    fetchEntries()
+  }
+
+  // ── Styles ────────────────────────────────────────────────────────────────
+  const card      = { background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px' }
+  const lbl       = { fontSize: '11px', letterSpacing: '1.6px', fontWeight: 800, color: '#2563EB' }
+  const inp       = { width: '100%', border: '1px solid #CBD5E1', borderRadius: '8px', padding: '10px 12px', fontFamily: F, fontSize: '14px', color: '#0F172A', background: '#FFFFFF', boxSizing: 'border-box' }
+  const primary   = { border: 'none', borderRadius: '8px', background: '#2563EB', color: '#FFFFFF', padding: '10px 16px', fontFamily: F, fontSize: '13px', fontWeight: 800, cursor: 'pointer' }
+  const secondary = { border: '1px solid #BFDBFE', borderRadius: '8px', background: '#FFFFFF', color: '#2563EB', padding: '10px 16px', fontFamily: F, fontSize: '13px', fontWeight: 800, cursor: 'pointer' }
+  const smallBtn  = { border: '1px solid #E2E8F0', borderRadius: '6px', background: 'transparent', color: '#64748B', padding: '5px 10px', fontFamily: F, fontSize: '11px', fontWeight: 700, cursor: 'pointer' }
+
+  if (loading) return <div style={{ color: t.textMuted, padding: '40px' }}>A carregar...</div>
+
+  const tasks   = focus.tasks   || []
+  const drivers = focus.drivers || []
+
+  return (
+    <div style={{ fontFamily: F, color: '#0F172A' }}>
+      <style>{`
+        .tp-two    { display:grid; grid-template-columns:1fr 1.2fr; gap:16px; }
+        .tp-drivers{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+        @media(max-width:800px){ .tp-two,.tp-drivers{ grid-template-columns:1fr; } }
+      `}</style>
+
+      {/* ── Modals ── */}
+      {showEditFocus && (
+        <EditFocusModal focus={focus}
+          onSave={u => { setFocus(u); setShowEditFocus(false) }}
+          onClose={() => setShowEditFocus(false)}
+          inp={inp} primary={primary} secondary={secondary} />
+      )}
+      {showEditTasks && (
+        <EditTasksModal tasks={tasks}
+          onSave={u => { setFocus(f => ({ ...f, tasks: u })); setShowEditTasks(false) }}
+          onClose={() => setShowEditTasks(false)}
+          inp={inp} primary={primary} secondary={secondary} />
+      )}
+      {showEditDrivers && (
+        <EditDriversModal drivers={drivers}
+          onSave={u => { setFocus(f => ({ ...f, drivers: u })); setShowEditDrivers(false) }}
+          onClose={() => setShowEditDrivers(false)}
+          inp={inp} primary={primary} secondary={secondary} />
+      )}
+      {showMilestones && (
+        <MilestonesModal focus={focus} currentValue={currentValue}
+          onClose={() => setShowMilestones(false)} secondary={secondary} />
+      )}
+      {showRegister && (
+        <div style={OVR}>
+          <div style={{ ...card, width: '100%', maxWidth: '440px', padding: '22px' }}>
+            <div style={{ fontSize: '18px', fontWeight: 900, marginBottom: '18px' }}>Registar novo valor</div>
+            <div style={{ display: 'grid', gap: '12px' }}>
+              <Field label="Indicador">
+                <select value={regForm.metric}
+                  onChange={e => {
+                    const m = metricOptions.find(x => x.value === e.target.value)
+                    setRegForm(p => ({ ...p, metric: e.target.value, unit: m?.unit || p.unit }))
+                  }} style={inp}>
+                  {metricOptions.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                </select>
+              </Field>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <Field label="Data"><input type="date" value={regForm.date} onChange={e => setRegForm(p => ({ ...p, date: e.target.value }))} style={inp} /></Field>
+                <Field label="Valor"><input type="number" value={regForm.value} onChange={e => setRegForm(p => ({ ...p, value: e.target.value }))} style={inp} autoFocus /></Field>
+              </div>
+              <Field label="Unidade"><input value={regForm.unit} onChange={e => setRegForm(p => ({ ...p, unit: e.target.value }))} style={inp} /></Field>
+              <Field label="Notas (opcional)"><textarea value={regForm.notes} onChange={e => setRegForm(p => ({ ...p, notes: e.target.value }))} style={{ ...inp, minHeight: '70px', resize: 'vertical' }} /></Field>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '18px' }}>
+              <button onClick={() => setShowRegister(false)} style={secondary}>Cancelar</button>
+              <button onClick={saveValue} disabled={saving || !regForm.value} style={{ ...primary, opacity: saving || !regForm.value ? 0.55 : 1 }}>
+                {saving ? 'A guardar…' : 'Guardar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Header ── */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
+        <div>
+          <div style={{ fontSize: '10px', letterSpacing: '3px', color: t.accent, marginBottom: '4px', fontWeight: 700 }}>FOCO ATIVO</div>
+          <div style={{ fontSize: '24px', fontWeight: 800, color: t.text, lineHeight: 1.15 }}>{focus.name}</div>
+          <div style={{ fontSize: '12px', color: t.textMuted, marginTop: '4px' }}>Regista valores, acompanha as tarefas da semana e vê a evolução do foco</div>
+        </div>
+        <button onClick={() => setShowEditFocus(true)} style={secondary}>Alterar foco</button>
+      </div>
+
+      {/* ── FOCO ATUAL ── */}
+      <div style={{ ...card, padding: '28px 32px', marginBottom: '16px', display: 'grid', gridTemplateColumns: '1fr 230px', gap: '24px', alignItems: 'center' }}>
+        <div>
+          <div style={lbl}>FOCO ATUAL</div>
+          <div style={{ fontSize: '27px', fontWeight: 900, marginTop: '10px' }}>{focus.name}</div>
+          <div style={{ fontSize: '46px', fontWeight: 950, marginTop: '10px', lineHeight: 1 }}>
+            {currentValue} <span style={{ color: '#475569' }}>→</span> {focus.targetValue}{' '}
+            <span style={{ fontSize: '21px', fontWeight: 800 }}>{focus.unit}</span>
+          </div>
+          <div style={{ fontSize: '14px', color: '#334155', marginTop: '12px' }}>Objetivo: {focus.objective}</div>
+          <div style={{ marginTop: '24px', height: '9px', background: '#E2E8F0', borderRadius: '999px', overflow: 'hidden' }}>
+            <div style={{ width: `${progressPct}%`, height: '100%', background: '#2563EB', borderRadius: '999px', transition: 'width 0.4s ease' }} />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px', color: '#475569', fontSize: '12px' }}>
+            <span>{startValue} {focus.unit}</span>
+            <span>Atual: {currentValue} {focus.unit}</span>
+            <span>{focus.targetValue} {focus.unit}</span>
+          </div>
+        </div>
+        <div style={{ borderLeft: '1px solid #E2E8F0', paddingLeft: '24px' }}>
+          <div style={{ fontSize: '28px', fontWeight: 950, color: '#2563EB' }}>Faltam {missing} {focus.unit}</div>
+          <div style={{ marginTop: '22px', display: 'grid', gap: '14px', color: '#334155', fontSize: '13px' }}>
+            <div>
+              <CalendarDays size={17} strokeWidth={1.8} style={{ verticalAlign: 'middle', marginRight: '7px' }} />
+              Último registo<br />
+              <strong>{formatDate(lastPoint?.entry_date)}{lastPoint ? ` — ${currentValue} ${focus.unit}` : ''}</strong>
+            </div>
+            <div>
+              <CalendarDays size={17} strokeWidth={1.8} style={{ verticalAlign: 'middle', marginRight: '7px' }} />
+              Próximo check<br />
+              <strong>Daqui a {daysUntilNextCheck(lastPoint?.entry_date)} dias</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── ESTADO + O QUE FAZER ── */}
+      <div className="tp-two" style={{ marginBottom: '16px' }}>
+
+        {/* Estado Atual */}
+        <div style={{ ...card, padding: '22px' }}>
+          <div style={lbl}>ESTADO ATUAL</div>
+          {(() => {
+            const MAP = {
+              ok:      { text: 'Em dia',   bg: '#F0FDF4', color: '#16A34A' },
+              warning: { text: 'Atenção',  bg: '#FFF7ED', color: '#EA580C' },
+              overdue: { text: 'Atrasado', bg: '#FEF2F2', color: '#DC2626' },
+            }
+            const s = compliance.lastLog ? (MAP[compliance.status] ?? MAP.warning) : { text: 'Sem dados', bg: '#F1F5F9', color: '#64748B' }
+            return <div style={{ display: 'inline-flex', background: s.bg, color: s.color, borderRadius: '8px', padding: '10px 14px', fontWeight: 800, marginTop: '18px', fontSize: '14px' }}>{s.text}</div>
+          })()}
+          <div style={{ marginTop: '22px', color: '#64748B', fontSize: '13px' }}>Tendência</div>
+          {trend != null ? (
+            <>
+              <div style={{ fontSize: '25px', fontWeight: 900, color: trend < 0 ? '#EF4444' : '#16A34A', marginTop: '5px' }}>
+                {trend > 0 ? '+' : ''}{Math.round(trend)} {focus.unit}
+              </div>
+              <div style={{ color: '#64748B', fontSize: '12px' }}>nas últimas 2 semanas</div>
+            </>
+          ) : (
+            <div style={{ fontSize: '13px', color: '#94A3B8', marginTop: '5px' }}>Ainda sem dados suficientes</div>
+          )}
+        </div>
+
+        {/* O que Fazer */}
+        <div style={{ ...card, padding: '22px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={lbl}>O QUE FAZER</div>
+            <button onClick={() => setShowEditTasks(true)} style={smallBtn}>Editar tarefas</button>
+          </div>
+          <div style={{ display: 'grid', gap: '12px', marginTop: '16px' }}>
+            {tasks.map((task, i) => {
+              const ts = compliance.tasks[task.id]
+              if (!ts) return null
+              const isOptional = !task.required
+              return (
+                <div key={task.id} style={{ display: 'grid', gridTemplateColumns: '26px 1fr auto', alignItems: 'center', gap: '10px', color: isOptional ? '#94A3B8' : '#334155', fontSize: '14px' }}>
+                  <div style={{ width: '24px', height: '24px', borderRadius: '50%', display: 'grid', placeItems: 'center', background: ts.complete ? '#DCFCE7' : '#F1F5F9', color: ts.complete ? '#16A34A' : '#64748B', fontWeight: 900, fontSize: '12px' }}>
+                    {ts.complete ? <Check size={15} /> : i + 1}
+                  </div>
+                  <div>
+                    {task.label}
+                    {isOptional && <span style={{ fontSize: '11px', color: '#CBD5E1', marginLeft: '6px' }}>opcional</span>}
+                  </div>
+                  <div style={{ color: ts.complete ? '#16A34A' : isOptional ? '#CBD5E1' : '#64748B', fontWeight: 900 }}>
+                    {Math.min(ts.done, ts.expected)}/{ts.expected}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+          <div style={{ display: 'flex', gap: '10px', marginTop: '20px', flexWrap: 'wrap' }}>
+            <button onClick={() => setShowRegister(true)} style={primary}>Registar novo valor</button>
+            <button onClick={() => document.getElementById('focus-evolution')?.scrollIntoView({ behavior: 'smooth' })} style={secondary}>Ver evolução</button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── DRIVERS ── */}
+      {drivers.length > 0 && (
+        <div style={{ ...card, padding: '22px', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <div style={lbl}>DRIVERS DO OBJETIVO</div>
+            <button onClick={() => setShowEditDrivers(true)} style={smallBtn}>Editar drivers</button>
+          </div>
+          <div className="tp-drivers">
+            {drivers.map(driver => {
+              const disp = getDriverDisplay(driver, entries)
+              return (
+                <div key={driver.id} style={{ border: '1px solid #E2E8F0', borderRadius: '10px', padding: '14px' }}>
+                  <div style={{ fontWeight: 800, fontSize: '13px', color: '#0F172A' }}>{driver.label}</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px', fontSize: '13px' }}>
+                    <span style={{ color: disp.color, fontWeight: 900 }}>{disp.value}</span>
+                    <span style={{ color: disp.color, fontSize: '20px', lineHeight: 1 }}>{disp.arrow}</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── EVOLUÇÃO ── */}
+      <div id="focus-evolution" style={{ ...card, padding: '24px', marginBottom: '22px' }}>
+        <FocusGoalChart entries={entries} focus={focus} onEdit={() => setShowEditFocus(true)} />
+        <div style={{ marginTop: '12px', background: '#F0FDFA', border: '1px solid #CCFBF1', borderRadius: '10px', padding: '16px 18px', display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'center', color: '#0F172A' }}>
+          <div style={{ fontSize: '14px', lineHeight: 1.45 }}>{focusAnalysis}</div>
+          <button onClick={() => setShowMilestones(true)} style={{ border: 'none', background: 'transparent', color: '#2563EB', fontWeight: 900, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap', fontFamily: F }}>
+            Ver milestones <ChevronRight size={16} />
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }

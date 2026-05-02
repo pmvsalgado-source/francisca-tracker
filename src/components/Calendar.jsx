@@ -13,7 +13,7 @@ import {
 } from '../services/calendarService'
 import { saveTrainingPlan } from '../services/trainingService'
 import { SCHEDULE_TYPES, TOURNAMENT_CATEGORIES, DEFAULT_CATEGORIES, activityColor, activityColorFromCategory, getEventVisual, isCompetitionEvent } from '../constants/eventCategories'
-import { calcWeekPhase, PHASE_COLORS } from '../lib/periodization'
+import { calcWeekPhase, calcCurrentPhase, PHASE_COLORS } from '../lib/periodization'
 import EmptyState from './EmptyState'
 
 const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
@@ -524,6 +524,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
   const selectedDayDate = new Date(selectedDayStr + 'T12:00:00')
   const selectedDayEvents = getEventsForDay(selectedDayStr)
   const weekPhaseData = calcWeekPhase(getWeekStartForDate(selectedDayStr), events)
+  const currentPhaseData = calcCurrentPhase(events)
   const weekDays = getWeekDays()
   const weekStart = weekDays[0]
   const weekEnd = weekDays[6]
@@ -1233,9 +1234,12 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
         </div>
       )}
 
-      <div style={{ display: 'none' }}>
-        <div style={{ fontSize: '9px', letterSpacing: '3px', color: t.accent, fontWeight: 700, marginBottom: '4px' }}>CALENDAR</div>
-        <div style={{ fontSize: '18px', fontWeight: 800, color: t.text }}>Calendrio</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
+        <div>
+          <div style={{ fontSize: '10px', letterSpacing: '3px', color: t.accent, marginBottom: '4px', fontWeight: 700 }}>CALENDÁRIO</div>
+          <div style={{ fontSize: '24px', fontWeight: 800, color: t.text, lineHeight: 1.15 }}>Agenda da Temporada</div>
+          <div style={{ fontSize: '12px', color: t.textMuted, marginTop: '4px' }}>Todos os eventos da época — competições, treinos de campo e sessões de ginásio</div>
+        </div>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -1264,7 +1268,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
             onToday={() => { setDayDetailDate(todayIso); setCurrentDate(new Date(todayDate.getFullYear(), todayDate.getMonth(), todayDate.getDate())); setView('day') }}
             onAdd={() => openSchedulePicker(selectedDayStr)}
           />
-          <div style={{ background: weekPhaseData.phaseColor, padding: '6px 16px' }}>
+          <div style={{ background: `linear-gradient(125deg, ${weekPhaseData.phaseColor} 0%, ${weekPhaseData.phaseColor}d0 55%, ${weekPhaseData.phaseColor}90 100%)`, padding: '6px 16px' }}>
             <span style={{ fontSize: '10px', letterSpacing: '3px', color: '#fff', fontWeight: 800, textTransform: 'uppercase', fontFamily: F, opacity: 0.95 }}>
               {weekPhaseData.phase.replace(/_/g, ' ')}
             </span>

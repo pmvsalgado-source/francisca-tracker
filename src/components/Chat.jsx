@@ -156,9 +156,12 @@ export default function Chat({ theme, t, user, profile, lang = 'en' }) {
       )}
 
       {/* Page header */}
-      <div style={{ marginBottom: '16px' }}>
-        <div style={{ fontSize: '9px', letterSpacing: '3px', color: t.accent, fontWeight: 700, marginBottom: '3px' }}>CHAT / TEAM</div>
-        <div style={{ fontSize: '11px', color: t.textMuted }}>{lang === 'pt' ? 'Comunicação com a equipa' : 'Team communication'}</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
+        <div>
+          <div style={{ fontSize: '10px', letterSpacing: '3px', color: t.accent, marginBottom: '4px', fontWeight: 700 }}>MENSAGENS</div>
+          <div style={{ fontSize: '24px', fontWeight: 800, color: t.text, lineHeight: 1.15 }}>Chat com o Coach</div>
+          <div style={{ fontSize: '12px', color: t.textMuted, marginTop: '4px' }}>Fala com o coach, partilha feedback e acompanha as orientações de treino</div>
+        </div>
       </div>
 
       {/* Chat card — full width, integrated */}
