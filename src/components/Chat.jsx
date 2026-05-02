@@ -22,6 +22,7 @@ export default function Chat({ theme, t, user, profile, lang = 'en' }) {
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
   const isMountedRef = useRef(true)
+  const isFetchingRef = useRef(false)
   const fetchIdRef = useRef(0)
   const F = "'Inter', system-ui, sans-serif"
   const myEmail = (user?.email || '').trim().toLowerCase()
@@ -30,18 +31,26 @@ export default function Chat({ theme, t, user, profile, lang = 'en' }) {
     ? { placeholder: 'Mensagem...', send: 'Enviar', loading: 'A carregar...', empty: 'Sem mensagens. Começa a conversa!', you: 'Tu', cancel: 'Cancelar', save: 'Guardar', deleteMsg: 'Apagar esta mensagem?', deleteBtn: 'Apagar', edited: 'editado' }
     : { placeholder: 'Message...', send: 'Send', loading: 'Loading...', empty: 'No messages yet. Start the conversation!', you: 'You', cancel: 'Cancel', save: 'Save', deleteMsg: 'Delete this message?', deleteBtn: 'Delete', edited: 'edited' }
 
-  useEffect(() => () => { isMountedRef.current = false }, [])
+  useEffect(() => {
+    isMountedRef.current = true
+
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
 
   const fetchMessages = useCallback(async () => {
-    const id = ++fetchIdRef.current
+    if (isFetchingRef.current) return
+    isFetchingRef.current = true
     try {
       const data = await getMessages()
-      if (!isMountedRef.current || id !== fetchIdRef.current) return
-      setMessages(data || [])
-      setLoading(false)
+      if (!isMountedRef.current) return
+      setMessages(Array.isArray(data) ? data : [])
     } catch {
-      if (!isMountedRef.current || id !== fetchIdRef.current) return
-      setLoading(false)
+      if (!isMountedRef.current) return
+    } finally {
+      isFetchingRef.current = false
+      if (isMountedRef.current) setLoading(false)
     }
   }, [])
 
@@ -166,7 +175,7 @@ export default function Chat({ theme, t, user, profile, lang = 'en' }) {
 
         {/* Messages */}
         <div className="chat-scroll" style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '2px', background: t.bg }}>
-          {loading ? (
+          {loading && messages.length === 0 ? (
             <div style={{ textAlign: 'center', color: t.textMuted, padding: '40px', fontSize: '13px' }}>{s.loading}</div>
           ) : messages.length === 0 ? (
             <EmptyState icon="💬" message={s.empty} t={t} />

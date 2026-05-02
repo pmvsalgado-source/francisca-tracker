@@ -319,7 +319,10 @@ export default function Dashboard({ user }) {
   const [showLangModal, setShowLangModal] = useState(false)
   const s = STRINGS[lang]
   const t = theme === 'dark' ? dark : light
-  const [view, setView] = useState('home')
+  const [view, setView] = useState(() => {
+    const storedView = localStorage.getItem('fs_view')
+    return storedView === 'messages' ? 'chat' : storedView || 'home'
+  })
   const [trainingFocusDate, setTrainingFocusDate] = useState(null)
   const [calendarFocusDate, setCalendarFocusDate] = useState(null)
   const [calendarInitSchedule, setCalendarInitSchedule] = useState(null)
@@ -382,20 +385,24 @@ export default function Dashboard({ user }) {
   }, [])
 
   useEffect(() => {
-    window.history.replaceState({ appView: 'home' }, '')
+    window.history.replaceState({ appView: view }, '')
     const handlePop = (e) => {
-      if (e.state?.appView) setView(e.state.appView)
+      const normalizedView = e.state?.appView === 'messages' ? 'chat' : e.state?.appView
+      localStorage.setItem('fs_view', normalizedView || 'home')
+      setView(normalizedView || 'home')
     }
     window.addEventListener('popstate', handlePop)
     return () => window.removeEventListener('popstate', handlePop)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const navigateToView = useCallback((v, opts) => {
+    const normalizedView = v === 'messages' ? 'chat' : v
     if (opts?.date) setTrainingFocusDate(opts.date)
-    if (opts?.date && v === 'calendar') setCalendarFocusDate(opts.date)
+    if (opts?.date && normalizedView === 'calendar') setCalendarFocusDate(opts.date)
     if (opts?.scheduleType) setCalendarInitSchedule(opts.scheduleType)
-    setView(v)
-    window.history.pushState({ appView: v }, '')
+    setView(normalizedView)
+    localStorage.setItem('fs_view', normalizedView)
+    window.history.pushState({ appView: normalizedView }, '')
   }, [])
 
   const fetchMetrics = useCallback(async () => {
@@ -841,10 +848,6 @@ export default function Dashboard({ user }) {
                 <span>{label}</span>
               </button>
             ))}
-            {/* Record what I did */}
-            <button className="snav-btn" onClick={() => setShowRegister(true)}>
-              <span>{lang === 'pt' ? 'Registar Performance' : 'Record what I did'}</span>
-            </button>
           </nav>
         </div>
 
