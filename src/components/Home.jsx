@@ -3,7 +3,7 @@ import { findCurrentPlan } from '../lib/trainingPlanUtils'
 import { getHomeEntries, getHomeCompStats, getHomeCompConfig, getHomeWagrHistory, getHomeProfile, getHomeGoals, getSwingGoal, updateAthleteProfile, updateKpiOrder, updateStatPrefs } from '../services/homeService'
 import { calcCurrentPhase, isCompetition, getUpcomingCompetitions } from '../lib/periodization'
 import { getPlansForDate } from '../lib/trainingUtils'
-import { ACTIVITY_COLORS } from '../constants/eventCategories'
+import { ACTIVITY_COLORS, getEventVisual } from '../constants/eventCategories'
 
 const golfColor = ACTIVITY_COLORS.golf
 const gymColor = ACTIVITY_COLORS.gym
@@ -611,6 +611,8 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   const lastSwing = swingEntries.length ? parseFloat(swingEntries[swingEntries.length - 1].value) : null
   const lastDate = swingEntries.length ? swingEntries[swingEntries.length - 1].entry_date : null
 
+  const [weekOffset, setWeekOffset] = useState(0)
+  const [weekSlideDir, setWeekSlideDir] = useState(null)
   const [swingGoal, setSwingGoal] = useState(null)
   useEffect(() => {
     getSwingGoal().then(goal => { if (goal) setSwingGoal(goal) })
@@ -651,8 +653,11 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   ].filter(k => lastMetrics[k.id])
 
   const todayDate = new Date()
-  const weekStartDate = new Date(todayDate)
-  weekStartDate.setDate(todayDate.getDate() - (todayDate.getDay() === 0 ? 6 : todayDate.getDay() - 1))
+  todayDate.setHours(0, 0, 0, 0)
+  const _baseWeekStart = new Date(todayDate)
+  _baseWeekStart.setDate(todayDate.getDate() - (todayDate.getDay() === 0 ? 6 : todayDate.getDay() - 1))
+  const weekStartDate = new Date(_baseWeekStart)
+  weekStartDate.setDate(_baseWeekStart.getDate() + weekOffset * 7)
   const weekStartStr = weekStartDate.toISOString().split('T')[0]
   const DAYS_PT_SHORT = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb']
   const todayDayPT = DAYS_PT_SHORT[todayDate.getDay()]
@@ -784,14 +789,22 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
     if (compPeriod === '1y') { const d = new Date(now); d.setFullYear(d.getFullYear()-1); return d.toISOString().split('T')[0] }
     return null
   })()
-  const filteredCompStats = compPeriodStart ? compStats.filter(s => s.event_date >= compPeriodStart) : compStats
+  // Only count records that have real round data (consistent with CompStats logic)
+  const validCompStats = compStats.filter(s =>
+    Array.isArray(s?.values?.rounds) &&
+    s.values.rounds.some(r => ['score','fairways_hit','gir','putts'].some(id => r[id] != null && r[id] !== ''))
+  )
+  const filteredCompStats = compPeriodStart ? validCompStats.filter(s => s.event_date >= compPeriodStart) : validCompStats
 
-  const fcScores = filteredCompStats.map(s => parseFloat(s.values?.score)).filter(v => !isNaN(v))
+  // avgScore uses per-round scores (consistent with CompStats KPI logic)
+  const fcRoundScores = filteredCompStats.flatMap(s =>
+    (s.values?.rounds || []).map(r => parseFloat(r.score)).filter(v => !isNaN(v) && v > 0)
+  )
   const fcPositions = filteredCompStats.map(s => parseFloat(s.values?.position)).filter(v => !isNaN(v))
   const fcFairways = filteredCompStats.map(s => parseFloat(s.values?.fairways)).filter(v => !isNaN(v))
   const fcGir = filteredCompStats.map(s => parseFloat(s.values?.gir)).filter(v => !isNaN(v))
   const fcPutts = filteredCompStats.map(s => parseFloat(s.values?.putts)).filter(v => !isNaN(v))
-  const avgScore = fcScores.length ? (fcScores.reduce((a,b)=>a+b,0)/fcScores.length).toFixed(1) : null
+  const avgScore = fcRoundScores.length ? (fcRoundScores.reduce((a,b)=>a+b,0)/fcRoundScores.length).toFixed(1) : null
   const bestPos = fcPositions.length ? Math.min(...fcPositions) : null
   const top10 = filteredCompStats.filter(s => parseFloat(s.values?.position) <= 10).length
   const avgFairways = fcFairways.length ? (fcFairways.reduce((a,b)=>a+b,0)/fcFairways.length).toFixed(1) : null
@@ -799,25 +812,28 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   const avgPutts = fcPutts.length ? (fcPutts.reduce((a,b)=>a+b,0)/fcPutts.length).toFixed(1) : null
   const lastScore = filteredCompStats.length > 0 ? filteredCompStats[0].values?.score : null
 
-  const scoresAll = compStats.filter(s => {
+  const scoresAll = validCompStats.filter(s => {
     const sc = s.values?.score
     return sc !== undefined && sc !== null && String(sc).trim() !== '' && !isNaN(parseFloat(sc))
   })
   const bestResult = scoresAll.length > 0
     ? scoresAll.reduce((best, s) => parseFloat(s.values.score) < parseFloat(best.values.score) ? s : best)
     : null
-  const isNewPR = bestResult && compStats.length > 0 && compStats[0]?.id === bestResult?.id
+  const isNewPR = bestResult && validCompStats.length > 0 && validCompStats[0]?.id === bestResult?.id
 
   const upcomingComps = events.filter(e => e.start_date >= todayStr && !['cancelled','cancelado'].includes(e.status||'')).filter(isCompetition).slice(0, 5)
   const slotAItems = upcomingComps.length > 0 ? upcomingComps : upcomingEvents.slice(0, 5)
 
-  const stats2026 = compStats.filter(s => (s.event_date||'').startsWith('2026'))
+  const stats2026 = validCompStats.filter(s => (s.event_date||'').startsWith('2026'))
+  const s26roundScores = stats2026.flatMap(s =>
+    (s.values?.rounds || []).map(r => parseFloat(r.score)).filter(v => !isNaN(v) && v > 0)
+  )
   const s26scores = stats2026.map(s => parseFloat(s.values?.score)).filter(v => !isNaN(v))
   const s26pos    = stats2026.map(s => parseFloat(s.values?.position)).filter(v => !isNaN(v))
   const s26fw     = stats2026.map(s => parseFloat(s.values?.fairways)).filter(v => !isNaN(v))
   const s26gir    = stats2026.map(s => parseFloat(s.values?.gir)).filter(v => !isNaN(v))
   const s26putts  = stats2026.map(s => parseFloat(s.values?.putts)).filter(v => !isNaN(v))
-  const s26AvgScore  = s26scores.length ? (s26scores.reduce((a,b)=>a+b,0)/s26scores.length).toFixed(1) : null
+  const s26AvgScore  = s26roundScores.length ? (s26roundScores.reduce((a,b)=>a+b,0)/s26roundScores.length).toFixed(1) : null
   const s26BestPos   = s26pos.length ? Math.min(...s26pos) : null
   const s26Top10     = stats2026.filter(s => parseFloat(s.values?.position) <= 10).length
   const s26AvgFw     = s26fw.length ? (s26fw.reduce((a,b)=>a+b,0)/s26fw.length).toFixed(1) : null
@@ -1023,14 +1039,23 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
     return d
   })
 
+  // Normalise a raw date value to 'YYYY-MM-DD' (handles full timestamps)
+  const normDate = raw => { if (!raw) return ''; const m = String(raw).match(/^(\d{4}-\d{2}-\d{2})/); return m ? m[1] : '' }
+  const eventOccursOnDate = (event, dateStr) => {
+    if (['cancelled', 'cancelado'].includes(event.status || '')) return false
+    const start = normDate(event.start_date || event.date || event.start)
+    const end = normDate(event.end_date || event.end) || start
+    return start <= dateStr && end >= dateStr
+  }
+
   // Today's checklist: plan sessions (via shared util) + calendar events
   const todayPlanSessions = getPlansForDate(trainingPlans, todayStr)
-  const todayCalEvents = events.filter(e => e.start_date <= todayStr && (e.end_date || e.start_date) >= todayStr)
+  const todayCalEvents = events.filter(e => eventOccursOnDate(e, todayStr))
 
   const tomorrowDate = new Date(todayDate); tomorrowDate.setDate(todayDate.getDate() + 1)
   const tomorrowStr = tomorrowDate.toISOString().split('T')[0]
   const tomorrowPlanSessions = getPlansForDate(trainingPlans, tomorrowStr)
-  const tomorrowCalEvents = events.filter(e => e.start_date <= tomorrowStr && (e.end_date || e.start_date) >= tomorrowStr)
+  const tomorrowCalEvents = events.filter(e => eventOccursOnDate(e, tomorrowStr))
 
   const todayTasks = (() => {
     const tasks = []
@@ -1044,13 +1069,15 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
       })
     })
     todayCalEvents.forEach(e => {
-      const isComp = isCompetition(e)
+      const visual = getEventVisual(e.type, e.category, e.title)
+      const isComp = isCompetition(e) || visual.color === compColor
       const cat = (e.category || '').toLowerCase()
       const isGolf = !isComp && (cat.includes('treino') || cat.includes('camp'))
       tasks.push({
         label: e.title || 'Evento',
         detail: isComp ? 'Competição' : isGolf ? 'Golf' : e.category || '',
-        color: isComp ? compColor : isGolf ? golfColor : gymColor,
+        color: isComp ? compColor : isGolf ? golfColor : visual.color || gymColor,
+        icon: visual.icon,
         badge: isComp ? 'COMP' : null,
         badgeColor: compColor,
       })
@@ -1068,16 +1095,37 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
       tasks.push({ label: isCoach ? `Coach — ${type}` : `Treino ${type}`, detail: session.title || '', color: session.type === 'gym' ? gymColor : golfColor })
     })
     tomorrowCalEvents.forEach(e => {
-      const isComp = isCompetition(e)
+      const visual = getEventVisual(e.type, e.category, e.title)
+      const isComp = isCompetition(e) || visual.color === compColor
       const cat = (e.category || '').toLowerCase()
       const isGolf = !isComp && (cat.includes('treino') || cat.includes('camp'))
-      tasks.push({ label: e.title || 'Evento', detail: isComp ? 'Competição' : isGolf ? 'Golf' : e.category || '', color: isComp ? compColor : isGolf ? golfColor : gymColor, badge: isComp ? 'COMP' : null, badgeColor: compColor })
+      tasks.push({ label: e.title || 'Evento', detail: isComp ? 'Competição' : isGolf ? 'Golf' : e.category || '', color: isComp ? compColor : isGolf ? golfColor : visual.color || gymColor, icon: visual.icon, badge: isComp ? 'COMP' : null, badgeColor: compColor })
     })
     return tasks
   })()
 
-  // Normalise a raw date value to 'YYYY-MM-DD' (handles full timestamps)
-  const normDate = raw => { if (!raw) return ''; const m = String(raw).match(/^(\d{4}-\d{2}-\d{2})/); return m ? m[1] : '' }
+  const renderOverviewTask = (task, dateStr, key) => {
+    const color = task.color || golfColor
+    const icon = task.icon || (color === gymColor ? '⊕' : '⛳')
+    return (
+      <button key={key} className="hm-btn-reset" onClick={() => onNavigate && onNavigate('calendar', { date: dateStr })}
+        style={{ display:'flex', alignItems:'center', gap:'14px' }}>
+        <div style={{ width:'46px', height:'46px', borderRadius:'50%', background:`${color}22`, border:`2px solid ${color}`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, fontSize:'20px' }}>
+          {icon}
+        </div>
+        <div style={{ flex:1, minWidth:0 }}>
+          <div style={{ fontSize:'15px', fontWeight:800, color:t.text }}>{task.label}</div>
+          {task.detail && <div style={{ fontSize:'13px', color:t.textMuted, marginTop:'2px' }}>{task.detail}</div>}
+        </div>
+        {task.badge && (
+          <div style={{ fontSize:'10px', fontWeight:900, color:task.badgeColor || color, border:`1px solid ${task.badgeColor || color}`, borderRadius:'999px', padding:'3px 7px', flexShrink:0 }}>
+            {task.badge}
+          </div>
+        )}
+        <div style={{ color:t.textMuted, fontSize:'18px', flexShrink:0 }}>›</div>
+      </button>
+    )
+  }
 
   // Next competition - use normDate so timestamp-format start_dates compare correctly
   const nextCompetition = events
@@ -1086,6 +1134,12 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   const daysToNextComp = nextCompetition
     ? Math.max(0, Math.ceil((new Date(nextCompetition.start_date) - new Date()) / 86400000))
     : null
+
+  // Civil-day comparison in local timezone — avoids UTC midnight edge cases
+  const _ln = new Date()
+  const localTodayStr = `${_ln.getFullYear()}-${String(_ln.getMonth()+1).padStart(2,'0')}-${String(_ln.getDate()).padStart(2,'0')}`
+  const isNextCompToday = nextCompetition != null &&
+    normDate(nextCompetition.start_date || nextCompetition.date || nextCompetition.start) === localTodayStr
 
   const upcomingCompsAll = getUpcomingCompetitions(
     events.filter(e => !['cancelled','cancelado'].includes(e.status || '')),
@@ -1312,6 +1366,11 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
         .hm-row{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:16px;margin-bottom:16px;align-items:start}
         .hm-row3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:16px;align-items:stretch}
         .hm-week-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+        .hm-week-slide{overflow:hidden}
+        @keyframes hmSlideRight{from{transform:translateX(-28px);opacity:0}to{transform:translateX(0);opacity:1}}
+        @keyframes hmSlideLeft{from{transform:translateX(28px);opacity:0}to{transform:translateX(0);opacity:1}}
+        .hm-slide-right{animation:hmSlideRight 0.32s cubic-bezier(.25,.46,.45,.94)}
+        .hm-slide-left{animation:hmSlideLeft 0.32s cubic-bezier(.25,.46,.45,.94)}
         .hm-btn-reset{background:transparent;border:none;padding:0;cursor:pointer;font-family:inherit;text-align:left;width:100%}
         @media(max-width:900px){.hm-row{grid-template-columns:1fr}.hm-row3{grid-template-columns:1fr}}
         @media(max-width:768px){
@@ -1460,33 +1519,13 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
             </div>
           </div>
           <div style={{ display:'flex', flexDirection:'column', gap:'12px', marginBottom:'18px' }}>
-            {todayPlanSessions.length > 0 ? todayPlanSessions.map((session, i) => {
-              const isGym = session.type === 'gym'
-              const color = isGym ? gymColor : golfColor
-              return (
-                <button key={i} className="hm-btn-reset" onClick={() => onNavigate && onNavigate('calendar', { date: todayStr })}
-                  style={{ display:'flex', alignItems:'center', gap:'14px' }}>
-                  <div style={{ width:'46px', height:'46px', borderRadius:'50%', background: isGym ? `${gymColor}22` : `${golfColor}22`, border:`2px solid ${color}`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, fontSize:'20px' }}>
-                    {isGym ? '⊕' : '⛳'}
-                  </div>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontSize:'15px', fontWeight:800, color:t.text }}>{sessionDisplayTitle(session)}</div>
-                    {sessionMeta(session) && <div style={{ fontSize:'13px', color:t.textMuted, marginTop:'2px' }}>{sessionMeta(session)}</div>}
-                  </div>
-                  <div style={{ color:t.textMuted, fontSize:'18px', flexShrink:0 }}>›</div>
-                </button>
-              )
-            }) : (
+            {enrichedTodayTasks.length > 0 ? enrichedTodayTasks.map((task, i) => renderOverviewTask(task, todayStr, i)) : (
               <div>
                 <div style={{ fontSize:'15px', fontWeight:700, color:t.text, marginBottom:'4px' }}>Plano ainda não definido</div>
                 <div style={{ fontSize:'13px', color:t.textMuted }}>A aguardar planeamento do coach</div>
               </div>
             )}
           </div>
-          <button onClick={() => onNavigate && onNavigate('calendar', { date: todayStr })}
-            style={{ width:'100%', background:phaseInfo.phaseColor, border:'none', borderRadius:'10px', color:heroTextColor, padding:'13px', fontSize:'14px', fontWeight:800, cursor:'pointer', fontFamily:F, display:'flex', alignItems:'center', justifyContent:'center', gap:'8px' }}>
-            Ver plano completo →
-          </button>
         </div>
 
         {/* AMANHÃ */}
@@ -1498,23 +1537,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
             </div>
           </div>
           <div style={{ display:'flex', flexDirection:'column', gap:'12px' }}>
-            {tomorrowPlanSessions.length > 0 ? tomorrowPlanSessions.map((session, i) => {
-              const isGym = session.type === 'gym'
-              const color = isGym ? gymColor : golfColor
-              return (
-                <button key={i} className="hm-btn-reset" onClick={() => onNavigate && onNavigate('calendar', { date: tomorrowStr })}
-                  style={{ display:'flex', alignItems:'center', gap:'14px' }}>
-                  <div style={{ width:'46px', height:'46px', borderRadius:'50%', background: isGym ? `${gymColor}22` : `${golfColor}22`, border:`2px solid ${color}`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, fontSize:'20px' }}>
-                    {isGym ? '⊕' : '⛳'}
-                  </div>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontSize:'15px', fontWeight:800, color:t.text }}>{sessionDisplayTitle(session)}</div>
-                    {sessionMeta(session) && <div style={{ fontSize:'13px', color:t.textMuted, marginTop:'2px' }}>{sessionMeta(session)}</div>}
-                  </div>
-                  <div style={{ color:t.textMuted, fontSize:'18px', flexShrink:0 }}>›</div>
-                </button>
-              )
-            }) : (
+            {tomorrowTasks.length > 0 ? tomorrowTasks.map((task, i) => renderOverviewTask(task, tomorrowStr, i)) : (
               <div>
                 <div style={{ fontSize:'15px', fontWeight:700, color:t.text, marginBottom:'4px' }}>Plano ainda não definido</div>
                 <div style={{ fontSize:'13px', color:t.textMuted }}>A aguardar planeamento do coach</div>
@@ -1530,20 +1553,36 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
           </div>
           {upcomingCompsAll.length > 0 ? (
             <>
-              <div style={{ display:'flex', alignItems:'flex-start', gap:'20px', marginBottom:'16px' }}>
-                <div style={{ textAlign:'center', flexShrink:0 }}>
-                  <div style={{ fontSize:'64px', fontWeight:950, color:'#ef4444', lineHeight:0.88 }}>{daysToNextComp ?? '—'}</div>
-                  <div style={{ fontSize:'10px', letterSpacing:'2px', color:t.textMuted, fontWeight:800, marginTop:'6px' }}>DIAS</div>
-                </div>
-                <div style={{ minWidth:0 }}>
-                  <div style={{ fontSize:'16px', fontWeight:900, color:t.text, lineHeight:1.25 }}>{upcomingCompsAll[0].title}</div>
-                  <div style={{ fontSize:'13px', color:t.textMuted, fontWeight:600, marginTop:'5px' }}>
-                    {formatDate(upcomingCompsAll[0].start_date)}
-                    {upcomingCompsAll[0].end_date && upcomingCompsAll[0].end_date !== upcomingCompsAll[0].start_date
-                      ? ` — ${formatDate(upcomingCompsAll[0].end_date)}` : ''}
+              {isNextCompToday ? (
+                <div style={{ display:'flex', flexDirection:'column', gap:'10px', marginBottom:'16px' }}>
+                  <div style={{ fontSize:'26px', fontWeight:950, color:'#ef4444', lineHeight:1.2 }}>
+                    Dia de jogo. Vamos!
+                  </div>
+                  <div style={{ minWidth:0 }}>
+                    <div style={{ fontSize:'16px', fontWeight:900, color:t.text, lineHeight:1.25 }}>{upcomingCompsAll[0].title}</div>
+                    <div style={{ fontSize:'13px', color:t.textMuted, fontWeight:600, marginTop:'5px' }}>
+                      {formatDate(upcomingCompsAll[0].start_date)}
+                      {upcomingCompsAll[0].end_date && upcomingCompsAll[0].end_date !== upcomingCompsAll[0].start_date
+                        ? ` — ${formatDate(upcomingCompsAll[0].end_date)}` : ''}
+                    </div>
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div style={{ display:'flex', alignItems:'flex-start', gap:'20px', marginBottom:'16px' }}>
+                  <div style={{ textAlign:'center', flexShrink:0 }}>
+                    <div style={{ fontSize:'64px', fontWeight:950, color:'#ef4444', lineHeight:0.88 }}>{daysToNextComp ?? '—'}</div>
+                    <div style={{ fontSize:'10px', letterSpacing:'2px', color:t.textMuted, fontWeight:800, marginTop:'6px' }}>DIAS</div>
+                  </div>
+                  <div style={{ minWidth:0 }}>
+                    <div style={{ fontSize:'16px', fontWeight:900, color:t.text, lineHeight:1.25 }}>{upcomingCompsAll[0].title}</div>
+                    <div style={{ fontSize:'13px', color:t.textMuted, fontWeight:600, marginTop:'5px' }}>
+                      {formatDate(upcomingCompsAll[0].start_date)}
+                      {upcomingCompsAll[0].end_date && upcomingCompsAll[0].end_date !== upcomingCompsAll[0].start_date
+                        ? ` — ${formatDate(upcomingCompsAll[0].end_date)}` : ''}
+                    </div>
+                  </div>
+                </div>
+              )}
               {upcomingCompsAll.length > 1 && (
                 <div style={{ borderTop:`1px solid ${t.border}`, paddingTop:'12px', display:'flex', flexDirection:'column', gap:'8px' }}>
                   {upcomingCompsAll.slice(1, 4).map((comp, i) => {
@@ -1573,8 +1612,29 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
 
         {/* ESTA SEMANA */}
         <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'16px', padding:'20px' }}>
-          <div style={{ fontSize:'16px', fontWeight:900, color:t.text, marginBottom:'16px' }}>ESTA SEMANA</div>
-          <div className="hm-week-grid">
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'16px' }}>
+            <div style={{ fontSize:'16px', fontWeight:900, color:t.text }}>
+              {weekOffset === 0 ? 'ESTA SEMANA' : weekOffset === -1 ? 'SEMANA PASSADA' : weekOffset === 1 ? 'PRÓXIMA SEMANA' : `SEMANA ${weekOffset > 0 ? '+' : ''}${weekOffset}`}
+            </div>
+            <div style={{ display:'flex', gap:'2px', alignItems:'center' }}>
+              {weekOffset !== 0 && (
+                <button onClick={() => { setWeekSlideDir(weekOffset > 0 ? 'right' : 'left'); setWeekOffset(0) }}
+                  style={{ background:'transparent', border:'none', color:t.textFaint, fontSize:'10px', cursor:'pointer', padding:'3px 6px', fontFamily:'inherit', fontWeight:600, letterSpacing:'0.5px' }}>
+                  hoje
+                </button>
+              )}
+              <button onClick={() => { setWeekSlideDir('right'); setWeekOffset(o => o - 1) }}
+                style={{ background:'transparent', border:'none', color:t.textFaint, fontSize:'16px', cursor:'pointer', padding:'2px 5px', lineHeight:1 }}>
+                ‹
+              </button>
+              <button onClick={() => { setWeekSlideDir('left'); setWeekOffset(o => o + 1) }}
+                style={{ background:'transparent', border:'none', color:t.textFaint, fontSize:'16px', cursor:'pointer', padding:'2px 5px', lineHeight:1 }}>
+                ›
+              </button>
+            </div>
+          </div>
+          <div className="hm-week-slide">
+          <div key={weekOffset} className={`hm-week-grid${weekSlideDir === 'left' ? ' hm-slide-left' : weekSlideDir === 'right' ? ' hm-slide-right' : ''}`}>
             {weekDays.map((day, i) => {
               const ds = day.toISOString().split('T')[0]
               const isToday = ds === todayStr
@@ -1584,41 +1644,44 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
                 const end = normDate(e.end_date || e.end) || s
                 return s <= ds && end >= ds
               })
-              const compEvts = dayEvts.filter(isCompetition)
               const daySessions = getPlansForDate(trainingPlans, ds)
-              const hasComp = compEvts.length > 0
-              const gymSess = daySessions.filter(s => s.type === 'gym')
-              const golfSess = daySessions.filter(s => s.type !== 'gym')
-              const hasGolf = !hasComp && golfSess.length > 0
-              const hasGym  = !hasComp && !hasGolf && gymSess.length > 0
-              const actLabel = hasComp
-                ? (compEvts[0].title?.slice(0, 12) || 'Competição')
-                : hasGolf
-                  ? (golfSess[0]?.title?.slice(0, 12) || 'Golf')
-                  : hasGym
-                    ? 'Ginásio'
-                    : ''
+
+              // All activities for this day: calendar events + training sessions
+              const activities = [
+                ...dayEvts.map(ev => {
+                  const dv = getEventVisual(ev.type, ev.category, ev.title)
+                  return { icon: dv.icon, color: dv.color, label: (ev.title || ev.category || 'Evento').slice(0, 16) }
+                }),
+                ...daySessions.map(sess => {
+                  const dv = getEventVisual(sess.type, sess.cat || sess.category, sess.title || '')
+                  return { icon: dv.icon, color: dv.color, label: (sess.title || (sess.type === 'gym' ? 'Ginásio' : 'Golf')).slice(0, 16) }
+                }),
+              ]
+
               return (
-                <div key={i} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:'8px', padding:'10px 4px', borderRadius:'10px', background: isToday ? `${t.accent}12` : 'transparent', border: isToday ? `1px solid ${t.accent}33` : '1px solid transparent', opacity: isPast && !isToday ? 0.5 : 1 }}>
-                  <div style={{ fontSize:'12px', fontWeight: isToday ? 900 : 700, color: isToday ? t.accent : t.textMuted }}>
+                <button key={i} type="button" className="hm-btn-reset" onClick={() => onNavigate && onNavigate('calendar', { date: ds })}
+                  style={{ display:'flex', flexDirection:'column', alignItems:'stretch', padding:'8px 4px', borderRadius:'10px', background: isToday ? `${t.accent}12` : 'transparent', border: isToday ? `1px solid ${t.accent}33` : '1px solid transparent', opacity: isPast && !isToday ? 0.5 : 1 }}>
+                  <div style={{ fontSize:'11px', fontWeight: isToday ? 900 : 700, color: isToday ? t.accent : t.textMuted, textAlign:'center', marginBottom:'6px' }}>
                     {DAY_LABELS[i]}
                   </div>
-                  <div style={{ height:'28px', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                    {hasComp
-                      ? <span style={{ fontSize:'20px' }}>🏆</span>
-                      : hasGolf
-                        ? <div style={{ width:'10px', height:'10px', borderRadius:'50%', background:'#378ADD', boxShadow:'0 0 0 3px #378ADD22' }} />
-                        : hasGym
-                          ? <div style={{ width:'10px', height:'10px', borderRadius:'50%', background:'#52E8A0', boxShadow:'0 0 0 3px #52E8A022' }} />
-                          : <span style={{ color:t.textFaint, fontSize:'14px', fontWeight:500 }}>—</span>
-                    }
-                  </div>
-                  <div style={{ fontSize:'10px', color:t.textMuted, fontWeight:600, textAlign:'center', lineHeight:1.25, minHeight:'20px', wordBreak:'break-word' }}>
-                    {actLabel}
-                  </div>
-                </div>
+                  {activities.length > 0 ? (
+                    <div style={{ display:'flex', flexDirection:'column', gap:'3px' }}>
+                      {activities.map((act, ai) => (
+                        <div key={ai} style={{ display:'flex', alignItems:'center', gap:'4px', minWidth:0 }}>
+                          <span style={{ fontSize:'13px', flexShrink:0 }}>{act.icon}</span>
+                          <span style={{ fontSize:'9px', color:t.text, fontWeight:600, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', lineHeight:1.4 }}>
+                            {act.label}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ textAlign:'center', color:t.textFaint, fontSize:'13px', paddingTop:'2px' }}>—</div>
+                  )}
+                </button>
               )
             })}
+          </div>
           </div>
         </div>
 
@@ -1636,7 +1699,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
               <button key={`ag-${i}`} className="hm-btn-reset" onClick={() => onNavigate && onNavigate('calendar', { date: item.date })}
                 style={{ display:'flex', alignItems:'center', gap:'12px', padding:'10px 0', borderBottom:`1px solid ${t.border}` }}>
                 <div style={{ width:'36px', height:'36px', borderRadius:'50%', background: isGym ? `${gymColor}18` : `${golfColor}18`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, fontSize:'16px' }}>
-                  {isGym ? '⊕' : '🚶'}
+                  {getEventVisual(isGym ? 'gym' : 'golf', '', '').icon}
                 </div>
                 <div style={{ flex:1, fontSize:'14px', fontWeight:700, color:t.text }}>{item.label}</div>
                 <div style={{ fontSize:'12px', fontWeight:800, color:badgeColor, background:`${badgeColor}18`, border:`1px solid ${badgeColor}30`, borderRadius:'999px', padding:'3px 10px', whiteSpace:'nowrap', flexShrink:0 }}>

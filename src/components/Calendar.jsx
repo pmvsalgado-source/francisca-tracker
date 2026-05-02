@@ -12,26 +12,32 @@ import {
   deleteEntry,
 } from '../services/calendarService'
 import { saveTrainingPlan } from '../services/trainingService'
-import { SCHEDULE_TYPES, TOURNAMENT_CATEGORIES, DEFAULT_CATEGORIES, activityColor, activityColorFromCategory } from '../constants/eventCategories'
+import { SCHEDULE_TYPES, TOURNAMENT_CATEGORIES, DEFAULT_CATEGORIES, activityColor, activityColorFromCategory, getEventVisual, isCompetitionEvent } from '../constants/eventCategories'
 import { calcWeekPhase, PHASE_COLORS } from '../lib/periodization'
 import EmptyState from './EmptyState'
 
 const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
 const WEEKDAYS = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom']
-const STATUS = ['confirmed','optional','cancelled']
+const STATUS = ['confirmed','optional','cancelled','played']
 
 const EXERCISE_PALETTE = ['#6366f1','#ec4899','#14b8a6','#f59e0b','#8b5cf6','#06b6d4','#f97316','#ef4444','#22c55e','#a855f7']
-
-const WELLNESS_METRICS = [
-  { id: '__w_energia__',  label: 'Energia',       icon: '⚡', color: '#22c55e' },
-  { id: '__w_sono__',     label: 'Sono',           icon: '🌙', color: '#4f46e5' },
-  { id: '__w_cansaco__',  label: 'Cansaço',        icon: '💪', color: '#f59e0b' },
-  { id: '__w_dores__',    label: 'Dores / Lesões', icon: '🩹', color: '#f43f5e' },
-  { id: '__w_stress__',   label: 'Stress',         icon: '🌀', color: '#14b8a6' },
+const RATING_OPTIONS = [
+  { value: 'mau', face: '😞', label: 'Mal', color: '#ef4444' },
+  { value: 'medio', face: '😐', label: 'Médio', color: '#f59e0b' },
+  { value: 'bom', face: '😊', label: 'Bem', color: '#22c55e' },
 ]
 
+const WELLNESS_METRICS = [
+  { id: '__w_energia__',  label: 'Energia',       icon: '⚡', color: '#22C55E' },
+  { id: '__w_sono__',     label: 'Sono',           icon: '🌙', color: '#6366F1' },
+  { id: '__w_cansaco__',  label: 'Cansaço',        icon: '💪', color: '#F59E0B' },
+  { id: '__w_dores__',    label: 'Dores / Lesões', icon: '🩹', color: '#EF4444' },
+  { id: '__w_stress__',   label: 'Stress',         icon: '🌀', color: '#14B8A6' },
+]
+const DAY_NOTE_METRIC_ID = '__day_note__'
+
 const EMPTY_FORM = {
-  title: '', start_date: '', end_date: '', category: 'Competio', status: 'confirmed',
+  title: '', start_date: '', end_date: '', category: 'Competição', status: 'confirmed',
   color: '#378ADD', result: '', position: '', notes: '', fez_campo: false,
   time: '', duration: '', course: '', holes: '18', score: '',
 }
@@ -59,14 +65,22 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
   const [sessionRatings, setSessionRatings] = useState({})
   const [expandedSession, setExpandedSession] = useState(null)
   const [deleteSessionConfirm, setDeleteSessionConfirm] = useState(null) // { entryId, metricId }
+  const [completedByKey, setCompletedByKey] = useState({})
+  const [activityPopover, setActivityPopover] = useState(null)
+  const [todayPulse, setTodayPulse] = useState(false)
+  const [showLoadInfo, setShowLoadInfo] = useState(false)
+  const [showPlayedModal, setShowPlayedModal] = useState(false)
   const focusDateRef = useRef(null)
+  const calNoteSaveTimerRef = useRef(null)
+  const calNoteLoadedDateRef = useRef(null)
+  const calNoteSkipSaveRef = useRef(false)
 
   const todayDate = new Date()
   todayDate.setHours(0, 0, 0, 0)
   const todayIso = `${todayDate.getFullYear()}-${String(todayDate.getMonth() + 1).padStart(2, '0')}-${String(todayDate.getDate()).padStart(2, '0')}`
   const monthLabels = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
   const weekdayLabels = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
-  const weekdayFullLabels = ['Domingo', 'Segunda', 'Tera', 'Quarta', 'Quinta', 'Sexta', 'Sbado']
+  const weekdayFullLabels = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado']
 
   const fetchCategories = useCallback(async () => {
     try {
@@ -108,15 +122,23 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
 
   useEffect(() => {
     const dateStr = dayDetailDate || todayIso
-    const d = new Date(dateStr + 'T12:00:00')
-    const dow = d.getDay()
-    const monday = new Date(d)
-    monday.setDate(d.getDate() + (dow === 0 ? -6 : 1 - dow))
-    const ws = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`
-    const plan = trainingPlans.find(p => p.week_start === ws && p.plan_type === 'golf')
-      || trainingPlans.find(p => p.week_start === ws)
-    setCalNote(plan?.athlete_notes || '')
-  }, [dayDetailDate, trainingPlans, todayIso])
+    let cancelled = false
+    calNoteLoadedDateRef.current = null
+    getWellnessEntries(dateStr, [DAY_NOTE_METRIC_ID])
+      .then(data => {
+        if (cancelled) return
+        calNoteSkipSaveRef.current = true
+        setCalNote(data?.[0]?.value || '')
+        calNoteLoadedDateRef.current = dateStr
+      })
+      .catch(() => {
+        if (cancelled) return
+        calNoteSkipSaveRef.current = true
+        setCalNote('')
+        calNoteLoadedDateRef.current = dateStr
+      })
+    return () => { cancelled = true }
+  }, [dayDetailDate, todayIso])
 
   useEffect(() => {
     const d = new Date()
@@ -177,6 +199,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
   const saveEvent = async () => {
     setSaving(true)
     setSaveError(null)
+    const prevStatus = editEvent?.status
     const isCampoType = scheduleType === 'campo' && !editEvent
     const extras = []
     if (form.time) extras.push(`Hora: ${form.time}`)
@@ -215,6 +238,9 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
     setShowModal(false)
     setScheduleType(null)
     onEventsChanged?.()
+    if (form.status === 'played' && prevStatus !== 'played' && isCompetitionEvent({ category: form.category, title: form.title })) {
+      setShowPlayedModal(true)
+    }
   }
 
   const deleteEvent = () => setDeleteConfirmEvent(editEvent)
@@ -236,11 +262,17 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
 
   const getCatColor = (catName) => categories.find(c => c.name === catName)?.color || '#777'
 
-  const getWeekDays = () => Array.from({ length: 7 }, (_, i) => {
+  const getWeekDays = () => {
     const d = new Date(currentDate)
-    d.setDate(currentDate.getDate() + i)
-    return d
-  })
+    const dow = d.getDay()
+    const monday = new Date(d)
+    monday.setDate(d.getDate() - (dow === 0 ? 6 : dow - 1))
+    return Array.from({ length: 7 }, (_, i) => {
+      const day = new Date(monday)
+      day.setDate(monday.getDate() + i)
+      return day
+    })
+  }
 
   const switchView = (v) => {
     const now = new Date()
@@ -269,12 +301,12 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
         dayDate.setDate(dayDate.getDate() + dayIdx)
         const sds = `${dayDate.getFullYear()}-${String(dayDate.getMonth()+1).padStart(2,'0')}-${String(dayDate.getDate()).padStart(2,'0')}`
         if (sds !== d) return
-        day.sessions.forEach(session => {
+        day.sessions.forEach((session, si) => {
           const typeTag = session.session_type === 'coach' ? ' [C]' : session.session_type === 'auto' ? ' [A]' : ''
           if (calFilters.golf && planType === 'golf')
-            trainingSessions.push({ ...session, _isTrain: true, type: 'golf', _color: activityColor('golf'), name: (session.cat || 'Golf') + typeTag, done: session.status === 'done' })
+            trainingSessions.push({ ...session, _isTrain: true, type: 'golf', _color: activityColor('golf'), name: (session.cat || 'Golf') + typeTag, done: session.status === 'done', _key: `golf-${plan.id}-${dayIdx}-${si}`, _planId: plan.id, _dayIdx: dayIdx, _si: si })
           if (calFilters.gym && planType === 'gym')
-            trainingSessions.push({ ...session, _isTrain: true, type: 'gym', _color: activityColor('gym'), name: (session.cat || 'Gym') + typeTag, done: session.status === 'done' })
+            trainingSessions.push({ ...session, _isTrain: true, type: 'gym', _color: activityColor('gym'), name: (session.cat || 'Gym') + typeTag, done: session.status === 'done', _key: `gym-${plan.id}-${dayIdx}-${si}`, _planId: plan.id, _dayIdx: dayIdx, _si: si })
         })
       })
     })
@@ -286,7 +318,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
     const lastDay = new Date(year, month + 1, 0)
     const days = []
     let startDow = firstDay.getDay()
-    startDow = startDow === 0 ? 6 : startDow - 1
+    startDow = startDow === 0 ? 6 : startDow - 1 // Seg=0 … Dom=6
     for (let i = 0; i < startDow; i++) days.push({ date: new Date(year, month, -startDow + i + 1), current: false })
     for (let i = 1; i <= lastDay.getDate(); i++) days.push({ date: new Date(year, month, i), current: true })
     while (days.length % 7 !== 0) {
@@ -367,16 +399,11 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
   }
 
   const saveCalNote = async (noteText) => {
-    const ws = getWeekStartForDate(selectedDayStr)
-    const plan = trainingPlans.find(p => p.week_start === ws && p.plan_type === 'golf')
-      || trainingPlans.find(p => p.week_start === ws)
-    if (!plan) return
     setCalNoteSaving(true)
     try {
-      await saveTrainingPlan({ athlete_notes: noteText, updated_at: new Date().toISOString() }, plan.id)
+      await saveWellnessEntry(selectedDayStr, DAY_NOTE_METRIC_ID, noteText, user?.email)
     } catch (err) { console.error('saveCalNote:', err) }
     setCalNoteSaving(false)
-    onPlansChanged?.()
   }
 
   const saveWellness = async (metricId, value) => {
@@ -442,6 +469,57 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
     onPlansChanged?.()
   }
 
+  const getActivityKey = (row) => {
+    if (row.type === 'event') return `evt-${row.ev?.id}`
+    if (row.type === 'golf') return `golf-${row.plan?.id}-${row.dayIdx}-${row.si}`
+    if (row.type === 'gym') return `gym-${row.plan?.id}-${row.dayIdx}-${row.si}`
+    return null
+  }
+
+  const toggleActivityDone = (row) => {
+    const key = getActivityKey(row)
+    if (!key) return
+    const currentDone = completedByKey[key] !== undefined
+      ? completedByKey[key]
+      : (row.session?.status === 'done')
+    if (currentDone) {
+      unmarkActivity(key, row.plan?.id, row.dayIdx, row.si)
+    } else {
+      setActivityPopover({ key, planId: row.plan?.id, dayIdx: row.dayIdx, si: row.si })
+    }
+  }
+
+  const clearSessionRating = async (sessionKey, dateStr) => {
+    const metricId = `__sr_${sessionKey}__`
+    setSessionRatings(p => { const n = { ...p }; delete n[metricId]; return n })
+    try {
+      const existing = await findSessionRatingEntry(dateStr, metricId)
+      if (existing) await deleteEntry(existing.id)
+    } catch (err) { console.error('clearSessionRating:', err) }
+  }
+
+  const unmarkActivity = (key, planId, dayIdx, si) => {
+    setCompletedByKey(prev => ({ ...prev, [key]: false }))
+    if (planId !== undefined) {
+      const plan = trainingPlans.find(p => p.id === planId)
+      if (plan) toggleSessionStatus(plan, dayIdx, si, 'pending')
+    }
+    clearSessionRating(key, selectedDayStr)
+    setActivityPopover(null)
+  }
+
+  const confirmRating = (val) => {
+    if (!activityPopover) return
+    const { key, planId, dayIdx, si } = activityPopover
+    setCompletedByKey(prev => ({ ...prev, [key]: true }))
+    if (planId !== undefined) {
+      const plan = trainingPlans.find(p => p.id === planId)
+      if (plan) toggleSessionStatus(plan, dayIdx, si, 'done')
+    }
+    saveSessionRating(key, selectedDayStr, val)
+    setActivityPopover(null)
+  }
+
   const selectedDayStr = dayDetailDate || todayIso
   const selectedDayDate = new Date(selectedDayStr + 'T12:00:00')
   const selectedDayEvents = getEventsForDay(selectedDayStr)
@@ -449,18 +527,50 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
   const weekDays = getWeekDays()
   const weekStart = weekDays[0]
   const weekEnd = weekDays[6]
+
+  useEffect(() => {
+    if (calNoteSkipSaveRef.current) {
+      calNoteSkipSaveRef.current = false
+      return
+    }
+    if (calNoteLoadedDateRef.current !== selectedDayStr) return
+    if (calNoteSaveTimerRef.current) clearTimeout(calNoteSaveTimerRef.current)
+    calNoteSaveTimerRef.current = setTimeout(() => {
+      saveCalNote(calNote)
+    }, 800)
+    return () => {
+      if (calNoteSaveTimerRef.current) clearTimeout(calNoteSaveTimerRef.current)
+    }
+  }, [calNote, selectedDayStr])
   const weekRangeLabel = weekStart && weekEnd
     ? (weekStart.getMonth() === weekEnd.getMonth()
-      ? `${weekStart.getDate()}${weekEnd.getDate()} ${monthLabels[weekStart.getMonth()]} ${weekStart.getFullYear()}`
-      : `${weekStart.getDate()} ${monthLabels[weekStart.getMonth()].slice(0, 3)}  ${weekEnd.getDate()} ${monthLabels[weekEnd.getMonth()].slice(0, 3)} ${weekEnd.getFullYear()}`)
+      ? `${weekStart.getDate()} – ${weekEnd.getDate()} ${monthLabels[weekStart.getMonth()]} ${weekStart.getFullYear()}`
+      : `${weekStart.getDate()} ${monthLabels[weekStart.getMonth()].slice(0, 3)} – ${weekEnd.getDate()} ${monthLabels[weekEnd.getMonth()].slice(0, 3)} ${weekEnd.getFullYear()}`)
     : ''
   const monthDays = getDaysInMonth(year, month)
   const weekEvents = weekDays.flatMap(day => getEventsForDay(day))
   const weekTrainings = weekEvents.filter(ev => ev._isTrain).length
-  const weekCompetitions = weekEvents.filter(ev => !ev._isTrain && (ev.category === 'Competio' || TOURNAMENT_CATEGORIES.some(tc => tc.name === ev.category))).length
+  const weekCompetitions = weekEvents.filter(isCompetitionEvent).length
   const weekCalendarEvents = weekEvents.filter(ev => !ev._isTrain).length
-  const weekLoad = Math.max(0, Math.min(100, Math.round((weekEvents.length / 8) * 100)))
-  const weekObjective = weekEvents.find(ev => !ev._isTrain)?.title || weekEvents.find(ev => ev._isTrain)?.title || 'Gerir carga com clareza'
+  // Carga: pontos por dia ativo (competição=1.5, treino=1.0, só appointment=0.5).
+  // Denominador = 6 (máximo recomendado — 1 dia de descanso obrigatório por semana).
+  // Se score > 6 a carga ultrapassa 100% → sinal de sobrecarga.
+  const weekLoadScore = weekDays.reduce((sum, day) => {
+    const evts = getEventsForDay(day)
+    if (evts.some(isCompetitionEvent)) return sum + 1.5
+    if (evts.some(ev => ev._isTrain)) return sum + 1.0
+    if (evts.some(ev => !ev._isTrain)) return sum + 0.5
+    return sum
+  }, 0)
+  const weekRestDays = weekDays.filter(day => getEventsForDay(day).length === 0).length
+  const weekLoad = Math.min(100, Math.round((weekLoadScore / 6) * 100))
+  // Objetivo: prioridade — competição > camp > treino > manutenção > livre
+  const weekFirstComp = weekEvents.find(isCompetitionEvent)
+  const weekFirstCamp = weekEvents.find(ev => !ev._isTrain && /camp/i.test(ev.category || ev.title || ''))
+  const weekObjective = weekFirstComp?.title
+    || weekFirstCamp?.title
+    || (weekTrainings > 0 ? `Semana de treino — ${weekTrainings} ${weekTrainings === 1 ? 'sessão' : 'sessões'}` : null)
+    || (weekCalendarEvents > 0 ? 'Semana de manutenção' : 'Semana livre')
   const selectedDayObjective = selectedDayEvents.find(ev => ev._isTrain)?.title || selectedDayEvents[0]?.title || 'Sem eventos definidos'
   const selectedDaySubtitle = selectedDayEvents.length > 0
     ? `${selectedDayEvents.length} bloco${selectedDayEvents.length === 1 ? '' : 's'} planeado${selectedDayEvents.length === 1 ? '' : 's'}`
@@ -473,7 +583,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
     boxShadow: '0 1px 0 rgba(15, 23, 42, 0.03)',
   }
 
-  const HeaderBar = ({ label, range, onPrev, onNext, onAdd }) => (
+  const HeaderBar = ({ label, range, onPrev, onNext, onToday, onAdd, showGolfGym = true }) => (
     <div style={{ ...cardShell, padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
       <div style={{ minWidth: 0 }}>
         <div style={{ fontSize: '9px', letterSpacing: '1.8px', color: t.accent, fontWeight: 700, marginBottom: '3px', textTransform: 'uppercase' }}>{label}</div>
@@ -482,6 +592,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
           <button onClick={onPrev} style={{ background: '#fff', border: `1px solid ${t.border}`, borderRadius: '999px', color: t.textMuted, width: '32px', height: '32px', cursor: 'pointer', fontSize: '16px', lineHeight: 1 }}>&lt;</button>
+          <button onClick={() => { onToday?.(); setTodayPulse(true); setTimeout(() => setTodayPulse(false), 600) }} style={{ background: '#fff', border: `1px solid ${t.border}`, borderRadius: '999px', color: t.textMuted, height: '32px', padding: '0 12px', cursor: 'pointer', fontSize: '11px', fontFamily: F, fontWeight: 700, transform: todayPulse ? 'scale(0.88)' : 'scale(1)', transition: 'transform 150ms ease' }}>Hoje</button>
           <button onClick={onNext} style={{ background: '#fff', border: `1px solid ${t.border}`, borderRadius: '999px', color: t.textMuted, width: '32px', height: '32px', cursor: 'pointer', fontSize: '16px', lineHeight: 1 }}>&gt;</button>
         </div>
         <button onClick={onAdd} style={{ background: t.accent, border: 'none', borderRadius: '999px', color: '#fff', height: '32px', padding: '0 14px', cursor: 'pointer', fontSize: '11px', fontFamily: F, fontWeight: 800, boxShadow: `0 3px 10px ${t.accent}2b` }}>+ Evento</button>
@@ -489,12 +600,12 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
           {(['day', 'week', 'month', 'year']).map(v => (
             <button key={v} onClick={() => switchView(v)}
               style={{ background: view === v ? t.accent : 'transparent', border: 'none', borderRadius: '999px', color: view === v ? '#fff' : t.textMuted, padding: '6px 12px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: view === v ? 800 : 600 }}>
-              {v === 'day' ? 'Dia' : v === 'week' ? 'Semana' : v === 'month' ? 'Ms' : 'Ano'}
+              {v === 'day' ? 'Dia' : v === 'week' ? 'Semana' : v === 'month' ? 'Mês' : 'Ano'}
             </button>
           ))}
         </div>
-        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
-          {[[ 'events', 'Eventos', '#378ADD' ], [ 'golf', 'Golf', '#22c55e' ], [ 'gym', 'Ginsio', '#f97316' ]].map(([key, label, color]) => (
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center', visibility: showGolfGym ? 'visible' : 'hidden' }}>
+          {[[ 'events', 'Eventos', '#378ADD' ], [ 'golf', 'Golf', '#22c55e' ], [ 'gym', 'Ginásio', '#f97316' ]].map(([key, label, color]) => (
             <button key={key} onClick={() => setCalFilters(p => ({ ...p, [key]: !p[key] }))}
               style={{ background: calFilters[key] ? color + '18' : '#fff', border: `1px solid ${calFilters[key] ? color : t.border}`, borderRadius: '999px', color: calFilters[key] ? color : t.textMuted, padding: '5px 10px', cursor: 'pointer', fontSize: '9px', fontFamily: F, fontWeight: calFilters[key] ? 700 : 500, letterSpacing: '0.8px' }}>
               {label}
@@ -523,7 +634,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
   )
 
   const phaseFromSelectedDay = (() => {
-    if (selectedDayEvents.some(ev => !ev._isTrain && (ev.category === 'Competio' || TOURNAMENT_CATEGORIES.some(tc => tc.name === ev.category)))) return 'PEAK'
+    if (selectedDayEvents.some(isCompetitionEvent)) return 'PEAK'
     if (selectedDayEvents.some(ev => ev._isTrain && ev.type === 'golf')) return 'BUILD'
     if (selectedDayEvents.some(ev => ev._isTrain && ev.type === 'gym')) return 'BUILD'
     if (selectedDayEvents.length === 0) return 'RECOVERY'
@@ -563,61 +674,68 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
     )
   }
 
-  const SessionGlyph = ({ kind, color = '#fff' }) => {
-    const common = { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: color, strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': 'true' }
-    if (kind === 'golf') {
-      return (
-        <svg {...common}>
-          <line x1="8" y1="21" x2="8" y2="4" />
-          <path d="M8 4l8 3-8 3z" fill={color} stroke="none" />
-          <circle cx="16" cy="18" r="2" fill={color} stroke="none" />
-        </svg>
-      )
-    }
-    if (kind === 'gym') {
-      return (
-        <svg {...common}>
-          <rect x="4" y="9" width="4" height="6" rx="1" fill={color} stroke="none" />
-          <rect x="16" y="9" width="4" height="6" rx="1" fill={color} stroke="none" />
-          <rect x="9" y="10" width="6" height="4" rx="1" fill={color} stroke="none" />
-        </svg>
-      )
-    }
-    if (kind === 'mental') {
-      return (
-        <svg {...common}>
-          <path d="M7 13c-1.5 0-3-1.2-3-3s1.5-3 3-3c.3-1.5 1.8-2.5 3.3-2.5 1.2 0 2.2.5 2.9 1.4.5-.2 1-.3 1.6-.3 1.9 0 3.5 1.6 3.5 3.5 1.2.4 2 1.6 2 2.9 0 1.6-1.3 2.9-2.9 2.9H7z" />
-        </svg>
-      )
-    }
-    if (kind === 'comp') {
-      return (
-        <svg {...common}>
-          <path d="M12 3l2.4 4.8 5.3.8-3.9 3.8.9 5.3L12 15.8 7.3 17.7l.9-5.3-3.9-3.8 5.3-.8z" fill={color} stroke="none" />
-        </svg>
-      )
-    }
-    if (kind === 'recovery') {
-      return (
-        <svg {...common}>
-          <path d="M6 14h3l2-5 2 10 2-5h3" />
-        </svg>
-      )
-    }
+  const SessionGlyph = ({ kind, color = '#fff', size = 48 }) => {
+    const s = { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: color, strokeWidth: 1.5, strokeLinecap: 'round', strokeLinejoin: 'round', 'aria-hidden': 'true' }
+    if (kind === 'range') return (
+      <svg {...s}>
+        <circle cx="12" cy="12" r="10"/>
+        <circle cx="12" cy="12" r="6"/>
+        <circle cx="12" cy="12" r="2" fill={color} stroke="none"/>
+      </svg>
+    )
+    if (kind === 'golf') return (
+      <svg {...s}>
+        <line x1="6" y1="22" x2="6" y2="3"/>
+        <path d="M6 3l13 5-13 5z" fill={color} stroke="none"/>
+      </svg>
+    )
+    if (kind === 'gym') return (
+      <svg {...s}>
+        <path d="m6.5 6.5 11 11"/><path d="m21 21-1-1"/><path d="m3 3 1 1"/>
+        <path d="m18 22 4-4"/><path d="m2 6 4-4"/>
+        <path d="m3 10 7-7"/><path d="m14 21 7-7"/>
+      </svg>
+    )
+    if (kind === 'mental') return (
+      <svg {...s}>
+        <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.44-4.84z"/>
+        <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.44-4.84z"/>
+      </svg>
+    )
+    if (kind === 'trophy' || kind === 'comp') return (
+      <svg {...s}>
+        <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/>
+        <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/>
+        <path d="M4 22h16"/>
+        <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/>
+        <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/>
+        <path d="M18 2H6v7a6 6 0 0 0 12 0V2z"/>
+      </svg>
+    )
+    if (kind === 'recovery') return (
+      <svg {...s}>
+        <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/>
+        <path d="M3.22 12H9.5l1.5-3 2 4.5 1.5-4 1.5 2.5h5.27"/>
+      </svg>
+    )
     return (
-      <svg {...common}>
-        <circle cx="12" cy="12" r="5" />
+      <svg {...s}>
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+        <line x1="16" y1="2" x2="16" y2="6"/>
+        <line x1="8" y1="2" x2="8" y2="6"/>
+        <line x1="3" y1="10" x2="21" y2="10"/>
       </svg>
     )
   }
 
-  const EventCard = ({ event, compact = false, onClick }) => {
-    const color = event._isTrain ? event._color : (event.color || getCatColor(event.category))
-    const typeInfo = SCHEDULE_TYPES.find(s => s.category === event.category)
-    const checked = !!(event.done || event.completed || event.checked || event.fez_campo)
-    const icon = event._isTrain
-      ? (event.type === 'golf' ? 'G' : 'GYM')
-      : (typeInfo?.icon || '"')
+  const EventCard = ({ event, compact = false, onClick, completedOverride, onCircleClick, rating }) => {
+    const visual = getEventVisual(event._isTrain ? event.type : null, event.category, event.title)
+    const color = event._isTrain ? (event._color || visual.color) : (event.color || getCatColor(event.category) || visual.color)
+    const checked = completedOverride !== undefined ? completedOverride : !!(event.done || event.completed || event.checked || event.fez_campo)
+    const icon = visual.icon
+    const ratingColor = rating === 'bom' ? '#22c55e' : rating === 'medio' ? '#f59e0b' : rating === 'mau' ? '#ef4444' : null
+    const ratingSmile = rating === 'bom' ? ':)' : rating === 'medio' ? ':|' : rating === 'mau' ? ':(' : ''
+    const circleActiveBg = ratingColor || color
     return (
       <div onClick={onClick}
         style={{ ...cardShell, padding: compact ? '8px 10px' : '12px 12px', borderLeft: `3px solid ${color}`, background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
@@ -629,97 +747,152 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
           <div style={{ fontSize: '9px', color: color, fontWeight: 700, letterSpacing: '0.9px', textTransform: 'uppercase', marginTop: '2px' }}>{event.category || (event.type === 'golf' ? 'Golf' : 'Ginasio')}</div>
           {!compact && event.notes && <div style={{ fontSize: '10px', color: t.textMuted, marginTop: '5px', lineHeight: 1.45 }}>{event.notes.split('\n')[0]}</div>}
         </div>
-        {!checked && <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: `1.5px solid ${color}`, flexShrink: 0, marginTop: '2px' }} />}
-        {checked && <div style={{ width: '18px', height: '18px', borderRadius: '50%', background: color, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: '2px', fontSize: '11px', fontWeight: 800 }}>OK</div>}
+        <button
+          onClick={e => { e.stopPropagation(); onCircleClick?.() }}
+          style={{ width: '18px', height: '18px', borderRadius: '50%', background: checked ? circleActiveBg : 'transparent', border: `1.5px solid ${checked ? circleActiveBg : color}`, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: '2px', cursor: onCircleClick ? 'pointer' : 'default', padding: 0, fontSize: '9px', fontWeight: 900, lineHeight: 1 }}>
+          {checked ? '✓' : ''}
+        </button>
       </div>
     )
   }
 
-  const ProgressBar = ({ value, label, color }) => (
-    <div style={{ ...cardShell, padding: '12px 14px', background: '#fff', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+  const ProgressBar = ({ value, label, color, onInfo, showInfo, infoText }) => (
+    <div style={{ ...cardShell, padding: '12px 14px', background: '#fff', display: 'flex', flexDirection: 'column', gap: '8px', position: 'relative' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'baseline' }}>
-        <div style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: t.textMuted, fontWeight: 700 }}>{label}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+          <div style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: t.textMuted, fontWeight: 700 }}>{label}</div>
+          {onInfo && (
+            <button onClick={onInfo} style={{ width: '14px', height: '14px', borderRadius: '50%', background: t.border, border: 'none', color: t.textMuted, fontSize: '9px', fontWeight: 900, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, padding: 0, flexShrink: 0 }}>i</button>
+          )}
+        </div>
         <div style={{ fontSize: '22px', fontWeight: 900, color }}>{value}%</div>
       </div>
       <div style={{ height: '6px', borderRadius: '999px', background: t.border, overflow: 'hidden' }}>
         <div style={{ width: `${Math.max(0, Math.min(100, value))}%`, height: '100%', background: color, borderRadius: '999px' }} />
       </div>
-    </div>
-  )
-
-  const DayColumn = ({ day, dayLabel, eventsForDay, isToday, trainingLog }) => (
-    <div style={{ ...cardShell, padding: '12px', minHeight: '220px', background: isToday ? t.accentBg : '#fff' }}>
-      <div style={{ marginBottom: '10px' }}>
-        <div style={{ fontSize: '9px', letterSpacing: '1.4px', textTransform: 'uppercase', color: isToday ? t.accent : t.textMuted, fontWeight: 800 }}>{dayLabel}</div>
-        <div style={{ fontSize: '20px', fontWeight: 900, color: t.text, lineHeight: 1, marginTop: '4px' }}>{day.getDate()}</div>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {eventsForDay.map((ev, idx) => (
-          <EventCard key={ev.id || idx} event={ev} compact onClick={() => { if (ev._isTrain) { openDayDetail(fmtDate(day)) } else { openEdit(ev) } }} />
-        ))}
-      </div>
-      {trainingLog?.hasPlan && (
-        <div style={{ marginTop: '8px', paddingTop: '8px', borderTop: `1px solid ${t.border}` }}>
-          <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
-            {trainingLog.sessions.filter(s => !s.isRest).map((session, si) => {
-              const isGolf = session.planType === 'golf'
-              const color = isGolf ? activityColor('golf') : activityColor('gym')
-              const sessItems = (session.items || []).filter(i => !i.isRest)
-              const pct = sessItems.length > 0
-                ? Math.round(sessItems.reduce((a, i) => a + (i.progress ?? (i.done ? 100 : 0)), 0) / sessItems.length)
-                : null
-              return (
-                <div key={si} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: color + '14', border: `1px solid ${color}35`, borderRadius: '999px', padding: '3px 8px' }}>
-                  <span style={{ fontSize: '10px' }}>{isGolf ? '⛳' : '💪'}</span>
-                  {pct !== null && <span style={{ fontSize: '10px', fontWeight: 700, color }}>{pct}%</span>}
-                  {pct === null && <span style={{ fontSize: '10px', fontWeight: 600, color }}>—</span>}
-                </div>
-              )
-            })}
-            {trainingLog.sessions.some(s => s.isRest) && (
-              <div style={{ display: 'flex', alignItems: 'center', background: '#f59e0b14', border: '1px solid #f59e0b35', borderRadius: '999px', padding: '3px 8px' }}>
-                <span style={{ fontSize: '10px', fontWeight: 700, color: '#f59e0b' }}>Descanso</span>
-              </div>
-            )}
+      {showInfo && infoText && (
+        <>
+          <div onClick={onInfo} style={{ position: 'fixed', inset: 0, zIndex: 19 }} />
+          <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 20, background: t.text, color: '#fff', borderRadius: '10px', padding: '12px 14px', fontSize: '11px', lineHeight: 1.6, width: '260px', boxShadow: '0 8px 24px rgba(0,0,0,0.18)' }}>
+            {infoText}
           </div>
-        </div>
+        </>
       )}
     </div>
   )
 
+  const DayColumn = ({ day, eventsForDay, isToday, trainingLog }) => {
+    const dateStr = fmtDate(day)
+    const weekdayShort = weekdayLabels[(day.getDay() + 6) % 7]
+    const sorted = sortCalendarEvents(eventsForDay)
+    const hasComp = sorted.some(isCompetitionEvent)
+    const hasTrain = sorted.some(ev => ev._isTrain)
+    const phase = hasComp ? 'Peak' : hasTrain ? 'Build' : 'Rest'
+    const phaseColor = phase === 'Peak' ? '#ef4444' : phase === 'Build' ? '#f59e0b' : '#94a3b8'
+    const trainSessions = (trainingLog?.sessions || []).filter(s => !s.isRest)
+    const hasRest = (trainingLog?.sessions || []).some(s => s.isRest)
+    return (
+      <div onClick={() => openDayDetail(dateStr)} style={{ ...cardShell, padding: 0, minHeight: '210px', background: isToday ? t.accent + '08' : '#fff', cursor: 'pointer', overflow: 'hidden', display: 'flex', flexDirection: 'column', borderTop: `3px solid ${phaseColor}` }}>
+        <div style={{ padding: '10px 10px 6px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '4px' }}>
+          <div>
+            <div style={{ fontSize: '9px', letterSpacing: '1.5px', textTransform: 'uppercase', color: isToday ? t.accent : t.textMuted, fontWeight: 700 }}>{weekdayShort}</div>
+            {isToday
+              ? <div className="today-badge-lg" style={{ marginTop: '4px' }}>{day.getDate()}</div>
+              : <div style={{ fontSize: '22px', fontWeight: 900, color: t.text, lineHeight: 1, marginTop: '4px' }}>{day.getDate()}</div>
+            }
+          </div>
+          <div style={{ marginTop: '2px', background: phaseColor + '18', border: `1px solid ${phaseColor}55`, borderRadius: '999px', padding: '2px 7px', fontSize: '8px', fontWeight: 800, color: phaseColor, letterSpacing: '0.8px', textTransform: 'uppercase', flexShrink: 0 }}>{phase}</div>
+        </div>
+        <div style={{ padding: '0 8px 8px', flex: 1, display: 'flex', flexDirection: 'column', gap: '3px' }}>
+          {sorted.slice(0, 3).map((ev, idx) => {
+            const evVis = getEventVisual(ev._isTrain ? ev.type : null, ev.category, ev.title)
+            const evColor = ev._isTrain ? (ev._color || evVis.color) : (ev.color || getCatColor(ev.category) || evVis.color)
+            const evName = ev.title || ev.session_name || ev.name || ev.cat || '—'
+            return (
+              <div key={ev.id || idx}
+                onClick={e => { e.stopPropagation(); ev._isTrain ? openDayDetail(dateStr) : openEdit(ev) }}
+                style={{ display: 'flex', alignItems: 'center', gap: '5px', background: evColor + '10', borderRadius: '6px', padding: '5px 7px', cursor: 'pointer', minWidth: 0, borderLeft: `3px solid ${evColor}` }}>
+                <span style={{ fontSize: '11px', lineHeight: 1, flexShrink: 0 }}>{evVis.icon}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '10px', fontWeight: 700, color: t.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1.3 }}>{evName}</div>
+                  {(ev.category || ev.type) && <div style={{ fontSize: '8px', letterSpacing: '0.5px', color: evColor, fontWeight: 700, textTransform: 'uppercase' }}>{ev.category || (ev.type === 'golf' ? 'Golf' : 'Ginásio')}</div>}
+                </div>
+              </div>
+            )
+          })}
+          {sorted.length > 3 && <div style={{ fontSize: '9px', color: t.textMuted, fontWeight: 700, paddingLeft: '4px' }}>+{sorted.length - 3}</div>}
+          {sorted.length === 0 && <div style={{ fontSize: '10px', color: t.textFaint, padding: '4px 2px', fontStyle: 'italic' }}>Livre</div>}
+        </div>
+        {(trainSessions.length > 0 || hasRest) && (
+          <div style={{ padding: '6px 8px', borderTop: `1px solid ${t.border}`, display: 'flex', gap: '4px', flexWrap: 'wrap', background: t.bg }}>
+            {trainSessions.map((session, si) => {
+              const isGolf = session.planType === 'golf'
+              const color = isGolf ? activityColor('golf') : activityColor('gym')
+              const sessItems = (session.items || []).filter(i => !i.isRest)
+              const pct = sessItems.length > 0 ? Math.round(sessItems.reduce((a, i) => a + (i.progress ?? (i.done ? 100 : 0)), 0) / sessItems.length) : null
+              return (
+                <div key={si} style={{ display: 'flex', alignItems: 'center', gap: '4px', background: color + '14', border: `1px solid ${color}35`, borderRadius: '999px', padding: '3px 8px' }}>
+                  <span style={{ fontSize: '10px' }}>{isGolf ? '⛳' : '💪'}</span>
+                  <span style={{ fontSize: '10px', fontWeight: 700, color }}>{pct !== null ? `${pct}%` : '—'}</span>
+                </div>
+              )
+            })}
+            {hasRest && (
+              <div style={{ display: 'flex', alignItems: 'center', background: '#94a3b814', border: '1px solid #94a3b835', borderRadius: '999px', padding: '3px 8px' }}>
+                <span style={{ fontSize: '9px', fontWeight: 700, color: '#94a3b8' }}>Descanso</span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   const getCalendarPriority = (ev) => {
     if (!ev) return 3
-    if (!ev._isTrain && (ev.category === 'Competição' || TOURNAMENT_CATEGORIES.some(tc => tc.name === ev.category))) return 0
+    if (isCompetitionEvent(ev)) return 0
     if (ev._isTrain) return 1
     return 2
   }
 
   const sortCalendarEvents = (list) => [...list].sort((a, b) => getCalendarPriority(a) - getCalendarPriority(b))
 
-  const MonthCard = ({ monthIndex, eventsForMonth }) => (
-    <div style={{ ...cardShell, padding: '12px', background: '#fff', height: '178px', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ fontSize: '9px', letterSpacing: '3px', color: t.accent, marginBottom: '10px', textTransform: 'uppercase', fontWeight: 700, flexShrink: 0 }}>{monthLabels[monthIndex]}</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minHeight: 0, overflow: 'hidden' }}>
-        {sortCalendarEvents(eventsForMonth).slice(0, 3).map(ev => (
-          <div key={ev.id} onClick={() => openEdit(ev)}
-            style={{ ...cardShell, padding: '7px 9px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', cursor: 'pointer', borderLeft: `3px solid ${getCatColor(ev.category)}`, minWidth: 0 }}>
-            <div style={{ fontSize: '12px', color: getCatColor(ev.category), fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>{ev.title}</div>
-            <div style={{ fontSize: '11px', color: t.textFaint, whiteSpace: 'nowrap', flexShrink: 0 }}>{ev.start_date?.slice(8)}{ev.end_date && ev.end_date !== ev.start_date ? `–${ev.end_date?.slice(8)}` : ''}</div>
-          </div>
-        ))}
-        {eventsForMonth.length > 3 && <div style={{ fontSize: '11px', color: t.textMuted, fontWeight: 700, paddingLeft: '2px' }}>+{eventsForMonth.length - 3}</div>}
-        {eventsForMonth.length === 0 && <div style={{ fontSize: '11px', color: t.textFaint }}>Sem eventos</div>}
+  const MonthCard = ({ monthIndex, eventsForMonth }) => {
+    const sorted = sortCalendarEvents(eventsForMonth)
+    const hasComp = sorted.some(isCompetitionEvent)
+    const hasTrain = sorted.some(ev => ev._isTrain)
+    const phase = hasComp ? 'peak' : hasTrain ? 'build' : null
+    const phaseColor = phase === 'peak' ? '#ef4444' : phase === 'build' ? '#f59e0b' : null
+    return (
+      <div style={{ ...cardShell, padding: '12px', background: t.surface, height: '178px', display: 'flex', flexDirection: 'column', borderTop: phaseColor ? `3px solid ${phaseColor}` : undefined }}>
+        <div style={{ fontSize: '9px', letterSpacing: '2px', color: t.textMuted, marginBottom: '8px', textTransform: 'uppercase', fontWeight: 700, flexShrink: 0 }}>{monthLabels[monthIndex]}</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minHeight: 0, overflow: 'hidden', flex: 1 }}>
+          {sorted.slice(0, 4).map(ev => {
+            const evVis = getEventVisual(ev._isTrain ? ev.type : null, ev.category, ev.title)
+            const evColor = ev._isTrain ? (ev._color || evVis.color) : (ev.color || getCatColor(ev.category) || evVis.color)
+            return (
+              <div key={ev.id} onClick={() => openEdit(ev)}
+                style={{ display: 'flex', alignItems: 'center', gap: '5px', background: evColor + '10', borderRadius: '5px', padding: '4px 6px', cursor: 'pointer', borderLeft: `2px solid ${evColor}`, minWidth: 0 }}>
+                <span style={{ fontSize: '10px', flexShrink: 0 }}>{evVis.icon}</span>
+                <span style={{ fontSize: '10px', fontWeight: 700, color: t.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{ev.title}</span>
+                <span style={{ fontSize: '9px', color: t.textMuted, whiteSpace: 'nowrap', flexShrink: 0 }}>{ev.start_date?.slice(8)}{ev.end_date && ev.end_date !== ev.start_date ? `–${ev.end_date?.slice(8)}` : ''}</span>
+              </div>
+            )
+          })}
+          {sorted.length > 4 && <div style={{ fontSize: '9px', color: t.textMuted, fontWeight: 700, paddingLeft: '4px' }}>+{sorted.length - 4}</div>}
+          {sorted.length === 0 && <div style={{ fontSize: '10px', color: t.textFaint, fontStyle: 'italic', padding: '4px 2px' }}>Livre</div>}
+        </div>
       </div>
-    </div>
-  )
+    )
+  }
 
   return (
     <div style={{ fontFamily: F, color: t.text }}>
       <style>{`
-        .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);grid-auto-rows:124px;background:${t.surface};border-radius:0 0 14px 14px;overflow:hidden;border:1px solid ${t.border};border-top:none;}
-        .cal-cell{background:${t.bg};padding:6px;height:124px;min-height:124px;max-height:124px;cursor:pointer;transition:background 0.1s;border-right:0.5px solid ${t.border};border-bottom:0.5px solid ${t.border};display:flex;flex-direction:column;overflow:hidden;}
-        .cal-cell:hover{background:${t.accent}08;}
-        .cal-cell.today-cell{background:${t.accent}15 !important;box-shadow:inset 0 0 0 2px ${t.accent}55;}
+        .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;background:${t.bg};padding:4px;}
+        .cal-cell{background:${t.surface};padding:6px;height:120px;min-height:120px;max-height:120px;cursor:pointer;transition:background 0.1s,box-shadow 0.1s;border:1px solid ${t.border};border-radius:8px;display:flex;flex-direction:column;overflow:hidden;}
+        .cal-cell:hover{background:${t.accent}06;box-shadow:0 2px 8px rgba(0,0,0,0.06);}
+        .cal-cell.today-cell{background:${t.accent}12 !important;border-color:${t.accent}55;box-shadow:0 0 0 2px ${t.accent}33;}
         .cal-week-grid{display:grid;grid-template-columns:repeat(7,1fr);background:${t.surface};border-radius:0 0 14px 14px;overflow:hidden;border:1px solid ${t.border};border-top:none;}
         .cal-week-cell{background:${t.bg};padding:8px 6px;min-height:160px;cursor:pointer;transition:background 0.1s;border-right:0.5px solid ${t.border};border-bottom:0.5px solid ${t.border};}
         .cal-week-cell:hover{background:${t.accent}08;}
@@ -730,9 +903,11 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
         .cal-year-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
         .type-btn:hover{transform:scale(1.03);box-shadow:0 4px 16px rgba(0,0,0,0.15);}
         .type-btn{transition:all 0.15s;}
-        .session-card{transition:box-shadow 0.15s,transform 0.15s;cursor:pointer;}
-        .session-card:hover{box-shadow:0 4px 16px rgba(0,0,0,0.10);transform:translateY(-1px);}
-        @media(max-width:768px){.annual-grid{grid-template-columns:repeat(2,1fr)}.cal-cell{height:96px;min-height:96px;max-height:96px;padding:3px}.cal-week-cell{min-height:100px;padding:4px}}
+        .session-card{position:relative;transition:box-shadow 0.15s,transform 0.15s,border-color 0.15s;cursor:pointer;}
+        .session-card::before{content:'';position:absolute;left:74px;right:0;top:0;height:0;background:var(--session-color);transition:height 0.15s;z-index:1;}
+        .session-card:hover{border-color:var(--session-color) !important;box-shadow:0 5px 16px var(--session-shadow);transform:translateY(-1px);}
+        .session-card:hover::before{height:3px;}
+        @media(max-width:768px){.annual-grid{grid-template-columns:repeat(2,1fr)}.cal-cell{height:88px;min-height:88px;max-height:88px;padding:4px}.cal-week-cell{min-height:100px;padding:4px}}
         @media(max-width:600px){.cal-year-stats{grid-template-columns:repeat(2,1fr)}}
       `}</style>
 
@@ -750,6 +925,28 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
         </div>
       )}
 
+      {/* Session rating popup */}
+      {activityPopover && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1002, padding: '16px' }}>
+          <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '14px', padding: '18px 20px', width: '100%', maxWidth: '320px', boxShadow: '0 18px 48px rgba(15,23,42,0.22)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '14px' }}>
+              <div style={{ fontSize: '9px', letterSpacing: '2px', fontWeight: 800, color: t.accent, textTransform: 'uppercase' }}>COMO CORREU?</div>
+              <button onClick={() => setActivityPopover(null)} style={{ background: 'transparent', border: 'none', color: t.textMuted, cursor: 'pointer', fontSize: '18px', lineHeight: 1, padding: '0 2px' }}>×</button>
+            </div>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
+              {[['mau', 'Mal', '#ef4444'], ['medio', 'Médio', '#f59e0b'], ['bom', 'Bem', '#22c55e']].map(([val, label, bc]) => (
+                <button key={val}
+                  onClick={() => confirmRating(val)}
+                  title={label}
+                  style={{ background: bc + '12', border: `1.5px solid ${bc}`, borderRadius: '50%', color: bc, width: '48px', height: '48px', cursor: 'pointer', fontSize: '25px', fontFamily: F, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
+                  {RATING_OPTIONS.find(o => o.value === val)?.face || label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Delete Confirm Modal */}
       {deleteConfirmEvent && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
@@ -762,6 +959,21 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
               <button onClick={() => setDeleteConfirmEvent(null)} style={btn(false)}>Cancelar</button>
               <button onClick={confirmDeleteEvent} style={{ background: t.danger, border: 'none', borderRadius: '20px', color: '#fff', padding: '7px 16px', cursor: 'pointer', fontSize: '11px', fontFamily: F, fontWeight: 700 }}>Apagar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Played Modal */}
+      {showPlayedModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1001 }}>
+          <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '14px', padding: '32px 28px', maxWidth: '380px', width: '90%', textAlign: 'center' }}>
+            <div style={{ fontSize: '36px', marginBottom: '12px' }}>🏆</div>
+            <div style={{ fontSize: '18px', fontWeight: 800, color: t.text, marginBottom: '8px' }}>Torneio concluído!</div>
+            <div style={{ fontSize: '13px', color: t.textMuted, marginBottom: '24px', lineHeight: 1.6 }}>Queres preencher as stats agora?</div>
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+              <button onClick={() => setShowPlayedModal(false)} style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '8px', color: t.textMuted, padding: '9px 18px', cursor: 'pointer', fontSize: '13px', fontFamily: F }}>Mais tarde</button>
+              <button onClick={() => { setShowPlayedModal(false); onNavigate?.('competition') }} style={{ background: '#ef4444', border: 'none', borderRadius: '8px', color: '#fff', padding: '9px 20px', cursor: 'pointer', fontSize: '13px', fontWeight: 700, fontFamily: F }}>Preencher Stats</button>
             </div>
           </div>
         </div>
@@ -833,7 +1045,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
                   <div>
                     <div style={{ fontSize: '9px', letterSpacing: '2px', color: t.textMuted, marginBottom: '4px' }}>ESTADO</div>
                     <select value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value }))} style={{ ...inp }}>
-                      {STATUS.map(s => <option key={s} value={s}>{s === 'confirmed' ? 'Confirmado' : s === 'optional' ? 'Opcional' : 'Cancelado'}</option>)}
+                      {STATUS.map(s => <option key={s} value={s}>{s === 'played' ? 'Jogado ✓' : s === 'confirmed' ? 'Confirmado' : s === 'optional' ? 'Opcional' : 'Cancelado'}</option>)}
                     </select>
                   </div>
                 </div>
@@ -896,7 +1108,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
                 <div>
                   <div style={{ fontSize: '9px', letterSpacing: '2px', color: t.textMuted, marginBottom: '4px' }}>ESTADO</div>
                   <select value={form.status} onChange={e => setForm(p => ({ ...p, status: e.target.value }))} style={{ ...inp }}>
-                    {STATUS.map(s => <option key={s} value={s}>{s === 'confirmed' ? 'Confirmado' : s === 'optional' ? 'Opcional' : 'Cancelado'}</option>)}
+                    {STATUS.map(s => <option key={s} value={s}>{s === 'played' ? 'Jogado ✓' : s === 'confirmed' ? 'Confirmado' : s === 'optional' ? 'Opcional' : 'Cancelado'}</option>)}
                   </select>
                 </div>
                 <div style={{ borderTop: `1px solid ${t.border}`, paddingTop: '12px' }}>
@@ -1032,7 +1244,8 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
         <section style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', overflow: 'hidden', boxShadow: '0 1px 0 rgba(15, 23, 42, 0.03)' }}>
           <HeaderBar
             label="Dia"
-            range={`${selectedDayDate.getDate()} ${monthLabels[selectedDayDate.getMonth()]} ${selectedDayDate.getFullYear()}  ${['Domingo', 'Segunda-feira', 'Tera-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sbado'][selectedDayDate.getDay()]}`}
+            showGolfGym={false}
+            range={`${selectedDayDate.getDate()} ${monthLabels[selectedDayDate.getMonth()]} ${selectedDayDate.getFullYear()}  ${['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'][selectedDayDate.getDay()]}`}
             onPrev={() => {
               const prev = new Date(selectedDayStr + 'T12:00:00')
               prev.setDate(prev.getDate() - 1)
@@ -1049,7 +1262,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
               setCurrentDate(next)
               setView('day')
             }}
-            onToday={() => { setDayDetailDate(todayIso); setCurrentDate(new Date(todayDate.getFullYear(), todayDate.getMonth(), 1)); setView('day') }}
+            onToday={() => { setDayDetailDate(todayIso); setCurrentDate(new Date(todayDate.getFullYear(), todayDate.getMonth(), todayDate.getDate())); setView('day') }}
             onAdd={() => openSchedulePicker(selectedDayStr)}
           />
           <div style={{ background: weekPhaseData.phaseColor, padding: '6px 16px' }}>
@@ -1067,13 +1280,30 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
                   <EmptyState icon="📅" message="Sem eventos" subMessage="Usa + Evento para criar um registo." t={t} compact />
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', overflowY: 'auto', maxHeight: '220px', paddingRight: '2px' }}>
-                    {selectedDayEvents.map((ev, ei) => (
-                      <EventCard
-                        key={ev.id || ei}
-                        event={ev}
-                        onClick={() => { if (ev._isTrain) { openDayDetail(selectedDayStr) } else { openEdit(ev) } }}
-                      />
-                    ))}
+                    {selectedDayEvents.map((ev, ei) => {
+                      const actKey = ev._isTrain ? (ev._key || null) : (ev.id ? `evt-${ev.id}` : null)
+                      const doneOverride = actKey !== null && completedByKey[actKey] !== undefined ? completedByKey[actKey] : undefined
+                      const isDone = doneOverride !== undefined ? doneOverride : !!(ev.done || ev.completed || ev.checked || ev.fez_campo)
+                      const currentRating = actKey ? (sessionRatings[`__sr_${actKey}__`] || null) : null
+                      return (
+                        <div key={ev.id || ei}>
+                          <EventCard
+                            event={ev}
+                            completedOverride={doneOverride}
+                            rating={currentRating}
+                            onClick={() => { if (ev._isTrain) { openDayDetail(selectedDayStr) } else { openEdit(ev) } }}
+                            onCircleClick={() => {
+                              if (!actKey) return
+                              if (isDone) {
+                                unmarkActivity(actKey, ev._planId, ev._dayIdx, ev._si)
+                              } else {
+                                setActivityPopover({ key: actKey, planId: ev._planId, dayIdx: ev._dayIdx, si: ev._si })
+                              }
+                            }}
+                          />
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
               </div>
@@ -1090,8 +1320,8 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
                         <div style={{ fontSize: '11px', color: t.text, fontWeight: 600, flex: 1, minWidth: 0 }}>{m.label}</div>
                         <div style={{ display: 'flex', gap: '5px', flexShrink: 0 }}>
                           {Array.from({ length: 5 }, (_, i) => (
-                            <button key={i} onClick={() => saveWellness(m.id, i + 1)}
-                              style={{ width: '15px', height: '15px', borderRadius: '50%', border: `1.5px solid ${i < val ? m.color : t.border}`, background: i < val ? m.color : 'transparent', cursor: 'pointer', padding: 0, flexShrink: 0, transition: 'all 0.12s' }} />
+                            <button key={i} onClick={() => saveWellness(m.id, val === 1 && i === 0 ? 0 : i + 1)}
+                              style={{ width: '15px', height: '15px', borderRadius: '50%', border: `1.5px solid ${i < val ? m.color : '#E5E7EB'}`, background: i < val ? m.color : '#E5E7EB', cursor: 'pointer', padding: 0, flexShrink: 0, transition: 'all 0.12s' }} />
                           ))}
                         </div>
                       </div>
@@ -1128,7 +1358,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
               const hasAnything = sessionRows.length > 0 || hasRestDay
 
               return (
-                <div style={{ marginTop: '8px' }}>
+                <div style={{ margin: '8px auto 0', maxWidth: '980px', width: '100%' }}>
                   <div style={{ fontSize: '9px', letterSpacing: '3px', color: t.accent, fontWeight: 700, marginBottom: '8px', textTransform: 'uppercase' }}>SESSÕES DO DIA</div>
 
                   {!hasAnything && (
@@ -1151,29 +1381,29 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
                     {sessionRows.map((row, rowIdx) => {
                       const isExpanded = expandedSession === row.key
                       const rating = sessionRatings[`__sr_${row.key}__`] || null
+                      const ratingInfo = RATING_OPTIONS.find(o => o.value === rating)
+                      const ratingSmile = ratingInfo?.face || ''
+                      const ratingColor = ratingInfo?.color || null
 
                       let color, iconKind, title, subtitle, tagCount, duration
                       if (row.type === 'golf') {
-                        color = activityColor('golf'); iconKind = 'golf'
+                        const vis = getEventVisual('golf', row.session.cat, '')
+                        color = vis.color; iconKind = vis.svgKind
                         title = (row.session.cat || 'GOLF').toUpperCase()
                         subtitle = row.session.session_type === 'coach' ? 'Com Coach' : row.session.session_type === 'auto' ? 'Autónomo' : (row.session.notes || '')
                         tagCount = (row.session.items || []).filter(i => !i.isRest).length
                         duration = row.session.duration || null
                       } else if (row.type === 'gym') {
-                        color = activityColor('gym'); iconKind = 'gym'
+                        const vis = getEventVisual('gym', row.session.cat, '')
+                        color = vis.color; iconKind = vis.svgKind
                         title = (row.session.cat || 'GINÁSIO').toUpperCase()
                         subtitle = row.session.session_type === 'coach' ? 'Com Coach' : (row.session.notes || '')
                         tagCount = (row.session.items || []).filter(i => !i.isRest).length
                         duration = row.session.duration || null
                       } else {
-                        const cat = `${row.ev.category || ''} ${row.ev.title || ''}`
-                        color = row.ev.color || activityColorFromCategory(cat)
-                        if (color === activityColor('competition')) iconKind = 'comp'
-                        else if (color === activityColor('golf')) iconKind = 'golf'
-                        else if (color === activityColor('mental')) iconKind = 'mental'
-                        else if (color === activityColor('fisio') || color === activityColor('massagem')) iconKind = 'recovery'
-                        else if (color === activityColor('gym')) iconKind = 'gym'
-                        else iconKind = 'event'
+                        const vis = getEventVisual(null, row.ev.category, row.ev.title)
+                        iconKind = vis.svgKind
+                        color = row.ev.color || vis.color
                         title = row.ev.title
                         subtitle = row.ev.category || ''
                         tagCount = null; duration = null
@@ -1182,7 +1412,10 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
                       const activeItems = row.type !== 'event'
                         ? (row.session.items || []).map((item, ii) => ({ ...item, _ii: ii })).filter(i => !i.isRest)
                         : []
-                      const sessionDone = row.session?.status === 'done'
+                      const activityKey = getActivityKey(row)
+                      const sessionDone = activityKey !== null && completedByKey[activityKey] !== undefined
+                        ? completedByKey[activityKey]
+                        : (row.session?.status === 'done')
                       const markerGrad = row.type === 'golf'
                         ? 'linear-gradient(180deg, #378ADD 0%, #2563eb 100%)'
                         : row.type === 'gym'
@@ -1197,112 +1430,102 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
                           : 'rgba(255,255,255,0.16)'
 
                       return (
-                        <div key={row.key} className="session-card" style={{ ...cardShell, overflow: 'hidden', padding: 0 }}>
-                          <div onClick={() => activeItems.length > 0 && setExpandedSession(isExpanded ? null : row.key)} style={{ display: 'flex', alignItems: 'stretch', cursor: activeItems.length > 0 ? 'pointer' : 'default' }}>
+                        <div key={row.key}>
+                          <div className="session-card" style={{ ...cardShell, overflow: 'hidden', padding: 0, '--session-color': color, '--session-shadow': `${color}24` }}>
+                            <div onClick={() => activeItems.length > 0 && setExpandedSession(isExpanded ? null : row.key)} style={{ display: 'flex', alignItems: 'stretch', cursor: activeItems.length > 0 ? 'pointer' : 'default' }}>
 
-                            {/* Left marker block */}
-                            <div style={{ width: '74px', background: markerGrad, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, minHeight: '92px', boxShadow: `inset 0 0 0 1px ${markerGlow}` }}>
-                              <div style={{ position: 'absolute', top: '8px', left: '8px', width: '22px', height: '22px', borderRadius: '50%', background: 'rgba(255,255,255,0.22)', border: '1.5px solid rgba(255,255,255,0.42)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontWeight: 900, color: '#fff', fontFamily: F, boxShadow: '0 2px 8px rgba(0,0,0,0.12)' }}>
-                                {rowIdx + 1}
-                              </div>
-                              {sessionDone && (
-                                <div style={{ position: 'absolute', top: '8px', right: '8px', width: '20px', height: '20px', borderRadius: '50%', background: '#fff', color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 900, boxShadow: '0 2px 6px rgba(0,0,0,0.12)' }}>
-                                  ✓
+                              {/* Left marker block */}
+                              <div style={{ width: '74px', background: markerGrad, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, minHeight: '92px', boxShadow: `inset 0 0 0 1px ${markerGlow}` }}>
+                                <div style={{ width: '42px', height: '42px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  <SessionGlyph kind={iconKind} size={40} />
                                 </div>
-                              )}
-                              <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'rgba(255,255,255,0.16)', border: '1px solid rgba(255,255,255,0.16)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.12)' }}>
-                                <SessionGlyph kind={iconKind} />
                               </div>
-                              <div style={{ position: 'absolute', left: '12px', bottom: '10px', right: '12px', height: '4px', borderRadius: '999px', background: 'rgba(255,255,255,0.18)' }} />
-                            </div>
 
-                            {/* Content */}
-                            <div style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '12px 14px', gap: '12px', minWidth: 0 }}>
+                              {/* Content */}
+                              <div style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '12px 14px', gap: '12px', minWidth: 0 }}>
 
-                              {/* Left: title + subtitle + tags */}
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: '12px', fontWeight: 900, color, letterSpacing: '0.8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textTransform: 'uppercase' }}>{title}</div>
-                                {subtitle && <div style={{ fontSize: '11px', color: t.textMuted, marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600 }}>{subtitle}</div>}
-                                <div style={{ display: 'flex', gap: '10px', marginTop: '5px', alignItems: 'center' }}>
-                                  {tagCount !== null && tagCount > 0 && (
-                                    <span style={{ fontSize: '10px', color: t.textMuted, display: 'flex', alignItems: 'center', gap: '3px' }}>
-                                      <span style={{ fontSize: '11px' }}>↕</span>{tagCount} exercício{tagCount !== 1 ? 's' : ''}
+                                {/* Left: title + subtitle + tags */}
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontSize: '12px', fontWeight: 900, color, letterSpacing: '0.8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textTransform: 'uppercase' }}>{title}</div>
+                                  {subtitle && <div style={{ fontSize: '11px', color: t.textMuted, marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600 }}>{subtitle}</div>}
+                                  <div style={{ display: 'flex', gap: '10px', marginTop: '5px', alignItems: 'center' }}>
+                                    {tagCount !== null && tagCount > 0 && (
+                                      <span style={{ fontSize: '10px', color, background: color + '12', border: `1px solid ${color}40`, borderRadius: '999px', padding: '3px 8px', display: 'inline-flex', alignItems: 'center', gap: '5px', fontWeight: 800 }}>
+                                        <span style={{ fontSize: '10px', lineHeight: 1 }}>{isExpanded ? '▴' : '▾'}</span>
+                                        {isExpanded ? 'Ocultar' : 'Ver'} {tagCount} exercício{tagCount !== 1 ? 's' : ''}
+                                      </span>
+                                    )}
+                                    {false && tagCount !== null && tagCount > 0 && (
+                                      <span style={{ fontSize: '10px', color, background: color + '12', border: `1px solid ${color}40`, borderRadius: '999px', padding: '3px 8px', display: 'inline-flex', alignItems: 'center', gap: '5px', fontWeight: 800 }}>
+                                        <span style={{ fontSize: '11px' }}>↕</span>{tagCount} exercício{tagCount !== 1 ? 's' : ''}
+                                      </span>
+                                    )}
+                                    {duration && (
+                                      <span style={{ fontSize: '10px', color: t.textMuted, display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                        <span style={{ fontSize: '11px' }}>⏱</span>{duration} min
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Right: Fiz */}
+                                <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: '8px' }} onClick={e => e.stopPropagation()}>
+                                  {ratingSmile && (
+                                    <span title={ratingInfo?.label} style={{ color: ratingColor, fontSize: '22px', fontWeight: 900, lineHeight: 1 }}>
+                                      {ratingSmile}
                                     </span>
                                   )}
-                                  {duration && (
-                                    <span style={{ fontSize: '10px', color: t.textMuted, display: 'flex', alignItems: 'center', gap: '3px' }}>
-                                      <span style={{ fontSize: '11px' }}>⏱</span>{duration} min
-                                    </span>
-                                  )}
+                                  <button onClick={() => toggleActivityDone(row)}
+                                    style={{ background: sessionDone ? '#16a34a' : 'transparent', border: `2px solid ${sessionDone ? '#16a34a' : '#22c55e'}`, borderRadius: '8px', color: sessionDone ? '#fff' : '#16a34a', padding: '9px 18px', cursor: 'pointer', fontSize: '12px', fontFamily: F, fontWeight: 700, whiteSpace: 'nowrap', boxShadow: sessionDone ? '0 2px 6px rgba(34,197,94,0.3)' : 'none' }}>
+                                    {String.fromCharCode(10003) + ' Fiz'}
+                                  </button>
                                 </div>
-                              </div>
 
-                              {/* Middle: Como correu? */}
-                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', flexShrink: 0 }} onClick={e => e.stopPropagation()}>
-                                <div style={{ fontSize: '9px', color: t.textMuted, fontWeight: 600, letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>Como correu?</div>
-                                <div style={{ display: 'flex', gap: '5px' }}>
-                                  {[['mau','✕','Mau','#ef4444'],['medio','●','Médio','#f59e0b'],['bom','✓','Bom','#22c55e']].map(([val, sym, label, bc]) => (
-                                    <button key={val} onClick={() => saveSessionRating(row.key, selectedDayStr, rating === val ? null : val)}
-                                      style={{ background: rating === val ? bc : '#fff', border: `1.5px solid ${bc}`, borderRadius: '20px', color: rating === val ? '#fff' : bc, padding: '4px 9px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 700, display: 'flex', alignItems: 'center', gap: '3px', whiteSpace: 'nowrap' }}>
-                                      <span>{sym}</span>{label}
-                                    </button>
-                                  ))}
-                                </div>
                               </div>
-
-                              {/* Right: Fiz */}
-                              <div style={{ flexShrink: 0 }} onClick={e => e.stopPropagation()}>
-                                <button onClick={row.plan ? () => toggleSessionStatus(row.plan, row.dayIdx, row.si, sessionDone ? 'pending' : 'done') : undefined}
-                                  style={{ background: sessionDone ? '#16a34a' : 'transparent', border: `2px solid ${sessionDone ? '#16a34a' : '#22c55e'}`, borderRadius: '8px', color: sessionDone ? '#fff' : '#16a34a', padding: '9px 18px', cursor: row.plan ? 'pointer' : 'default', fontSize: '12px', fontFamily: F, fontWeight: 700, whiteSpace: 'nowrap', boxShadow: sessionDone ? '0 2px 6px rgba(34,197,94,0.3)' : 'none' }}>
-                                  {String.fromCharCode(10003) + ' Fiz'}
-                                </button>
-                              </div>
-
                             </div>
+
+                            {/* Drill-down: exercises */}
+                            {isExpanded && activeItems.length > 0 && (
+                              <div style={{ padding: '0 14px 12px 14px', borderTop: `1px solid ${t.border}` }}>
+                                <div style={{ paddingTop: '10px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                                  {activeItems.map((item, idx) => {
+                                    const prog = item.progress ?? (item.done ? 100 : 0)
+                                    const ic = EXERCISE_PALETTE[idx % EXERCISE_PALETTE.length]
+                                    return (
+                                      <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '7px 10px', borderLeft: `3px solid ${prog === 100 ? '#22c55e' : ic}`, background: `${prog === 100 ? '#22c55e' : ic}10`, borderRadius: '6px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '7px', flex: 1, minWidth: 0 }}>
+                                          <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: prog === 100 ? '#22c55e' : ic, flexShrink: 0 }} />
+                                          <div style={{ fontSize: '12px', color: t.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600 }}>{item.name}</div>
+                                        </div>
+                                        <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                                          {[[0,'Não fiz','#6b7280'],[50,'50%','#f59e0b'],[100,'Fiz','#22c55e']].map(([val, label, aCol]) => (
+                                            <button key={val} onClick={() => row.plan && savePlanProgress(row.plan, row.dayIdx, row.si, item._ii, val)}
+                                              style={{ background: prog === val ? aCol : 'transparent', border: `1px solid ${prog === val ? aCol : t.border}`, borderRadius: '999px', color: prog === val ? '#fff' : t.textMuted, padding: '3px 9px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 700 }}>
+                                              {label}
+                                            </button>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            )}
                           </div>
 
-                          {/* Drill-down: exercises */}
-                          {isExpanded && activeItems.length > 0 && (
-                            <div style={{ padding: '0 14px 12px 14px', borderTop: `1px solid ${t.border}` }}>
-                              <div style={{ paddingTop: '10px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                                {activeItems.map((item, idx) => {
-                                  const prog = item.progress ?? (item.done ? 100 : 0)
-                                  const ic = EXERCISE_PALETTE[idx % EXERCISE_PALETTE.length]
-                                  return (
-                                    <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', padding: '7px 10px', borderLeft: `3px solid ${prog === 100 ? '#22c55e' : ic}`, background: `${prog === 100 ? '#22c55e' : ic}10`, borderRadius: '6px' }}>
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: '7px', flex: 1, minWidth: 0 }}>
-                                        <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: prog === 100 ? '#22c55e' : ic, flexShrink: 0 }} />
-                                        <div style={{ fontSize: '12px', color: t.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600 }}>{item.name}</div>
-                                      </div>
-                                      <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
-                                        {[[0,'Não fiz','#6b7280'],[50,'50%','#f59e0b'],[100,'Fiz','#22c55e']].map(([val, label, aCol]) => (
-                                          <button key={val} onClick={() => row.plan && savePlanProgress(row.plan, row.dayIdx, row.si, item._ii, val)}
-                                            style={{ background: prog === val ? aCol : 'transparent', border: `1px solid ${prog === val ? aCol : t.border}`, borderRadius: '999px', color: prog === val ? '#fff' : t.textMuted, padding: '3px 9px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 700 }}>
-                                            {label}
-                                          </button>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  )
-                                })}
-                              </div>
-                            </div>
-                          )}
                         </div>
                       )
                     })}
                   </div>
 
                   {/* Nota do dia */}
-                  {(golfPlan || gymPlan) && (
-                    <div style={{ ...cardShell, padding: '12px 14px', marginTop: '8px' }}>
-                      <div style={{ fontSize: '9px', letterSpacing: '2px', color: t.textMuted, fontWeight: 700, textTransform: 'uppercase', marginBottom: '6px' }}>NOTA DO DIA</div>
-                      <textarea value={calNote} onChange={e => setCalNote(e.target.value)}
-                        placeholder="Escreve uma nota sobre o treino de hoje..."
-                        rows={3}
-                        style={{ background: t.bg, border: `1px solid ${t.border}`, borderRadius: '8px', color: t.text, padding: '6px 10px', fontSize: '12px', fontFamily: F, outline: 'none', width: '100%', boxSizing: 'border-box', resize: 'vertical', minHeight: '64px' }} />
-                    </div>
-                  )}
+                  <div style={{ ...cardShell, padding: '12px 14px', marginTop: '8px' }}>
+                    <div style={{ fontSize: '9px', letterSpacing: '2px', color: t.textMuted, fontWeight: 700, textTransform: 'uppercase', marginBottom: '6px' }}>NOTA DO DIA</div>
+                    <textarea value={calNote} onChange={e => setCalNote(e.target.value)}
+                      placeholder="Escreve uma nota sobre o treino de hoje..."
+                      rows={3}
+                      style={{ background: t.bg, border: `1px solid ${t.border}`, borderRadius: '8px', color: t.text, padding: '6px 10px', fontSize: '12px', fontFamily: F, outline: 'none', width: '100%', boxSizing: 'border-box', resize: 'vertical', minHeight: '64px' }} />
+                  </div>
                 </div>
               )
             })()}
@@ -1331,13 +1554,13 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
                   {(['day', 'week', 'month', 'year']).map(v => (
                     <button key={v} onClick={() => switchView(v)}
                       style={{ background: view === v ? t.accent : 'transparent', border: 'none', borderRadius: '999px', color: view === v ? '#fff' : t.textMuted, padding: '6px 12px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: view === v ? 800 : 600 }}>
-                      {v === 'day' ? 'Dia' : v === 'week' ? 'Semana' : v === 'month' ? 'Ms' : 'Ano'}
+                      {v === 'day' ? 'Dia' : v === 'week' ? 'Semana' : v === 'month' ? 'Mês' : 'Ano'}
                     </button>
                   ))}
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
-                {[[ 'events', 'Eventos', '#378ADD' ], [ 'golf', 'Golf', activityColor('golf') ], [ 'gym', 'Ginsio', activityColor('gym') ]].map(([key, label, color]) => (
+                {[[ 'events', 'Eventos', '#378ADD' ], [ 'golf', 'Golf', activityColor('golf') ], [ 'gym', 'Ginásio', activityColor('gym') ]].map(([key, label, color]) => (
                   <button key={key} onClick={() => setCalFilters(p => ({ ...p, [key]: !p[key] }))}
                     style={{ background: calFilters[key] ? color + '18' : 'transparent', border: `1px solid ${calFilters[key] ? color : t.border}`, borderRadius: '999px', color: calFilters[key] ? color : t.textMuted, padding: '5px 11px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: calFilters[key] ? 700 : 500 }}>
                     {label}
@@ -1346,7 +1569,14 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
               </div>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px', marginBottom: '12px' }}>
-              <ProgressBar value={weekLoad} label="Carga semanal" color={t.accent} />
+              <ProgressBar
+                value={weekLoad}
+                label="Carga semanal"
+                color={weekRestDays === 0 ? t.danger : t.accent}
+                onInfo={() => setShowLoadInfo(v => !v)}
+                showInfo={showLoadInfo}
+                infoText={`Pontos por dia: competição = 1.5 · treino = 1.0 · só appointment = 0.5. Máximo recomendado = 6 dias ativos (1 dia de descanso obrigatório). Esta semana: ${weekLoadScore.toFixed(1)} / 6 = ${weekLoad}%${weekRestDays === 0 ? ' ⚠️ Sem dia de descanso esta semana.' : ` (${weekRestDays} dia${weekRestDays > 1 ? 's' : ''} de descanso)`}`}
+              />
               <div style={{ ...cardShell, padding: '12px 14px', background: '#fff' }}>
                 <div style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: t.textMuted, fontWeight: 700, marginBottom: '4px' }}>Objetivo da semana</div>
                 <div style={{ fontSize: '14px', fontWeight: 800, color: t.text, lineHeight: 1.35 }}>{weekObjective}</div>
@@ -1356,20 +1586,12 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
               <div style={{ minWidth: '760px', display: 'grid', gridTemplateColumns: 'repeat(7, minmax(150px, 1fr))', gap: '8px' }}>
                 {weekDays.map((day, i) => {
                   const dateStr = fmtDate(day)
-                  const dayLabel = weekdayLabels[(day.getDay() + 6) % 7]
                   const dayEvts = getEventsForDay(day)
                   const isToday = dateStr === todayIso
-                  const phaseLabel = dayEvts.some(ev => !ev._isTrain && (ev.category === 'Competio' || TOURNAMENT_CATEGORIES.some(tc => tc.name === ev.category)))
-                    ? 'Peak'
-                    : dayEvts.some(ev => ev._isTrain)
-                      ? 'Build'
-                      : 'Recovery'
-                  const phaseColor = phaseLabel === 'Peak' ? '#ef4444' : phaseLabel === 'Build' ? '#f59e0b' : '#94a3b8'
                   return (
                     <DayColumn
                       key={i}
                       day={day}
-                      dayLabel={`${dayLabel}  ${phaseLabel}`}
                       eventsForDay={dayEvts}
                       isToday={isToday}
                       trainingLog={getTrainingLogForDay(dateStr)}
@@ -1385,7 +1607,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
         {view === 'month' && (
         <section style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', overflow: 'hidden', boxShadow: '0 1px 0 rgba(15, 23, 42, 0.03)' }}>
           <HeaderBar
-            label="Ms"
+            label="Mês"
             range={`${monthLabels[month]} ${year}`}
             onPrev={() => setCurrentDate(new Date(year, month - 1, 1))}
             onNext={() => setCurrentDate(new Date(year, month + 1, 1))}
@@ -1402,33 +1624,49 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
               ))}
             </div>
             <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+              <div style={{ minWidth: '420px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '4px', padding: '4px 4px 0', background: t.bg }}>
+                  {weekdayLabels.map(d => (
+                    <div key={d} style={{ padding: '5px 8px', textAlign: 'center', fontSize: '9px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: t.textMuted }}>{d}</div>
+                  ))}
+                </div>
               <div className="cal-grid" style={{ minWidth: '420px' }}>
-                {weekdayLabels.map(d => (
-                  <div key={d} style={{ background: t.bg, padding: '8px', textAlign: 'center', fontSize: '10px', fontWeight: 700, letterSpacing: '1px', color: t.textMuted, borderRight: `0.5px solid ${t.border}`, borderBottom: `0.5px solid ${t.border}` }}>{d}</div>
-                ))}
                 {monthDays.map((day, i) => {
                   const dateStr = fmtDate(day.date)
                   const dayEvts = getEventsForDay(day.date)
                   const isToday = dateStr === todayIso
+                  const sorted = sortCalendarEvents(dayEvts)
+                  const hasComp = sorted.some(isCompetitionEvent)
+                  const hasTrain = sorted.some(ev => ev._isTrain)
+                  const mPhase = hasComp ? 'peak' : hasTrain ? 'build' : null
+                  const mPhaseColor = mPhase === 'peak' ? '#ef4444' : mPhase === 'build' ? '#f59e0b' : null
                   return (
                     <div key={i} className={`cal-cell${isToday ? ' today-cell' : ''}`} onClick={() => openDayDetail(dateStr)}
-                      style={{ background: isToday ? t.accent + '15' : day.current ? t.surface : t.bg, borderRight: `0.5px solid ${t.border}`, borderBottom: `0.5px solid ${t.border}` }}>
-                      <div style={{ marginBottom: '4px' }}>
+                      style={{ background: isToday ? t.accent + '12' : day.current ? t.surface : t.bg, borderTop: mPhaseColor ? `3px solid ${mPhaseColor}` : undefined, opacity: day.current ? 1 : 0.45 }}>
+                      <div style={{ marginBottom: '3px' }}>
                         {isToday
                           ? <span className="today-badge">{day.date.getDate()}</span>
-                          : <span style={{ fontSize: '12px', color: day.current ? t.text : t.textFaint, fontWeight: 600 }}>{day.date.getDate()}</span>
+                          : <span style={{ fontSize: '12px', color: day.current ? t.text : t.textFaint, fontWeight: 700 }}>{day.date.getDate()}</span>
                         }
                       </div>
-                      {sortCalendarEvents(dayEvts).slice(0, 2).map((ev, ei) => (
-                        <div key={ev.id || ei} onClick={e => { e.stopPropagation(); if (ev._isTrain) { openDayDetail(dateStr) } else { openEdit(ev) } }}
-                          style={{ background: ev._isTrain ? ev._color + '24' : (ev.color || getCatColor(ev.category)), borderRadius: '5px', padding: '2px 5px', fontSize: '10px', fontWeight: 700, color: ev._isTrain ? ev._color : '#fff', marginBottom: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer', border: ev._isTrain ? `1px solid ${ev._color}44` : 'none', flexShrink: 0 }}>
-                          {ev._isTrain ? (ev.type === 'golf' ? 'G' : 'GYM') : ''}{ev.title || ev.session_name || ev.name || ev.cat}
-                        </div>
-                      ))}
-                      {dayEvts.length > 2 && <div style={{ fontSize: '9px', color: t.textMuted, fontWeight: 700, marginTop: '1px' }}>+{dayEvts.length - 2}</div>}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                        {sorted.slice(0, 2).map((ev, ei) => {
+                          const evVis = getEventVisual(ev._isTrain ? ev.type : null, ev.category, ev.title)
+                          const evColor = ev._isTrain ? (ev._color || evVis.color) : (ev.color || getCatColor(ev.category) || evVis.color)
+                          return (
+                            <div key={ev.id || ei} onClick={e => { e.stopPropagation(); if (ev._isTrain) { openDayDetail(dateStr) } else { openEdit(ev) } }}
+                              style={{ display: 'flex', alignItems: 'center', gap: '3px', background: evColor + '12', borderRadius: '4px', padding: '2px 4px', cursor: 'pointer', minWidth: 0, borderLeft: `2px solid ${evColor}`, overflow: 'hidden' }}>
+                              <span style={{ fontSize: '9px', lineHeight: 1, flexShrink: 0 }}>{evVis.icon}</span>
+                              <span style={{ fontSize: '9px', fontWeight: 700, color: t.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{ev.title || ev.session_name || ev.name || ev.cat}</span>
+                            </div>
+                          )
+                        })}
+                        {sorted.length > 2 && <div style={{ fontSize: '8px', color: t.textMuted, fontWeight: 700, paddingLeft: '2px' }}>+{sorted.length - 2}</div>}
+                      </div>
                     </div>
                   )
                 })}
+              </div>
               </div>
             </div>
           </div>
@@ -1439,7 +1677,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
         <section style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', overflow: 'hidden', boxShadow: '0 1px 0 rgba(15, 23, 42, 0.03)' }}>
           <HeaderBar
             label="Ano"
-            range={`Viso anual  ${year}`}
+            range={`Visão anual  ${year}`}
             onPrev={() => setCurrentDate(new Date(year - 1, month, 1))}
             onNext={() => setCurrentDate(new Date(year + 1, month, 1))}
             onToday={() => { setCurrentDate(new Date(todayDate.getFullYear(), todayDate.getMonth(), 1)); setDayDetailDate(todayIso); setView('year') }}
