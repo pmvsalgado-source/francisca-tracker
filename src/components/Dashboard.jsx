@@ -1,9 +1,17 @@
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
-import Goals from './Goals'
+import {
+  Home as HomeIcon,
+  Calendar as CalendarIcon,
+  ClipboardList,
+  LineChart,
+  Trophy,
+  MessageCircle,
+  CircleHelp,
+  Settings,
+} from 'lucide-react'
 import Chat from './Chat'
 import Microcycles from './Microcycles'
 import Help from './Help'
-import logo from '../assets/logo.png'
 
 const Home = lazy(() => import('./Home'))
 const Training = lazy(() => import('./Training'))
@@ -599,16 +607,15 @@ export default function Dashboard({ user }) {
   }
 
   const SIDEBAR_NAV = [
-    ['home',        lang === 'pt' ? 'Overview'       : 'Overview',      '▦'],
-    ['calendar',    lang === 'pt' ? 'Calendário'     : 'Calendar',      '▦'],
-    ['training',    lang === 'pt' ? 'Plano de Treino': 'Training Plan',  '▦'],
-    ['performance', 'Track Progress',                                    '▦'],
-    ['competition', lang === 'pt' ? 'Competições'    : 'Competitions',  '▦'],
-    ...(isAdmin ? [['backoffice', lang === 'pt' ? 'Atletas' : 'Athletes', '▦']] : []),
-    ['chat',        lang === 'pt' ? 'Mensagens'      : 'Messages',      '▦'],
-    ['help',        'Ajuda',                                            '▦'],
+    { key: 'home', label: 'Overview', icon: HomeIcon },
+    { key: 'calendar', label: 'Calendar', icon: CalendarIcon },
+    { key: 'training', label: 'Training Plan', icon: ClipboardList },
+    { key: 'performance', label: 'Track Progress', icon: LineChart },
+    { key: 'competition', label: 'Competitions', icon: Trophy },
+    ...(isAdmin ? [{ key: 'backoffice', label: lang === 'pt' ? 'Atletas' : 'Athletes', icon: ClipboardList }] : []),
+    { key: 'chat', label: 'Messages', icon: MessageCircle },
+    { key: 'help', label: 'Ajuda', icon: CircleHelp },
   ]
-
   return (
     <div style={{ fontFamily: F, background: t.bg, minHeight: '100vh', color: t.text, display: 'flex', flexDirection: 'column' }}>
       <style>{`
@@ -619,9 +626,9 @@ export default function Dashboard({ user }) {
         .menu-item { display: block; width: 100%; background: transparent; border: none; color: #aaa; padding: 12px 16px; cursor: pointer; font-size: 12px; font-family: ${F}; text-align: left; letter-spacing: 0.5px; transition: all 0.1s; }
         .menu-item:hover { background: ${t.navActive}; color: ${t.text}; }
         .menu-item.danger { color: ${t.danger}; }
-        .snav-btn { display:flex; align-items:center; gap:12px; width:100%; background:transparent; border:none; border-left:3px solid transparent; padding:12px 20px; cursor:pointer; font-family:${F}; font-size:14px; font-weight:600; color:${t.textMuted}; text-align:left; transition:all 0.12s; }
+        .snav-btn { display:flex; align-items:center; gap:12px; width:100%; background:transparent; border:none; border-left:3px solid transparent; padding:12px 18px; cursor:pointer; font-family:${F}; font-size:13px; font-weight:600; color:#0F172A; text-align:left; transition:all 0.12s; }
         .snav-btn:hover:not(.snav-active) { background:${t.bg}; color:${t.text}; }
-        .snav-active { color:#ef4444 !important; border-left-color:#ef4444 !important; background:${theme==='dark'?'rgba(239,68,68,0.08)':'#fef2f2'} !important; font-weight:700 !important; }
+        .snav-active { color:#2563EB !important; border-left-color:#2563EB !important; background:#EFF6FF !important; font-weight:700 !important; }
         @media(max-width:720px) { .g2 { grid-template-columns: 1fr; } }
         @media(max-width:768px) { .db-sidebar { display:none !important; } }
       `}</style>
@@ -798,12 +805,13 @@ export default function Dashboard({ user }) {
 
       {/* ── TOP HEADER ── */}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 24px', height:'64px', background:t.surface, borderBottom:`1px solid ${t.border}`, flexShrink:0, zIndex:10 }}>
-        {/* Logo */}
-        <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
-          <img src={logo} alt="Team F1" style={{ height:'66px', width:'auto', objectFit:'contain', flexShrink:0 }} />
-          <div>
-            <div style={{ fontSize:'12px', fontWeight:900, color:t.text, lineHeight:1.15, letterSpacing:'0.3px', textTransform:'uppercase' }}>Performance Golf</div>
-            <div style={{ fontSize:'11px', fontWeight:600, color:t.textMuted, lineHeight:1.1 }}>Francisca Salgado</div>
+        <div style={{ display:'flex', alignItems:'baseline', gap:'12px', minWidth:0 }}>
+          <div style={{ fontSize:'19px', fontWeight:900, color:t.text, lineHeight:1, letterSpacing:'-0.01em', whiteSpace:'nowrap' }}>
+            Francisca Salgado
+          </div>
+          <div style={{ height:'18px', width:'1px', background:t.border, flexShrink:0 }} />
+          <div style={{ fontSize:'12px', fontWeight:700, color:t.textMuted, lineHeight:1, whiteSpace:'nowrap' }}>
+            Performance Golf
           </div>
         </div>
         {/* Right: avatar + menu */}
@@ -853,13 +861,18 @@ export default function Dashboard({ user }) {
         {/* SIDEBAR */}
         <div className="db-sidebar" style={{ width:'220px', background:t.surface, borderRight:`1px solid ${t.border}`, display:'flex', flexDirection:'column', flexShrink:0, overflowY:'auto' }}>
           <nav style={{ flex:1, paddingTop:'8px' }}>
-            {SIDEBAR_NAV.map(([key, label]) => (
+            {SIDEBAR_NAV.map(({ key, label, icon: Icon }) => (
               <button key={key} className={`snav-btn${view === key ? ' snav-active' : ''}`}
                 onClick={() => { navigateToView(key); if (key !== 'performance') setPerfTab('focus') }}>
+                <Icon size={20} strokeWidth={1.8} color={view === key ? '#2563EB' : '#0F172A'} />
                 <span>{label}</span>
               </button>
             ))}
           </nav>
+          <button className="snav-btn" onClick={() => { setProfileForm({...profile}); setPwForm({ newPw:'', confirmPw:'' }); setPwMsg(''); setShowProfile(true) }}>
+            <Settings size={20} strokeWidth={1.8} color="#0F172A" />
+            <span>Definições</span>
+          </button>
         </div>
 
         {/* MAIN CONTENT */}
@@ -987,7 +1000,6 @@ export default function Dashboard({ user }) {
               </div>
             )}
 
-            {!loading && view === 'goals'       && <Goals       theme={theme} t={t} user={user} />}
             {!loading && view === 'training' && (
               <Suspense fallback={<div style={{ padding:'60px', textAlign:'center', color:t.textMuted, fontSize:'14px' }}>{s.loading}</div>}>
                 <Training theme={theme} t={t} user={user} userRole={profile.role} lang={lang} focusDate={trainingFocusDate} onFocusConsumed={() => setTrainingFocusDate(null)} events={events} onPlansChanged={fetchTrainingPlans} />
@@ -1022,3 +1034,4 @@ export default function Dashboard({ user }) {
     </div>
   )
 }
+

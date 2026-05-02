@@ -10,7 +10,6 @@ import {
   savePeriodizationOverride,
   deletePeriodizationOverride,
 } from '../services/trainingService'
-import Goals from './Goals'
 import { ACTIVITY_COLORS } from '../constants/eventCategories'
 
 import { COACH_ROLES } from '../constants/roles'
@@ -1216,9 +1215,7 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
     { key:'plan', role:'COACH', label: lang==='pt' ? 'Plano Semanal' : 'Weekly Plan',
       icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
       bg:'#E6F1FB', color:'#185FA5' },
-    { key:'priorities', role:'ATHLETE', label: lang==='pt' ? 'Prioridades' : 'Priorities',
-      icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>,
-      bg:'#fdf4ff', color:'#7e22ce' },
+
     { key:'progress', role:'', label: lang==='pt' ? 'Progresso' : 'Progress',
       icon:<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>,
       bg:t.navActive||'#f5f5f5', color:t.textMuted },
@@ -2178,9 +2175,12 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
       )}
 
       {/* Tab header */}
-      <div style={{ marginBottom:'20px' }}>
-        <div style={{ fontSize:'9px', letterSpacing:'3px', color:golfColor, fontWeight:700, marginBottom:'3px' }}>PLAN</div>
-        <div style={{ fontSize:'11px', color:t.textMuted }}>{lang==='pt' ? 'Plano de treino, prioridades e periodização' : 'Training plan, priorities and periodisation'}</div>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:'24px', flexWrap:'wrap', gap:'12px' }}>
+        <div>
+          <div style={{ fontSize:'10px', letterSpacing:'3px', color:t.accent, marginBottom:'4px', fontWeight:700 }}>PLANO DE TREINO</div>
+          <div style={{ fontSize:'24px', fontWeight:800, color:t.text, lineHeight:1.15 }}>Estrutura Semanal</div>
+          <div style={{ fontSize:'12px', color:t.textMuted, marginTop:'4px' }}>Plano semanal com sessões detalhadas de campo, ginásio e orientações técnicas</div>
+        </div>
       </div>
 
       {/* ── SUB-TABS (compact pills) ── */}
@@ -2781,16 +2781,6 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
         )
       })()}
 
-      {/* ── PRIORIDADES ── */}
-      {subTab==='priorities' && (
-        <div>
-          <div style={{ marginBottom:'20px' }}>
-            <div style={{ fontSize:'9px', letterSpacing:'3px', color:'#7e22ce', fontWeight:700, marginBottom:'2px' }}>PLAN · PRIORIDADES</div>
-            <div style={{ fontSize:'13px', color:t.textMuted }}>Objetivos de performance e progresso por KPI</div>
-          </div>
-          <Goals theme={theme} t={t} user={user} />
-        </div>
-      )}
 
       {/* ── PERIODIZAÇÃO ── */}
       {subTab==='periodizacao' && (() => {
