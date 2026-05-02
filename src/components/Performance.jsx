@@ -593,7 +593,7 @@ export default function Performance({ theme, t, user, lang = 'en', initialTab = 
               if (!newMetric.label) return
               setMetrics(p => [...p, { ...newMetric, id: newMetric.label.toLowerCase().replace(/\s+/g, '_') + '_' + Date.now(), target: newMetric.target ? parseFloat(newMetric.target) : null }])
               setNewMetric({ label: '', unit: '', category: 'golfe', target: '' })
-            }} style={{ background: t.accent, border: 'none', borderRadius: '6px', color: '#fff', padding: '5px 14px', cursor: 'pointer', fontSize: '12px', fontFamily: F, fontWeight: 600 }}>+ Adicionar</button>
+            }} style={{ background: t.accent, border: 'none', borderRadius: '6px', color: t.onAccent, padding: '5px 14px', cursor: 'pointer', fontSize: '12px', fontFamily: F, fontWeight: 600 }}>+ Adicionar</button>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
             <button onClick={saveKpis} disabled={savingKpis}

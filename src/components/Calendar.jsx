@@ -577,10 +577,9 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
     : 'Sem eventos definidos'
 
   const cardShell = {
-    background: '#fff',
+    background: t.cardBg,
     border: `1px solid ${t.border}`,
     borderRadius: '16px',
-    boxShadow: '0 1px 0 rgba(15, 23, 42, 0.03)',
   }
 
   const HeaderBar = ({ label, range, onPrev, onNext, onToday, onAdd, showGolfGym = true }) => (
@@ -591,15 +590,15 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <button onClick={onPrev} style={{ background: '#fff', border: `1px solid ${t.border}`, borderRadius: '999px', color: t.textMuted, width: '32px', height: '32px', cursor: 'pointer', fontSize: '16px', lineHeight: 1 }}>&lt;</button>
-          <button onClick={() => { onToday?.(); setTodayPulse(true); setTimeout(() => setTodayPulse(false), 600) }} style={{ background: '#fff', border: `1px solid ${t.border}`, borderRadius: '999px', color: t.textMuted, height: '32px', padding: '0 12px', cursor: 'pointer', fontSize: '11px', fontFamily: F, fontWeight: 700, transform: todayPulse ? 'scale(0.88)' : 'scale(1)', transition: 'transform 150ms ease' }}>Hoje</button>
-          <button onClick={onNext} style={{ background: '#fff', border: `1px solid ${t.border}`, borderRadius: '999px', color: t.textMuted, width: '32px', height: '32px', cursor: 'pointer', fontSize: '16px', lineHeight: 1 }}>&gt;</button>
+          <button onClick={onPrev} style={{ background: t.cardBg, border: `1px solid ${t.border}`, borderRadius: '999px', color: t.textMuted, width: '32px', height: '32px', cursor: 'pointer', fontSize: '16px', lineHeight: 1 }}>&lt;</button>
+          <button onClick={() => { onToday?.(); setTodayPulse(true); setTimeout(() => setTodayPulse(false), 600) }} style={{ background: t.cardBg, border: `1px solid ${t.border}`, borderRadius: '999px', color: t.textMuted, height: '32px', padding: '0 12px', cursor: 'pointer', fontSize: '11px', fontFamily: F, fontWeight: 700, transform: todayPulse ? 'scale(0.88)' : 'scale(1)', transition: 'transform 150ms ease' }}>Hoje</button>
+          <button onClick={onNext} style={{ background: t.cardBg, border: `1px solid ${t.border}`, borderRadius: '999px', color: t.textMuted, width: '32px', height: '32px', cursor: 'pointer', fontSize: '16px', lineHeight: 1 }}>&gt;</button>
         </div>
-        <button onClick={onAdd} style={{ background: t.accent, border: 'none', borderRadius: '999px', color: '#fff', height: '32px', padding: '0 14px', cursor: 'pointer', fontSize: '11px', fontFamily: F, fontWeight: 800, boxShadow: `0 3px 10px ${t.accent}2b` }}>+ Evento</button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#fff', border: `1px solid ${t.border}`, borderRadius: '999px', padding: '4px' }}>
+        <button onClick={onAdd} style={{ background: t.accent, border: 'none', borderRadius: '999px', color: t.navTextActive, height: '32px', padding: '0 14px', cursor: 'pointer', fontSize: '11px', fontFamily: F, fontWeight: 800, boxShadow: `0 3px 10px ${t.accent}2b` }}>+ Evento</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: t.cardBg, border: `1px solid ${t.border}`, borderRadius: '999px', padding: '4px' }}>
           {(['day', 'week', 'month', 'year']).map(v => (
             <button key={v} onClick={() => switchView(v)}
-              style={{ background: view === v ? t.accent : 'transparent', border: 'none', borderRadius: '999px', color: view === v ? '#fff' : t.textMuted, padding: '6px 12px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: view === v ? 800 : 600 }}>
+              style={{ background: view === v ? t.accent : 'transparent', border: 'none', borderRadius: '999px', color: view === v ? t.navTextActive : t.textMuted, padding: '6px 12px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: view === v ? 800 : 600 }}>
               {v === 'day' ? 'Dia' : v === 'week' ? 'Semana' : v === 'month' ? 'Mês' : 'Ano'}
             </button>
           ))}
@@ -607,7 +606,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center', visibility: showGolfGym ? 'visible' : 'hidden' }}>
           {[[ 'events', 'Eventos', '#378ADD' ], [ 'golf', 'Golf', '#22c55e' ], [ 'gym', 'Ginásio', '#f97316' ]].map(([key, label, color]) => (
             <button key={key} onClick={() => setCalFilters(p => ({ ...p, [key]: !p[key] }))}
-              style={{ background: calFilters[key] ? color + '18' : '#fff', border: `1px solid ${calFilters[key] ? color : t.border}`, borderRadius: '999px', color: calFilters[key] ? color : t.textMuted, padding: '5px 10px', cursor: 'pointer', fontSize: '9px', fontFamily: F, fontWeight: calFilters[key] ? 700 : 500, letterSpacing: '0.8px' }}>
+              style={{ background: calFilters[key] ? color + '18' : t.cardBg, border: `1px solid ${calFilters[key] ? color : t.border}`, borderRadius: '999px', color: calFilters[key] ? color : t.textMuted, padding: '5px 10px', cursor: 'pointer', fontSize: '9px', fontFamily: F, fontWeight: calFilters[key] ? 700 : 500, letterSpacing: '0.8px' }}>
               {label}
             </button>
           ))}
@@ -625,10 +624,10 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <button onClick={onPrev} style={{ background: '#fff', border: `1px solid ${t.border}`, borderRadius: '999px', color: t.textMuted, width: '32px', height: '32px', cursor: 'pointer', fontSize: '16px', lineHeight: 1 }}>&lt;</button>
-          <button onClick={onNext} style={{ background: '#fff', border: `1px solid ${t.border}`, borderRadius: '999px', color: t.textMuted, width: '32px', height: '32px', cursor: 'pointer', fontSize: '16px', lineHeight: 1 }}>&gt;</button>
+          <button onClick={onPrev} style={{ background: t.cardBg, border: `1px solid ${t.border}`, borderRadius: '999px', color: t.textMuted, width: '32px', height: '32px', cursor: 'pointer', fontSize: '16px', lineHeight: 1 }}>&lt;</button>
+          <button onClick={onNext} style={{ background: t.cardBg, border: `1px solid ${t.border}`, borderRadius: '999px', color: t.textMuted, width: '32px', height: '32px', cursor: 'pointer', fontSize: '16px', lineHeight: 1 }}>&gt;</button>
         </div>
-        <button onClick={onAdd} style={{ background: t.danger, border: 'none', borderRadius: '999px', color: '#fff', height: '32px', padding: '0 14px', cursor: 'pointer', fontSize: '11px', fontFamily: F, fontWeight: 800, boxShadow: `0 3px 10px ${t.danger}2b` }}>+ Agendar</button>
+        <button onClick={onAdd} style={{ background: t.danger, border: 'none', borderRadius: '999px', color: t.navTextActive, height: '32px', padding: '0 14px', cursor: 'pointer', fontSize: '11px', fontFamily: F, fontWeight: 800, boxShadow: `0 3px 10px ${t.danger}2b` }}>+ Agendar</button>
       </div>
     </div>
   )
@@ -738,7 +737,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
     const circleActiveBg = ratingColor || color
     return (
       <div onClick={onClick}
-        style={{ ...cardShell, padding: compact ? '8px 10px' : '12px 12px', borderLeft: `3px solid ${color}`, background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+        style={{ ...cardShell, padding: compact ? '8px 10px' : '12px 12px', borderLeft: `3px solid ${color}`, cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
         <div style={{ width: compact ? '20px' : '22px', height: compact ? '20px' : '22px', borderRadius: '50%', color: color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: compact ? '12px' : '13px', flexShrink: 0, marginTop: '1px' }}>
           {icon}
         </div>
@@ -749,7 +748,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
         </div>
         <button
           onClick={e => { e.stopPropagation(); onCircleClick?.() }}
-          style={{ width: '18px', height: '18px', borderRadius: '50%', background: checked ? circleActiveBg : 'transparent', border: `1.5px solid ${checked ? circleActiveBg : color}`, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: '2px', cursor: onCircleClick ? 'pointer' : 'default', padding: 0, fontSize: '9px', fontWeight: 900, lineHeight: 1 }}>
+          style={{ width: '18px', height: '18px', borderRadius: '50%', background: checked ? circleActiveBg : 'transparent', border: `1.5px solid ${checked ? circleActiveBg : color}`, color: t.navTextActive, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: '2px', cursor: onCircleClick ? 'pointer' : 'default', padding: 0, fontSize: '9px', fontWeight: 900, lineHeight: 1 }}>
           {checked ? '✓' : ''}
         </button>
       </div>
@@ -757,7 +756,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
   }
 
   const ProgressBar = ({ value, label, color, onInfo, showInfo, infoText }) => (
-    <div style={{ ...cardShell, padding: '12px 14px', background: '#fff', display: 'flex', flexDirection: 'column', gap: '8px', position: 'relative' }}>
+    <div style={{ ...cardShell, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '8px', position: 'relative' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'baseline' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
           <div style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: t.textMuted, fontWeight: 700 }}>{label}</div>
@@ -773,7 +772,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
       {showInfo && infoText && (
         <>
           <div onClick={onInfo} style={{ position: 'fixed', inset: 0, zIndex: 19 }} />
-          <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 20, background: t.text, color: '#fff', borderRadius: '10px', padding: '12px 14px', fontSize: '11px', lineHeight: 1.6, width: '260px', boxShadow: '0 8px 24px rgba(0,0,0,0.18)' }}>
+          <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 20, background: t.text, color: t.bg, borderRadius: '10px', padding: '12px 14px', fontSize: '11px', lineHeight: 1.6, width: '260px', boxShadow: '0 8px 24px rgba(0,0,0,0.18)' }}>
             {infoText}
           </div>
         </>
@@ -792,7 +791,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
     const trainSessions = (trainingLog?.sessions || []).filter(s => !s.isRest)
     const hasRest = (trainingLog?.sessions || []).some(s => s.isRest)
     return (
-      <div onClick={() => openDayDetail(dateStr)} style={{ ...cardShell, padding: 0, minHeight: '210px', background: isToday ? t.accent + '08' : '#fff', cursor: 'pointer', overflow: 'hidden', display: 'flex', flexDirection: 'column', borderTop: `3px solid ${phaseColor}` }}>
+      <div onClick={() => openDayDetail(dateStr)} style={{ ...cardShell, padding: 0, minHeight: '210px', background: isToday ? t.accent + '08' : t.cardBg, cursor: 'pointer', overflow: 'hidden', display: 'flex', flexDirection: 'column', borderTop: `3px solid ${phaseColor}` }}>
         <div style={{ padding: '10px 10px 6px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '4px' }}>
           <div>
             <div style={{ fontSize: '9px', letterSpacing: '1.5px', textTransform: 'uppercase', color: isToday ? t.accent : t.textMuted, fontWeight: 700 }}>{weekdayShort}</div>
@@ -913,13 +912,13 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
 
       {/* Session rating delete confirm */}
       {deleteSessionConfirm && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1001 }}>
-          <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '14px', padding: '24px', width: '300px' }}>
+        <div style={{ position: 'fixed', inset: 0, background: t.overlayBg, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1001 }}>
+          <div style={{ background: t.modalBg, border: `1px solid ${t.border}`, borderRadius: '14px', padding: '24px', width: '300px' }}>
             <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '8px', color: t.text }}>Apagar esta avaliação?</div>
             <div style={{ fontSize: '12px', color: t.textMuted, marginBottom: '20px' }}>Esta acção não pode ser desfeita.</div>
             <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
               <button onClick={() => setDeleteSessionConfirm(null)} style={btn(false)}>Cancelar</button>
-              <button onClick={confirmDeleteSession} style={{ background: t.danger, border: 'none', borderRadius: '20px', color: '#fff', padding: '7px 16px', cursor: 'pointer', fontSize: '11px', fontFamily: F, fontWeight: 700 }}>Apagar</button>
+              <button onClick={confirmDeleteSession} style={{ background: t.danger, border: 'none', borderRadius: '20px', color: t.navTextActive, padding: '7px 16px', cursor: 'pointer', fontSize: '11px', fontFamily: F, fontWeight: 700 }}>Apagar</button>
             </div>
           </div>
         </div>
@@ -927,8 +926,8 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
 
       {/* Session rating popup */}
       {activityPopover && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1002, padding: '16px' }}>
-          <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '14px', padding: '18px 20px', width: '100%', maxWidth: '320px', boxShadow: '0 18px 48px rgba(15,23,42,0.22)' }}>
+        <div style={{ position: 'fixed', inset: 0, background: t.overlayBg, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1002, padding: '16px' }}>
+          <div style={{ background: t.modalBg, border: `1px solid ${t.border}`, borderRadius: '14px', padding: '18px 20px', width: '100%', maxWidth: '320px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '14px' }}>
               <div style={{ fontSize: '9px', letterSpacing: '2px', fontWeight: 800, color: t.accent, textTransform: 'uppercase' }}>COMO CORREU?</div>
               <button onClick={() => setActivityPopover(null)} style={{ background: 'transparent', border: 'none', color: t.textMuted, cursor: 'pointer', fontSize: '18px', lineHeight: 1, padding: '0 2px' }}>×</button>
@@ -949,8 +948,8 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
 
       {/* Delete Confirm Modal */}
       {deleteConfirmEvent && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '14px', padding: '28px 32px', maxWidth: '380px', width: '90%' }}>
+        <div style={{ position: 'fixed', inset: 0, background: t.overlayBg, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: t.modalBg, border: `1px solid ${t.border}`, borderRadius: '14px', padding: '28px 32px', maxWidth: '380px', width: '90%' }}>
             <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '8px', color: t.text }}>Apagar este evento?</div>
             <div style={{ fontSize: '13px', color: t.textMuted, marginBottom: '24px', lineHeight: 1.6 }}>
               <b style={{ color: t.text }}>{deleteConfirmEvent.title}</b><br/>
@@ -958,7 +957,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
             </div>
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
               <button onClick={() => setDeleteConfirmEvent(null)} style={btn(false)}>Cancelar</button>
-              <button onClick={confirmDeleteEvent} style={{ background: t.danger, border: 'none', borderRadius: '20px', color: '#fff', padding: '7px 16px', cursor: 'pointer', fontSize: '11px', fontFamily: F, fontWeight: 700 }}>Apagar</button>
+              <button onClick={confirmDeleteEvent} style={{ background: t.danger, border: 'none', borderRadius: '20px', color: t.navTextActive, padding: '7px 16px', cursor: 'pointer', fontSize: '11px', fontFamily: F, fontWeight: 700 }}>Apagar</button>
             </div>
           </div>
         </div>
@@ -966,14 +965,14 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
 
       {/* Played Modal */}
       {showPlayedModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1001 }}>
-          <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '14px', padding: '32px 28px', maxWidth: '380px', width: '90%', textAlign: 'center' }}>
+        <div style={{ position: 'fixed', inset: 0, background: t.overlayBg, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1001 }}>
+          <div style={{ background: t.modalBg, border: `1px solid ${t.border}`, borderRadius: '14px', padding: '32px 28px', maxWidth: '380px', width: '90%', textAlign: 'center' }}>
             <div style={{ fontSize: '36px', marginBottom: '12px' }}>🏆</div>
             <div style={{ fontSize: '18px', fontWeight: 800, color: t.text, marginBottom: '8px' }}>Torneio concluído!</div>
             <div style={{ fontSize: '13px', color: t.textMuted, marginBottom: '24px', lineHeight: 1.6 }}>Queres preencher as stats agora?</div>
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
               <button onClick={() => setShowPlayedModal(false)} style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '8px', color: t.textMuted, padding: '9px 18px', cursor: 'pointer', fontSize: '13px', fontFamily: F }}>Mais tarde</button>
-              <button onClick={() => { setShowPlayedModal(false); onNavigate?.('competition') }} style={{ background: '#ef4444', border: 'none', borderRadius: '8px', color: '#fff', padding: '9px 20px', cursor: 'pointer', fontSize: '13px', fontWeight: 700, fontFamily: F }}>Preencher Stats</button>
+              <button onClick={() => { setShowPlayedModal(false); onNavigate?.('competition') }} style={{ background: t.danger, border: 'none', borderRadius: '8px', color: t.navTextActive, padding: '9px 20px', cursor: 'pointer', fontSize: '13px', fontWeight: 700, fontFamily: F }}>Preencher Stats</button>
             </div>
           </div>
         </div>
@@ -981,8 +980,8 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
 
       {/* Schedule Type Picker */}
       {showTypeModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '18px', padding: '28px', width: '90%', maxWidth: '440px' }}>
+        <div style={{ position: 'fixed', inset: 0, background: t.overlayBg, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: t.modalBg, border: `1px solid ${t.border}`, borderRadius: '18px', padding: '28px', width: '90%', maxWidth: '440px' }}>
             <div style={{ fontSize: '17px', fontWeight: 800, marginBottom: '4px', color: t.text }}>Novo agendamento</div>
             <div style={{ fontSize: '12px', color: t.textMuted, marginBottom: '22px' }}>
               {pendingDate && pendingDate !== todayIso ? `Para ${pendingDate}  ` : ''}Que tipo de agendamento?
@@ -1003,8 +1002,8 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
 
       {/* Event Modal */}
       {showModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
-          <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '16px', padding: '24px', width: '90%', maxWidth: '460px', maxHeight: '92vh', overflowY: 'auto' }}>
+        <div style={{ position: 'fixed', inset: 0, background: t.overlayBg, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
+          <div style={{ background: t.modalBg, border: `1px solid ${t.border}`, borderRadius: '16px', padding: '24px', width: '90%', maxWidth: '460px', maxHeight: '92vh', overflowY: 'auto' }}>
 
             {/* Modal header */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
@@ -1205,7 +1204,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button onClick={() => { setShowModal(false); setScheduleType(null); setSaveError(null) }} style={btn(false)}>Cancelar</button>
                 <button onClick={saveEvent} disabled={saving || !canSave}
-                  style={{ background: saving ? t.surface : (schedTypeInfo?.color || t.accent), border: 'none', borderRadius: '20px', color: '#fff', padding: '7px 20px', cursor: (saving || !canSave) ? 'not-allowed' : 'pointer', fontSize: '12px', fontFamily: F, fontWeight: 700, opacity: !canSave ? 0.5 : 1 }}>
+                  style={{ background: saving ? t.surface : (schedTypeInfo?.color || t.accent), border: 'none', borderRadius: '20px', color: t.navTextActive, padding: '7px 20px', cursor: (saving || !canSave) ? 'not-allowed' : 'pointer', fontSize: '12px', fontFamily: F, fontWeight: 700, opacity: !canSave ? 0.5 : 1 }}>
                   {saving ? 'A guardar...' : 'Guardar'}
                 </button>
               </div>
@@ -1216,8 +1215,8 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
 
       {/* Category Modal */}
       {showCatModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
-          <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '14px', padding: '24px', width: '90%', maxWidth: '340px' }}>
+        <div style={{ position: 'fixed', inset: 0, background: t.overlayBg, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
+          <div style={{ background: t.modalBg, border: `1px solid ${t.border}`, borderRadius: '14px', padding: '24px', width: '90%', maxWidth: '340px' }}>
             <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '16px', color: t.text }}>Nova Categoria</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <input value={catForm.name} onChange={e => setCatForm(p => ({ ...p, name: e.target.value }))} placeholder="Nome da categoria" style={inp} />
@@ -1228,7 +1227,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
             </div>
             <div style={{ display: 'flex', gap: '8px', marginTop: '16px', justifyContent: 'flex-end' }}>
               <button onClick={() => setShowCatModal(false)} style={btn(false)}>Cancelar</button>
-              <button onClick={saveCat} style={{ background: t.accent, border: 'none', borderRadius: '20px', color: '#fff', padding: '7px 16px', cursor: 'pointer', fontSize: '11px', fontFamily: F, fontWeight: 700 }}>Guardar</button>
+              <button onClick={saveCat} style={{ background: t.accent, border: 'none', borderRadius: '20px', color: t.navTextActive, padding: '7px 16px', cursor: 'pointer', fontSize: '11px', fontFamily: F, fontWeight: 700 }}>Guardar</button>
             </div>
           </div>
         </div>
@@ -1241,7 +1240,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         {view === 'day' && (
-        <section style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', overflow: 'hidden', boxShadow: '0 1px 0 rgba(15, 23, 42, 0.03)' }}>
+        <section style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', overflow: 'hidden' }}>
           <HeaderBar
             label="Dia"
             showGolfGym={false}
@@ -1321,7 +1320,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
                         <div style={{ display: 'flex', gap: '5px', flexShrink: 0 }}>
                           {Array.from({ length: 5 }, (_, i) => (
                             <button key={i} onClick={() => saveWellness(m.id, val === 1 && i === 0 ? 0 : i + 1)}
-                              style={{ width: '15px', height: '15px', borderRadius: '50%', border: `1.5px solid ${i < val ? m.color : '#E5E7EB'}`, background: i < val ? m.color : '#E5E7EB', cursor: 'pointer', padding: 0, flexShrink: 0, transition: 'all 0.12s' }} />
+                              style={{ width: '15px', height: '15px', borderRadius: '50%', border: `1.5px solid ${i < val ? m.color : t.border}`, background: i < val ? m.color : t.border, cursor: 'pointer', padding: 0, flexShrink: 0, transition: 'all 0.12s' }} />
                           ))}
                         </div>
                       </div>
@@ -1476,7 +1475,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
                                     </span>
                                   )}
                                   <button onClick={() => toggleActivityDone(row)}
-                                    style={{ background: sessionDone ? '#16a34a' : 'transparent', border: `2px solid ${sessionDone ? '#16a34a' : '#22c55e'}`, borderRadius: '8px', color: sessionDone ? '#fff' : '#16a34a', padding: '9px 18px', cursor: 'pointer', fontSize: '12px', fontFamily: F, fontWeight: 700, whiteSpace: 'nowrap', boxShadow: sessionDone ? '0 2px 6px rgba(34,197,94,0.3)' : 'none' }}>
+                                    style={{ background: sessionDone ? t.success : 'transparent', border: `2px solid ${t.success}`, borderRadius: '8px', color: sessionDone ? t.navTextActive : t.success, padding: '9px 18px', cursor: 'pointer', fontSize: '12px', fontFamily: F, fontWeight: 700, whiteSpace: 'nowrap' }}>
                                     {String.fromCharCode(10003) + ' Fiz'}
                                   </button>
                                 </div>
@@ -1500,7 +1499,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
                                         <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
                                           {[[0,'Não fiz','#6b7280'],[50,'50%','#f59e0b'],[100,'Fiz','#22c55e']].map(([val, label, aCol]) => (
                                             <button key={val} onClick={() => row.plan && savePlanProgress(row.plan, row.dayIdx, row.si, item._ii, val)}
-                                              style={{ background: prog === val ? aCol : 'transparent', border: `1px solid ${prog === val ? aCol : t.border}`, borderRadius: '999px', color: prog === val ? '#fff' : t.textMuted, padding: '3px 9px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 700 }}>
+                                              style={{ background: prog === val ? aCol : 'transparent', border: `1px solid ${prog === val ? aCol : t.border}`, borderRadius: '999px', color: prog === val ? t.navTextActive : t.textMuted, padding: '3px 9px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: 700 }}>
                                               {label}
                                             </button>
                                           ))}
@@ -1534,7 +1533,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
         )}
 
         {view === 'week' && (
-        <section style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', overflow: 'hidden', boxShadow: '0 1px 0 rgba(15, 23, 42, 0.03)' }}>
+        <section style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', overflow: 'hidden' }}>
           <HeaderBar
             label="Semana"
             range={weekRangeLabel}
@@ -1547,13 +1546,13 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
             <div style={{ display: 'none' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 <button onClick={() => openSchedulePicker()}
-                  style={{ background: t.accent, border: 'none', borderRadius: '999px', color: '#fff', padding: '8px 16px', cursor: 'pointer', fontSize: '12px', fontFamily: F, fontWeight: 800, display: 'flex', alignItems: 'center', gap: '6px', boxShadow: `0 3px 12px ${t.accent}42` }}>
+                  style={{ background: t.accent, border: 'none', borderRadius: '999px', color: t.navTextActive, padding: '8px 16px', cursor: 'pointer', fontSize: '12px', fontFamily: F, fontWeight: 800, display: 'flex', alignItems: 'center', gap: '6px', boxShadow: `0 3px 12px ${t.accent}42` }}>
                   <span style={{ fontSize: '15px', lineHeight: 1 }}>+</span> Evento
                 </button>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: t.surface, border: `1px solid ${t.border}`, borderRadius: '999px', padding: '4px' }}>
                   {(['day', 'week', 'month', 'year']).map(v => (
                     <button key={v} onClick={() => switchView(v)}
-                      style={{ background: view === v ? t.accent : 'transparent', border: 'none', borderRadius: '999px', color: view === v ? '#fff' : t.textMuted, padding: '6px 12px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: view === v ? 800 : 600 }}>
+                      style={{ background: view === v ? t.accent : 'transparent', border: 'none', borderRadius: '999px', color: view === v ? t.navTextActive : t.textMuted, padding: '6px 12px', cursor: 'pointer', fontSize: '10px', fontFamily: F, fontWeight: view === v ? 800 : 600 }}>
                       {v === 'day' ? 'Dia' : v === 'week' ? 'Semana' : v === 'month' ? 'Mês' : 'Ano'}
                     </button>
                   ))}
@@ -1577,7 +1576,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
                 showInfo={showLoadInfo}
                 infoText={`Pontos por dia: competição = 1.5 · treino = 1.0 · só appointment = 0.5. Máximo recomendado = 6 dias ativos (1 dia de descanso obrigatório). Esta semana: ${weekLoadScore.toFixed(1)} / 6 = ${weekLoad}%${weekRestDays === 0 ? ' ⚠️ Sem dia de descanso esta semana.' : ` (${weekRestDays} dia${weekRestDays > 1 ? 's' : ''} de descanso)`}`}
               />
-              <div style={{ ...cardShell, padding: '12px 14px', background: '#fff' }}>
+              <div style={{ ...cardShell, padding: '12px 14px' }}>
                 <div style={{ fontSize: '9px', letterSpacing: '2px', textTransform: 'uppercase', color: t.textMuted, fontWeight: 700, marginBottom: '4px' }}>Objetivo da semana</div>
                 <div style={{ fontSize: '14px', fontWeight: 800, color: t.text, lineHeight: 1.35 }}>{weekObjective}</div>
               </div>
@@ -1605,7 +1604,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
         )}
 
         {view === 'month' && (
-        <section style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', overflow: 'hidden', boxShadow: '0 1px 0 rgba(15, 23, 42, 0.03)' }}>
+        <section style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', overflow: 'hidden' }}>
           <HeaderBar
             label="Mês"
             range={`${monthLabels[month]} ${year}`}
@@ -1674,7 +1673,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
         )}
 
         {view === 'year' && (
-        <section style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', overflow: 'hidden', boxShadow: '0 1px 0 rgba(15, 23, 42, 0.03)' }}>
+        <section style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', overflow: 'hidden' }}>
           <HeaderBar
             label="Ano"
             range={`Visão anual  ${year}`}

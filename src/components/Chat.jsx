@@ -144,12 +144,12 @@ export default function Chat({ theme, t, user, profile, lang = 'en' }) {
 
       {/* Delete confirm */}
       {deleteConfirm && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
+        <div style={{ position: 'fixed', inset: 0, background: t.overlayBg, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
           <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '14px', padding: '24px', width: '280px' }}>
             <div style={{ fontSize: '14px', fontWeight: 700, marginBottom: '8px', color: t.text }}>{s.deleteMsg}</div>
             <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '20px' }}>
               <button onClick={() => setDeleteConfirm(null)} style={pillBtn(false)}>{s.cancel}</button>
-              <button onClick={() => doDelete(deleteConfirm)} style={{ ...pillBtn(false), background: t.danger, border: 'none', color: '#fff', fontWeight: 700 }}>{s.deleteBtn}</button>
+              <button onClick={() => doDelete(deleteConfirm)} style={{ ...pillBtn(false), background: t.danger, border: 'none', color: t.navTextActive, fontWeight: 700 }}>{s.deleteBtn}</button>
             </div>
           </div>
         </div>
@@ -232,7 +232,7 @@ export default function Chat({ theme, t, user, profile, lang = 'en' }) {
                         borderRadius: isOwn ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
                         padding: '8px 14px',
                         fontSize: '13px',
-                        color: isOwn ? '#fff' : t.text,
+                        color: isOwn ? t.navTextActive : t.text,
                         lineHeight: 1.5,
                         wordBreak: 'break-word',
                       }}>
@@ -290,7 +290,7 @@ export default function Chat({ theme, t, user, profile, lang = 'en' }) {
               background: sending || !input.trim() ? t.border : t.accent,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
             }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={t.navTextActive} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <line x1="22" y1="2" x2="11" y2="13"></line>
               <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
             </svg>

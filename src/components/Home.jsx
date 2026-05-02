@@ -963,11 +963,8 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   const heroWeekLines = heroGuidanceLines.slice(1, 4)
   const heroTextColor = ['AFINACAO', 'DESCANSO'].includes(phaseInfo.phase) ? '#111827' : '#ffffff'
   const premiumCard = {
-    background: theme === 'dark'
-      ? 'linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.025))'
-      : 'linear-gradient(180deg, #ffffff 0%, #fbfcff 100%)',
-    border: `1px solid ${theme === 'dark' ? 'rgba(255,255,255,0.13)' : 'rgba(15,23,42,0.075)'}`,
-    boxShadow: theme === 'dark' ? '0 22px 54px rgba(0,0,0,0.38)' : '0 22px 54px rgba(15,23,42,0.09)',
+    background: t.cardBg,
+    border: `1px solid ${t.border}`,
   }
   const sectionTitleStyle = {
     fontSize:'11px',
@@ -1357,7 +1354,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
     </div>
   )
   return (
-    <div style={{ fontFamily:F, color:t.text, minHeight:'100%', background: theme === 'dark' ? t.bg : '#f8fafc' }}>
+    <div style={{ fontFamily:F, color:t.text, minHeight:'100%', background: t.bg }}>
       <style>{`
         *{box-sizing:border-box}
         .hm-page-shell{width:100%;max-width:1380px;margin:0 auto;padding:28px 34px 40px}
@@ -1389,7 +1386,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
 
       {/* ─── KPI MODAL ─── */}
       {kpiModal && (
-        <div style={{ position:'fixed',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:300,padding:'20px' }}
+        <div style={{ position:'fixed',inset:0,background:t.overlayBg,display:'flex',alignItems:'center',justifyContent:'center',zIndex:300,padding:'20px' }}
           onClick={e => { if (e.target===e.currentTarget) setKpiModal(null) }}>
           <div style={{ background:t.surface,border:`1px solid ${t.border}`,borderRadius:'14px',padding:'24px',width:'100%',maxWidth:'480px',maxHeight:'80vh',overflowY:'auto' }}>
             <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px' }}>
@@ -1453,7 +1450,7 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
             ))}
           </div>
           <div style={{ display:'flex', gap:'8px', marginTop:'12px' }}>
-            <button onClick={saveAthlete} disabled={athleteSaving} style={{ background:'#378ADD', border:'none', borderRadius:'6px', color:'#fff', padding:'6px 16px', fontSize:'11px', fontWeight:700, cursor:'pointer', fontFamily:F, opacity:athleteSaving?0.7:1 }}>{athleteSaving ? 'A GUARDAR...' : 'GUARDAR'}</button>
+            <button onClick={saveAthlete} disabled={athleteSaving} style={{ background:t.accent, border:'none', borderRadius:'6px', color:t.navTextActive, padding:'6px 16px', fontSize:'11px', fontWeight:700, cursor:'pointer', fontFamily:F, opacity:athleteSaving?0.7:1 }}>{athleteSaving ? 'A GUARDAR...' : 'GUARDAR'}</button>
             <button onClick={() => setEditingAthlete(false)} style={{ background:'transparent', border:`1px solid ${t.border}`, borderRadius:'6px', color:t.textMuted, padding:'6px 16px', fontSize:'11px', cursor:'pointer', fontFamily:F }}>Cancelar</button>
           </div>
         </div>

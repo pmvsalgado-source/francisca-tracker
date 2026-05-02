@@ -1229,49 +1229,49 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
 
   // ── PERIODIZAÇÃO ────────────────────────────────────────────────────────────
   const PHASES = {
-    peak:             { id:'peak',               label:'PEAK',                   color:'#ef4444', bg:'#fef2f2',
+    peak:             { id:'peak',               label:'PEAK',                   color:'#ef4444', bg:t.dangerBg,
       situacao:'Vais competir esta semana.', regra:'Não mudes nada. Faz o que já sabes.', hoje:'Putting + wedges + confiança.',
       golfSugestao:['30–45 min putting: ritmo e distância','wedges 50–80m: controlo','poucos drivers: sensação','rotina pré-volta'],
       gymSugestao:['ativação leve: mobilidade + core','20–30 min máximo'],
       evitar:['treino pesado','mudanças técnicas','muitas bolas'],
     },
-    manutencao:       { id:'manutencao',         label:'MANUTENÇÃO B2B',         color:'#f97316', bg:'#fff7ed',
+    manutencao:       { id:'manutencao',         label:'MANUTENÇÃO B2B',         color:'#f97316', bg:t.subtleBg,
       situacao:'Entre competições próximas.', regra:'Recuperar e manter.', hoje:'Leve + sensações.',
       golfSugestao:['putting','wedges','poucos ferros','sessão curta'],
       gymSugestao:['recuperação ativa','mobilidade','ativação leve'],
       evitar:['carga física','técnica nova'],
     },
-    afinacao:         { id:'afinacao',           label:'AFINAÇÃO',               color:'#eab308', bg:'#fefce8',
+    afinacao:         { id:'afinacao',           label:'AFINAÇÃO',               color:'#eab308', bg:t.subtleBg,
       situacao:'Competição nos próximos dias.', regra:'Afinar, não mudar.', hoje:'Jogo curto + ritmo.',
       golfSugestao:['putting competitivo: 1 bola, pressão','wedges: distâncias','ferro médio: controlo','rotina consistente'],
       gymSugestao:['leve a moderado','mobilidade','velocidade leve'],
       evitar:['técnica nova','sessões longas'],
     },
-    desenvolvimentoLight:{ id:'desenvolvimentoLight', label:'DESENVOLVIMENTO LIGHT', color:'#60a5fa', bg:'#eff6ff',
+    desenvolvimentoLight:{ id:'desenvolvimentoLight', label:'DESENVOLVIMENTO LIGHT', color:'#60a5fa', bg:t.subtleBg,
       situacao:'Tens pouco tempo entre torneios.', regra:'Melhorar sem cansar.', hoje:'Técnica leve + controlo.',
       golfSugestao:['wedges + putting','drills simples: contacto / alinhamento','controlo de distâncias','sessões curtas'],
       gymSugestao:['moderado','força leve','mobilidade'],
       evitar:['carga alta','volume excessivo'],
     },
-    desenvolvimento:  { id:'desenvolvimento',    label:'DESENVOLVIMENTO',         color:'#3b82f6', bg:'#dbeafe',
+    desenvolvimento:  { id:'desenvolvimento',    label:'DESENVOLVIMENTO',         color:'#3b82f6', bg:t.subtleBg,
       situacao:'Tens 2–3 semanas até competir.', regra:'Treinar para jogar melhor.', hoje:'Range com intenção + velocidade.',
       golfSugestao:['treino de velocidade: driver','ferro com alvo e objetivo','drills com feedback','sessões com foco claro'],
       gymSugestao:['força + potência','velocidade','sessões completas'],
       evitar:['bater bolas sem objetivo'],
     },
-    acumulacao:       { id:'acumulacao',         label:'ACUMULAÇÃO',             color:'#22c55e', bg:'#f0fdf4',
+    acumulacao:       { id:'acumulacao',         label:'ACUMULAÇÃO',             color:'#22c55e', bg:t.successBg,
       situacao:'Longe de competições.', regra:'Construir base.', hoje:'Volume + técnica.',
       golfSugestao:['muitas bolas no range','técnica detalhada','repetição controlada','putting básico consistente'],
       gymSugestao:['força base','volume mais alto','progressão de carga'],
       evitar:['foco em score','pouca repetição'],
     },
-    descarga:         { id:'descarga',           label:'DESCARGA',               color:'#9ca3af', bg:'#f3f4f6',
+    descarga:         { id:'descarga',           label:'DESCARGA',               color:'#9ca3af', bg:t.subtleBg,
       situacao:'Vens de carga alta ou estás cansada.', regra:'Reduzir carga.', hoje:'Leve + recuperar.',
       golfSugestao:['putting leve','wedges simples','poucos swings','ritmo sem pressão'],
       gymSugestao:['mobilidade','recuperação','muito leve'],
       evitar:['intensidade alta','volume'],
     },
-    descanso:         { id:'descanso',           label:'DESCANSO',               color:'#6b7280', bg:'#f9fafb',
+    descanso:         { id:'descanso',           label:'DESCANSO',               color:'#6b7280', bg:t.subtleBg,
       situacao:'Estás cansada física ou mentalmente.', regra:'Parar para recuperar.', hoje:'Descansar.',
       golfSugestao:['opcional: putting leve','ou zero treino'],
       gymSugestao:['descanso total'],
@@ -1651,7 +1651,7 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
               <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
                 <div style={{width:'28px',height:'28px',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'12px',fontWeight:700,
                   background:wizardStep>s?gymColor:wizardStep===s?typeColor:t.border,
-                  color:wizardStep>=s?'#fff':t.textMuted}}>
+                  color:wizardStep>=s?t.navTextActive:t.textMuted}}>
                   {wizardStep>s?'✓':s}
                 </div>
                 <span style={{fontSize:'13px',fontWeight:600,color:wizardStep>=s?t.text:t.textMuted}}>
@@ -1678,11 +1678,11 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
                       <div style={{fontSize:'13px',fontWeight:600,color:t.text}}>{tpl.name}</div>
                       <div style={{display:'flex',gap:'6px'}}>
                         <button onClick={()=>applyWeeklyTemplate(tpl)} title='Aplicar template'
-                          style={{background:typeColor,border:'none',borderRadius:'6px',color:'#fff',padding:'4px 10px',cursor:'pointer',fontSize:'11px',fontWeight:700,fontFamily:F}}>
+                          style={{background:typeColor,border:'none',borderRadius:'6px',color:t.navTextActive,padding:'4px 10px',cursor:'pointer',fontSize:'11px',fontWeight:700,fontFamily:F}}>
                           Usar este Template
                         </button>
                         <button onClick={()=>deleteTemplate(tpl.id)} title='Apagar template'
-                          style={{background:'transparent',border:`1px solid #ef4444`,borderRadius:'6px',color:'#ef4444',padding:'4px 10px',cursor:'pointer',fontSize:'11px',fontFamily:F}}>
+                          style={{background:'transparent',border:`1px solid ${t.danger}`,borderRadius:'6px',color:t.danger,padding:'4px 10px',cursor:'pointer',fontSize:'11px',fontFamily:F}}>
                           Apagar
                         </button>
                       </div>
@@ -1764,7 +1764,7 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
             <button disabled={datesInRange.length===0}
               onClick={()=>{ setWizardSelectedChips([]); setWizardStep(2) }}
               style={{background:datesInRange.length===0?t.border:typeColor,border:'none',borderRadius:'8px',
-                color:datesInRange.length===0?t.textMuted:'#fff',padding:'12px 24px',fontSize:'14px',
+                color:datesInRange.length===0?t.textMuted:t.navTextActive,padding:'12px 24px',fontSize:'14px',
                 fontWeight:700,cursor:datesInRange.length===0?'not-allowed':'pointer',fontFamily:F,width:'100%'}}>
               {datesInRange.length===0?'Define o período de treino':wizardPlanMode==='day'?'Definir Plano Diário →':'Definir Sessões →'}
             </button>
@@ -1781,11 +1781,11 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
               return (
                 <div key={ws} style={{...card,marginBottom:'10px',borderLeft:`4px solid ${ph.color}`,background:ph.bg,padding:'10px 14px'}}>
                   <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'4px'}}>
-                    <div style={{padding:'2px 8px',borderRadius:'4px',fontSize:'8px',fontWeight:700,letterSpacing:'1px',color:'#fff',background:ph.color}}>{ph.label}</div>
+                    <div style={{padding:'2px 8px',borderRadius:'4px',fontSize:'8px',fontWeight:700,letterSpacing:'1px',color:t.navTextActive,background:ph.color}}>{ph.label}</div>
                     <div style={{fontSize:'11px',color:ph.color,fontWeight:600}}>{ph.situacao}</div>
                   </div>
                   {als.map((a,i)=>(
-                    <div key={i} style={{fontSize:'10px',color:a.level==='red'?'#991b1b':'#854F0B',marginTop:'3px'}}>{a.icon} {a.text}</div>
+                    <div key={i} style={{fontSize:'10px',color:a.level==='red'?t.danger:t.textMuted,marginTop:'3px'}}>{a.icon} {a.text}</div>
                   ))}
                 </div>
               )
@@ -1793,7 +1793,7 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
 
             {/* Competition warning */}
             {datesInRange.some(ds=>dateHasComp(ds)) && (
-              <div style={{fontSize:'11px',color:'#854F0B',marginBottom:'10px',display:'flex',alignItems:'center',gap:'5px',padding:'6px 10px',background:'#FFF3CD',borderRadius:'6px',border:'1px solid #BA751744'}}>
+              <div style={{fontSize:'11px',color:t.textMuted,marginBottom:'10px',display:'flex',alignItems:'center',gap:'5px',padding:'6px 10px',background:t.subtleBg,borderRadius:'6px',border:'1px solid #BA751744'}}>
                 🏆 Dias com competição não precisam de sessão de treino.
               </div>
             )}
@@ -1819,11 +1819,11 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
                         <div key={ds} onClick={()=>isComp?null:toggleChip(ds)}
                           style={{padding:'7px 12px',borderRadius:'8px',cursor:isComp?'default':'pointer',minWidth:'52px',textAlign:'center',
                             border:`2px solid ${isComp?'#BA751744':sel?typeColor:hasData?typeColor+'55':t.border}`,
-                            background:isComp?'#FFF3CD':sel?typeColor+'18':hasData?typeColor+'09':t.surface,
+                            background:isComp?t.subtleBg:sel?typeColor+'18':hasData?typeColor+'09':t.surface,
                             opacity:isComp?0.7:1}}>
-                          <div style={{fontSize:'9px',letterSpacing:'1px',color:isComp?'#854F0B':sel?typeColor:t.textMuted,fontWeight:700}}>{DAYS_SHORT_PT[dayIdx]}</div>
-                          <div style={{fontSize:'15px',fontWeight:900,color:isComp?'#854F0B':sel?typeColor:t.text,lineHeight:1.2}}>{d.getDate()}</div>
-                          {isComp&&<div style={{fontSize:'8px',color:'#854F0B'}}>🏆</div>}
+                          <div style={{fontSize:'9px',letterSpacing:'1px',color:isComp?t.textMuted:sel?typeColor:t.textMuted,fontWeight:700}}>{DAYS_SHORT_PT[dayIdx]}</div>
+                          <div style={{fontSize:'15px',fontWeight:900,color:isComp?t.text:sel?typeColor:t.text,lineHeight:1.2}}>{d.getDate()}</div>
+                          {isComp&&<div style={{fontSize:'8px',color:t.textMuted}}>🏆</div>}
                           {!isComp&&hasData&&!sel&&<div style={{width:'5px',height:'5px',borderRadius:'50%',background:typeColor,margin:'2px auto 0'}}/>}
                           {!isComp&&sel&&<div style={{fontSize:'8px',color:typeColor,fontWeight:700}}>✓</div>}
                         </div>
@@ -1933,7 +1933,7 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
 
             {/* Chip summary / rest indicator */}
             {wizardSelectedChips.length>0 && isRestDay && (
-              <div style={{...card,marginBottom:'14px',padding:'12px 16px',background:'#fff7ed',border:'1px solid #f59e0b44'}}>
+              <div style={{...card,marginBottom:'14px',padding:'12px 16px',background:t.subtleBg,border:'1px solid #f59e0b44'}}>
                 <div style={{fontSize:'12px',color:'#f59e0b',fontWeight:600}}>😴 Dia de descanso marcado para os dias seleccionados</div>
               </div>
             )}
@@ -2005,7 +2005,7 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
                             style={{borderTop:`1px solid ${t.border}`,padding:'8px 12px',background:sel?typeColor+'0d':'transparent',cursor:'pointer',display:'flex',gap:'8px',alignItems:'flex-start'}}>
                             <div style={{width:'16px',height:'16px',borderRadius:'3px',flexShrink:0,marginTop:'1px',
                               border:`2px solid ${sel?typeColor:t.border}`,background:sel?typeColor:'transparent',
-                              display:'flex',alignItems:'center',justifyContent:'center',color:'#fff',fontSize:'10px',fontWeight:900}}>
+                              display:'flex',alignItems:'center',justifyContent:'center',color:t.navTextActive,fontSize:'10px',fontWeight:900}}>
                               {sel?'✓':''}
                             </div>
                             <div style={{flex:1}}>
@@ -2028,7 +2028,7 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
                       <option value=''>Cat.</option>
                       {cats.map(c=><option key={c} value={c}>{c}</option>)}
                     </select>
-                    <button onClick={addCustom} style={{background:typeColor,border:'none',borderRadius:'6px',color:'#fff',padding:'7px 12px',cursor:'pointer',fontSize:'12px',fontWeight:700,fontFamily:F}}>+</button>
+                    <button onClick={addCustom} style={{background:typeColor,border:'none',borderRadius:'6px',color:t.navTextActive,padding:'7px 12px',cursor:'pointer',fontSize:'12px',fontWeight:700,fontFamily:F}}>+</button>
                   </div>
                 </div>
               </div>
@@ -2053,7 +2053,7 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
                         <textarea value={wizardNote} onChange={e=>setWizardNote(e.target.value)} placeholder='Observações gerais' style={{...inp,minHeight:'56px',resize:'vertical'}}/>
                         <div style={{display:'flex',gap:'6px'}}>
                           <button onClick={saveAsDailyTemplate} disabled={savingTemplate||!wizardDailyTemplateName.trim()}
-                            style={{background:savingTemplate?t.border:typeColor,border:'none',borderRadius:'6px',color:'#fff',padding:'7px 14px',cursor:'pointer',fontSize:'12px',fontWeight:700,fontFamily:F}}>
+                            style={{background:savingTemplate?t.border:typeColor,border:'none',borderRadius:'6px',color:t.navTextActive,padding:'7px 14px',cursor:'pointer',fontSize:'12px',fontWeight:700,fontFamily:F}}>
                             {savingTemplate?'A guardar...':'Guardar'}
                           </button>
                           <button onClick={()=>setShowSaveTemplate(false)}
@@ -2076,7 +2076,7 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
                       <div style={{display:'flex',gap:'6px'}}>
                         <input value={wizardTemplateName} onChange={e=>setWizardTemplateName(e.target.value)} placeholder='Ex: Semana de Acumulação' style={{...inp,flex:1}}/>
                         <button onClick={()=>saveAsWeeklyTemplate(wizardTemplateName)} disabled={savingTemplate||!wizardTemplateName.trim()}
-                          style={{background:savingTemplate?t.border:typeColor,border:'none',borderRadius:'6px',color:'#fff',padding:'7px 14px',cursor:'pointer',fontSize:'12px',fontWeight:700,fontFamily:F}}>
+                          style={{background:savingTemplate?t.border:typeColor,border:'none',borderRadius:'6px',color:t.navTextActive,padding:'7px 14px',cursor:'pointer',fontSize:'12px',fontWeight:700,fontFamily:F}}>
                           {savingTemplate?'A guardar...':'OK'}
                         </button>
                         <button onClick={()=>setShowSaveTemplate(false)}
@@ -2091,7 +2091,7 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
             )}
 
             {wizardError&&(
-              <div style={{background:'#fef2f2',border:'1px solid #fecaca',borderRadius:'8px',padding:'10px 14px',marginBottom:'12px',fontSize:'12px',color:'#991b1b',fontWeight:600}}>
+              <div style={{background:t.dangerBg,border:`1px solid ${t.danger}`,borderRadius:'8px',padding:'10px 14px',marginBottom:'12px',fontSize:'12px',color:t.danger,fontWeight:600}}>
                 ⚠ {wizardError}
               </div>
             )}
@@ -2101,7 +2101,7 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
                 ← Voltar
               </button>
               <button onClick={saveWizard} disabled={saving||wizardSelectedChips.length===0}
-                style={{background:saving||wizardSelectedChips.length===0?t.border:typeColor,border:'none',borderRadius:'8px',color:saving||wizardSelectedChips.length===0?t.textMuted:'#fff',
+                style={{background:saving||wizardSelectedChips.length===0?t.border:typeColor,border:'none',borderRadius:'8px',color:saving||wizardSelectedChips.length===0?t.textMuted:t.navTextActive,
                   padding:'12px 28px',fontSize:'14px',fontWeight:700,cursor:saving||wizardSelectedChips.length===0?'not-allowed':'pointer',fontFamily:F}}>
                 {saving?'A guardar...':'Guardar Plano'}
               </button>
@@ -2118,13 +2118,13 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
 
       {/* Confirmação apagar template */}
       {deleteTemplateConfirm && (
-        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.75)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:'20px'}}>
-          <div style={{background:t.surface,border:`1px solid ${t.border}`,borderRadius:'14px',padding:'28px 32px',maxWidth:'360px',width:'100%',fontFamily:F}}>
+        <div style={{position:'fixed',inset:0,background:t.overlayBg,display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000,padding:'20px'}}>
+          <div style={{background:t.modalBg,border:`1px solid ${t.border}`,borderRadius:'14px',padding:'28px 32px',maxWidth:'360px',width:'100%',fontFamily:F}}>
             <div style={{fontSize:'16px',fontWeight:700,color:t.text,marginBottom:'8px'}}>Apagar este template?</div>
             <div style={{fontSize:'13px',color:t.textMuted,marginBottom:'24px',lineHeight:1.6}}>Esta acção é irreversível. O template será apagado permanentemente.</div>
             <div style={{display:'flex',gap:'10px',justifyContent:'flex-end'}}>
               <button onClick={()=>setDeleteTemplateConfirm(null)} style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'20px',color:t.textMuted,padding:'7px 16px',cursor:'pointer',fontSize:'12px',fontFamily:F}}>Cancelar</button>
-              <button onClick={confirmDeleteTemplate} style={{background:'#dc2626',border:'none',borderRadius:'20px',color:'#fff',padding:'7px 16px',cursor:'pointer',fontSize:'12px',fontFamily:F,fontWeight:700}}>Apagar</button>
+              <button onClick={confirmDeleteTemplate} style={{background:t.danger,border:'none',borderRadius:'20px',color:t.navTextActive,padding:'7px 16px',cursor:'pointer',fontSize:'12px',fontFamily:F,fontWeight:700}}>Apagar</button>
             </div>
           </div>
         </div>
@@ -2140,7 +2140,7 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
 
       {/* Free session modal */}
       {showFreeSession && (
-        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:200,padding:'20px'}}>
+        <div style={{position:'fixed',inset:0,background:t.overlayBg,display:'flex',alignItems:'center',justifyContent:'center',zIndex:200,padding:'20px'}}>
           <div style={{...card,width:'100%',maxWidth:'400px'}}>
             <div style={{fontSize:'16px',fontWeight:700,color:t.text,marginBottom:'16px'}}>Sessão no Campo</div>
             <div style={{display:'flex',flexDirection:'column',gap:'10px',marginBottom:'16px'}}>
@@ -2171,7 +2171,7 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
             )}
             <div style={{display:'flex',gap:'8px',justifyContent:'flex-end'}}>
               <button onClick={()=>{setShowFreeSession(false);setFreeSessionError(null)}} style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'8px',color:t.textMuted,padding:'8px 16px',cursor:'pointer',fontSize:'13px',fontFamily:F}}>Cancelar</button>
-              <button onClick={addFreeSession} disabled={savingFree} style={{background:savingFree?t.border:golfColor,border:'none',borderRadius:'8px',color:'#fff',padding:'8px 20px',cursor:'pointer',fontSize:'13px',fontWeight:700,fontFamily:F}}>{savingFree?'A guardar...':'Guardar'}</button>
+              <button onClick={addFreeSession} disabled={savingFree} style={{background:savingFree?t.border:golfColor,border:'none',borderRadius:'8px',color:t.navTextActive,padding:'8px 20px',cursor:'pointer',fontSize:'13px',fontWeight:700,fontFamily:F}}>{savingFree?'A guardar...':'Guardar'}</button>
             </div>
           </div>
         </div>
@@ -2212,7 +2212,7 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
               <div style={{marginTop:'12px',display:'flex',flexDirection:'column',gap:'6px'}}>
                 {Object.values(PHASES).map(ph=>(
                   <div key={ph.id} style={{display:'flex',gap:'10px',alignItems:'flex-start',padding:'8px 10px',borderRadius:'8px',background:ph.bg,border:`1px solid ${ph.color}33`}}>
-                    <div style={{padding:'2px 8px',borderRadius:'4px',fontSize:'8px',fontWeight:700,letterSpacing:'1px',color:'#fff',background:ph.color,whiteSpace:'nowrap',alignSelf:'flex-start',marginTop:'1px'}}>{ph.label}</div>
+                    <div style={{padding:'2px 8px',borderRadius:'4px',fontSize:'8px',fontWeight:700,letterSpacing:'1px',color:t.navTextActive,background:ph.color,whiteSpace:'nowrap',alignSelf:'flex-start',marginTop:'1px'}}>{ph.label}</div>
                     <div style={{display:'flex',flexDirection:'column',gap:'2px',flex:1}}>
                       <div style={{fontSize:'10px',color:t.text,fontWeight:600}}>{ph.situacao}</div>
                       <div style={{fontSize:'9px',color:t.textMuted}}>{ph.regra}</div>
@@ -2236,7 +2236,7 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
                       <div style={{fontSize:'9px',color:t.textMuted,marginTop:'1px'}}>{tpl.plan_type==='golf'?'Golf':'Gym'} · {(tpl.days||[]).filter(d=>d?.items?.length||d?.isRest).length} dias configurados</div>
                     </div>
                     <button onClick={()=>deleteTemplate(tpl.id)}
-                      style={{background:'transparent',border:`1px solid #ef4444`,borderRadius:'6px',color:'#ef4444',padding:'4px 10px',cursor:'pointer',fontSize:'11px',fontFamily:F}}>
+                      style={{background:'transparent',border:`1px solid ${t.danger}`,borderRadius:'6px',color:t.danger,padding:'4px 10px',cursor:'pointer',fontSize:'11px',fontFamily:F}}>
                       ✕ Apagar
                     </button>
                   </div>
@@ -2247,21 +2247,21 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
 
           {/* Create plan buttons — smaller coach cards */}
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px',marginBottom:'20px'}}>
-            <div style={{background:'#eaf4ff',border:`2px solid ${golfColor}`,borderRadius:'12px',padding:'14px 16px',cursor:'pointer'}}
+            <div style={{background:golfColor+'18',border:`2px solid ${golfColor}`,borderRadius:'12px',padding:'14px 16px',cursor:'pointer'}}
               onClick={()=>startWizard('golf')}>
               <div style={{fontSize:'9px',letterSpacing:'2px',color:golfColor,fontWeight:700,marginBottom:'2px'}}>COACH GOLF</div>
-              <div style={{fontSize:'14px',fontWeight:800,color:golfDark}}>Golf Plan</div>
-              <div style={{fontSize:'11px',color:'#185FA5',marginTop:'4px',lineHeight:1.4}}>Drills · bolas · campo</div>
-              <div style={{marginTop:'10px',display:'inline-flex',alignItems:'center',gap:'4px',background:golfColor,color:'#fff',padding:'5px 12px',borderRadius:'6px',fontSize:'11px',fontWeight:700}}>
+              <div style={{fontSize:'14px',fontWeight:800,color:golfColor}}>Golf Plan</div>
+              <div style={{fontSize:'11px',color:t.textMuted,marginTop:'4px',lineHeight:1.4}}>Drills · bolas · campo</div>
+              <div style={{marginTop:'10px',display:'inline-flex',alignItems:'center',gap:'4px',background:golfColor,color:t.navTextActive,padding:'5px 12px',borderRadius:'6px',fontSize:'11px',fontWeight:700}}>
                 + Criar
               </div>
             </div>
-            <div style={{background:'#eafff0',border:`2px solid ${gymColor}`,borderRadius:'12px',padding:'14px 16px',cursor:'pointer'}}
+            <div style={{background:gymColor+'18',border:`2px solid ${gymColor}`,borderRadius:'12px',padding:'14px 16px',cursor:'pointer'}}
               onClick={()=>startWizard('gym')}>
               <div style={{fontSize:'9px',letterSpacing:'2px',color:gymColor,fontWeight:700,marginBottom:'2px'}}>COACH GYM</div>
-              <div style={{fontSize:'14px',fontWeight:800,color:gymDark}}>Gym Plan</div>
-              <div style={{fontSize:'11px',color:'#27500A',marginTop:'4px',lineHeight:1.4}}>Séries · reps · carga</div>
-              <div style={{marginTop:'10px',display:'inline-flex',alignItems:'center',gap:'4px',background:gymColor,color:'#fff',padding:'5px 12px',borderRadius:'6px',fontSize:'11px',fontWeight:700}}>
+              <div style={{fontSize:'14px',fontWeight:800,color:gymColor}}>Gym Plan</div>
+              <div style={{fontSize:'11px',color:t.textMuted,marginTop:'4px',lineHeight:1.4}}>Séries · reps · carga</div>
+              <div style={{marginTop:'10px',display:'inline-flex',alignItems:'center',gap:'4px',background:gymColor,color:t.navTextActive,padding:'5px 12px',borderRadius:'6px',fontSize:'11px',fontWeight:700}}>
                 + Criar
               </div>
             </div>
@@ -2304,9 +2304,9 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
               </div>
             </div>
             {noGolfNext3 && (
-              <div style={{background:'#fef2f2',border:'1px solid #fecaca',borderRadius:'8px',padding:'8px 12px',display:'flex',alignItems:'center',gap:'8px'}}>
+              <div style={{background:t.dangerBg,border:`1px solid ${t.danger}`,borderRadius:'8px',padding:'8px 12px',display:'flex',alignItems:'center',gap:'8px'}}>
                 <div style={{fontSize:'14px',flexShrink:0}}>🔴</div>
-                <div style={{fontSize:'11px',color:'#991b1b',fontWeight:600}}>
+                <div style={{fontSize:'11px',color:t.danger,fontWeight:600}}>
                   {upcomingGolf.length===0
                     ? 'Sem treinos de golf planeados — cria um plano.'
                     : `Sem golf nos próximos 3 dias. Próximo em ${upcomingGolf[0].offset} dias.`}
@@ -2351,9 +2351,9 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
               </div>
             </div>
             {noGymNext3 && (
-              <div style={{background:'#fef2f2',border:'1px solid #fecaca',borderRadius:'8px',padding:'8px 12px',display:'flex',alignItems:'center',gap:'8px'}}>
+              <div style={{background:t.dangerBg,border:`1px solid ${t.danger}`,borderRadius:'8px',padding:'8px 12px',display:'flex',alignItems:'center',gap:'8px'}}>
                 <div style={{fontSize:'14px',flexShrink:0}}>🔴</div>
-                <div style={{fontSize:'11px',color:'#991b1b',fontWeight:600}}>
+                <div style={{fontSize:'11px',color:t.danger,fontWeight:600}}>
                   {upcomingGym.length===0
                     ? 'Sem treinos de ginásio planeados — cria um plano.'
                     : `Sem ginásio nos próximos 3 dias. Próximo em ${upcomingGym[0].offset} dias.`}
@@ -2376,7 +2376,7 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
               <button onClick={()=>setWeekOffset(w=>w-1)} style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'6px',color:t.textMuted,padding:'6px 10px',cursor:'pointer',fontFamily:F}}>‹</button>
               <div style={{fontSize:'13px',fontWeight:600,color:t.text,minWidth:'150px',textAlign:'center'}}>{formatWeek(weekStart)}</div>
               <button onClick={()=>setWeekOffset(w=>w+1)} style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'6px',color:t.textMuted,padding:'6px 10px',cursor:'pointer',fontFamily:F}}>›</button>
-              <button onClick={()=>setWeekOffset(0)} style={{background:isCurrentWeek?'#eaf4ff':'transparent',border:`1px solid ${isCurrentWeek?golfColor:t.border}`,borderRadius:'6px',color:isCurrentWeek?golfColor:t.textMuted,padding:'6px 10px',cursor:'pointer',fontFamily:F,fontSize:'11px'}}>
+              <button onClick={()=>setWeekOffset(0)} style={{background:isCurrentWeek?golfColor+'18':'transparent',border:`1px solid ${isCurrentWeek?golfColor:t.border}`,borderRadius:'6px',color:isCurrentWeek?golfColor:t.textMuted,padding:'6px 10px',cursor:'pointer',fontFamily:F,fontSize:'11px'}}>
                 HOJE
               </button>
               {logPhase && <div style={{padding:'3px 8px',borderRadius:'4px',fontSize:'8px',fontWeight:700,letterSpacing:'1px',color:logPhase.color,background:logPhase.bg}}>{logPhase.label}</div>}
@@ -2406,7 +2406,7 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
               const isSelected = selectedDay===i; const isToday = i===todayIdx&&isCurrentWeek
               return (
                 <div key={i} onClick={()=>setSelectedDay(i)}
-                  style={{background:isSelected?'#eaf4ff':t.surface,border:`1px solid ${isSelected?golfColor:dayD.sessions?.length?golfColor+'44':t.border}`,borderRadius:'8px',padding:'9px 4px',textAlign:'center',cursor:'pointer'}}>
+                  style={{background:isSelected?golfColor+'18':t.surface,border:`1px solid ${isSelected?golfColor:dayD.sessions?.length?golfColor+'44':t.border}`,borderRadius:'8px',padding:'9px 4px',textAlign:'center',cursor:'pointer'}}>
                   <div style={{fontSize:'9px',letterSpacing:'1px',color:isSelected?golfColor:isToday?t.text:t.textMuted,marginBottom:'5px',fontWeight:600}}>{d}</div>
                   {avgPct===null&&!dayD.sessions?.length&&<div style={{fontSize:'9px',color:t.border}}>—</div>}
                   {avgPct!==null&&<div style={{fontSize:'13px',fontWeight:900,color:avgPct===100?gymColor:avgPct>0?'#f59e0b':t.textMuted,lineHeight:1}}>{avgPct}%</div>}
@@ -2516,7 +2516,7 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
             <textarea value={athleteNote} onChange={e=>setAthleteNote(e.target.value)} placeholder='Como correu? Como te sentiste?' style={{...inp,minHeight:'64px',resize:'vertical'}}/>
             <div style={{display:'flex',justifyContent:'flex-end',marginTop:'8px'}}>
               <button onClick={async()=>{const p=golfPlan||gymPlan;if(p)await saveTrainingPlan({athlete_notes:athleteNote,updated_at:new Date().toISOString()},p.id)}}
-                style={{background:golfColor,border:'none',borderRadius:'8px',color:'#fff',padding:'8px 20px',cursor:'pointer',fontSize:'13px',fontWeight:700,fontFamily:F}}>
+                style={{background:golfColor,border:'none',borderRadius:'8px',color:t.navTextActive,padding:'8px 20px',cursor:'pointer',fontSize:'13px',fontWeight:700,fontFamily:F}}>
                 Guardar Nota
               </button>
             </div>
@@ -2826,8 +2826,8 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
           <div>
             {/* Criteria modal */}
             {showCriterios && (
-              <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.55)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:999}} onClick={()=>setShowCriterios(false)}>
-                <div style={{background:t.surface,border:`1px solid ${t.border}`,borderRadius:'14px',padding:'24px',width:'90%',maxWidth:'480px',maxHeight:'85vh',overflowY:'auto'}} onClick={e=>e.stopPropagation()}>
+              <div style={{position:'fixed',inset:0,background:t.overlayBg,display:'flex',alignItems:'center',justifyContent:'center',zIndex:999}} onClick={()=>setShowCriterios(false)}>
+                <div style={{background:t.modalBg,border:`1px solid ${t.border}`,borderRadius:'14px',padding:'24px',width:'90%',maxWidth:'480px',maxHeight:'85vh',overflowY:'auto'}} onClick={e=>e.stopPropagation()}>
                   <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px'}}>
                     <div style={{fontSize:'11px',letterSpacing:'2px',color:'#7e22ce',fontWeight:700}}>CRITÉRIOS DE FASE</div>
                     <button onClick={()=>setShowCriterios(false)} style={{background:'transparent',border:'none',color:t.textMuted,cursor:'pointer',fontSize:'18px',lineHeight:1}}>✕</button>
@@ -2848,7 +2848,7 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
                       return (
                         <div key={ph} style={{display:'flex',gap:'10px',alignItems:'flex-start',padding:'8px',borderRadius:'8px',background:p.bg,border:`1px solid ${p.color}33`}}>
                           <div style={{fontSize:'9px',color:t.textMuted,fontWeight:700,minWidth:'14px'}}>{i+1}</div>
-                          <div style={{padding:'1px 7px',borderRadius:'4px',fontSize:'8px',fontWeight:700,color:'#fff',background:p.color,whiteSpace:'nowrap'}}>{p.label}</div>
+                          <div style={{padding:'1px 7px',borderRadius:'4px',fontSize:'8px',fontWeight:700,color:t.navTextActive,background:p.color,whiteSpace:'nowrap'}}>{p.label}</div>
                           <div style={{fontSize:'10px',color:t.text}}>{crit}</div>
                         </div>
                       )
@@ -2856,14 +2856,14 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
                     <div style={{borderTop:`1px solid ${t.border}`,paddingTop:'12px',marginTop:'4px'}}>
                       <div style={{fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:700,marginBottom:'8px'}}>ALERTAS AUTOMÁTICOS</div>
                       <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
-                        <div style={{padding:'8px',borderRadius:'8px',background:'#fffbeb',border:'1px solid #fcd34d',fontSize:'10px',color:'#92400e'}}>
+                        <div style={{padding:'8px',borderRadius:'8px',background:t.subtleBg,border:'1px solid #fcd34d',fontSize:'10px',color:t.textMuted}}>
                           <div style={{fontWeight:700,marginBottom:'3px'}}>⚠️ Alerta amarelo (recomenda DESCARGA)</div>
                           <ul style={{margin:0,paddingLeft:'16px',lineHeight:1.8}}>
                             <li>3 competições nas últimas 4 semanas</li>
                             <li>4 semanas consecutivas sem descarga</li>
                           </ul>
                         </div>
-                        <div style={{padding:'8px',borderRadius:'8px',background:'#fef2f2',border:'1px solid #fca5a5',fontSize:'10px',color:'#b91c1c'}}>
+                        <div style={{padding:'8px',borderRadius:'8px',background:t.dangerBg,border:`1px solid ${t.danger}`,fontSize:'10px',color:t.danger}}>
                           <div style={{fontWeight:700,marginBottom:'3px'}}>🔴 Alerta vermelho (recomenda DESCANSO)</div>
                           <ul style={{margin:0,paddingLeft:'16px',lineHeight:1.8}}>
                             <li>6 semanas consecutivas sem descarga/descanso</li>
@@ -2887,7 +2887,7 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:'8px'}}>
                 <div style={{display:'flex',flexDirection:'column',gap:'5px'}}>
                   <div style={{fontSize:'8px',letterSpacing:'2px',color:currentPh.color,fontWeight:700}}>SEMANA ACTUAL</div>
-                  <div style={{padding:'3px 10px',borderRadius:'20px',fontSize:'10px',fontWeight:700,color:'#fff',background:currentPh.color,alignSelf:'flex-start'}}>{currentPh.label}</div>
+                  <div style={{padding:'3px 10px',borderRadius:'20px',fontSize:'10px',fontWeight:700,color:t.navTextActive,background:currentPh.color,alignSelf:'flex-start'}}>{currentPh.label}</div>
                   <div style={{fontSize:'12px',color:t.text,fontWeight:600}}>{currentPh.situacao}</div>
                   <div style={{fontSize:'11px',color:t.textMuted}}>{currentPh.regra}</div>
                   <div style={{fontSize:'11px',color:currentPh.color,fontWeight:600}}>Hoje: {currentPh.hoje}</div>
@@ -2910,9 +2910,9 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
               <div style={{marginBottom:'16px',display:'flex',flexDirection:'column',gap:'6px'}}>
                 {globalAlerts.map((a,i)=>(
                   <div key={i} style={{display:'flex',alignItems:'flex-start',gap:'8px',padding:'9px 14px',borderRadius:'10px',
-                    background:a.level==='red'?'#fef2f2':a.level==='orange'?'#fff7ed':'#fffbeb',
-                    border:`1px solid ${a.level==='red'?'#fca5a5':a.level==='orange'?'#fdba74':'#fcd34d'}`,
-                    fontSize:'11px',fontWeight:500,color:a.level==='red'?'#b91c1c':a.level==='orange'?'#c2410c':'#92400e'}}>
+                    background:a.level==='red'?t.dangerBg:t.subtleBg,
+                    border:`1px solid ${a.level==='red'?t.danger:a.level==='orange'?'#fdba74':'#fcd34d'}`,
+                    fontSize:'11px',fontWeight:500,color:a.level==='red'?t.danger:t.textMuted}}>
                     <span style={{flexShrink:0}}>{a.icon}</span><span>{a.text}</span>
                   </div>
                 ))}
@@ -2932,7 +2932,7 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
                     <div key={ph.id} style={{borderRadius:'10px',background:ph.bg,border:`1px solid ${isExp?ph.color:ph.color+'44'}`,overflow:'hidden'}}>
                       <button onClick={()=>setExpandedPhaseKey(isExp?null:ph.id)}
                         style={{width:'100%',display:'flex',alignItems:'center',gap:'10px',padding:'10px 12px',background:'transparent',border:'none',cursor:'pointer',fontFamily:F,textAlign:'left'}}>
-                        <div style={{padding:'2px 8px',borderRadius:'4px',fontSize:'8px',fontWeight:700,letterSpacing:'1px',color:'#fff',background:ph.color,whiteSpace:'nowrap',flexShrink:0}}>{ph.label}</div>
+                        <div style={{padding:'2px 8px',borderRadius:'4px',fontSize:'8px',fontWeight:700,letterSpacing:'1px',color:t.navTextActive,background:ph.color,whiteSpace:'nowrap',flexShrink:0}}>{ph.label}</div>
                         <div style={{flex:1,minWidth:0}}>
                           <div style={{fontSize:'11px',fontWeight:600,color:t.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ph.situacao}</div>
                           <div style={{fontSize:'10px',color:t.textMuted,marginTop:'1px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ph.regra}</div>
@@ -2953,7 +2953,7 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
                           </div>
                           <div>
                             <div style={{fontSize:'8px',letterSpacing:'1.5px',color:'#ef4444',fontWeight:700,marginBottom:'4px'}}>EVITAR</div>
-                            {ph.evitar.map((sg,i)=><div key={i} style={{fontSize:'11px',color:'#b91c1c',paddingLeft:'8px',lineHeight:1.8}}>· {sg}</div>)}
+                            {ph.evitar.map((sg,i)=><div key={i} style={{fontSize:'11px',color:t.danger,paddingLeft:'8px',lineHeight:1.8}}>· {sg}</div>)}
                           </div>
                         </div>
                       )}
@@ -2976,7 +2976,7 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
                   <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'10px'}}>
                     <div style={{fontSize:'9px',letterSpacing:'2px',fontWeight:700,color:blockHasCurrent?'#7e22ce':t.textMuted}}>{blockLabel.toUpperCase()}</div>
                     <div style={{fontSize:'10px',color:t.textMuted}}>{blockStartDate} – {blockEndStr}</div>
-                    {blockHasCurrent && <div style={{padding:'2px 8px',borderRadius:'10px',background:'#f3e8ff',color:'#7e22ce',fontSize:'9px',fontWeight:700}}>ACTUAL</div>}
+                    {blockHasCurrent && <div style={{padding:'2px 8px',borderRadius:'10px',background:t.subtleBg,color:'#7e22ce',fontSize:'9px',fontWeight:700}}>ACTUAL</div>}
                   </div>
                   <div className="train-perio-grid">
                     {block.map(ws => {
@@ -3008,8 +3008,8 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
                           <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'8px'}}>
                             <div style={{flex:1}}>
                               <div style={{display:'inline-flex',alignItems:'center',gap:'4px'}}>
-                                <div style={{padding:'3px 8px',borderRadius:'4px',fontSize:'9px',fontWeight:700,letterSpacing:'1px',color:'#fff',background:ph.color}}>{ph.label}</div>
-                                {isManual && <div style={{padding:'2px 5px',borderRadius:'4px',fontSize:'8px',fontWeight:700,color:'#92400e',background:'#fef3c7',border:'1px solid #fcd34d'}}>MANUAL</div>}
+                                <div style={{padding:'3px 8px',borderRadius:'4px',fontSize:'9px',fontWeight:700,letterSpacing:'1px',color:t.navTextActive,background:ph.color}}>{ph.label}</div>
+                                {isManual && <div style={{padding:'2px 5px',borderRadius:'4px',fontSize:'8px',fontWeight:700,color:t.textMuted,background:t.subtleBg,border:'1px solid #fcd34d'}}>MANUAL</div>}
                               </div>
                             </div>
                             {isCoach && (
@@ -3030,7 +3030,7 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
                                   </button>
                                 ))}
                                 {isManual && (
-                                  <button disabled={savingPhaseOverride} onClick={()=>clearPhaseOverride(ws)} style={{marginTop:'4px',padding:'5px 8px',borderRadius:'6px',border:'1px solid #ef4444',background:'transparent',cursor:'pointer',fontFamily:F,fontSize:'10px',color:'#ef4444',fontWeight:600}}>↺ Repor automático</button>
+                                  <button disabled={savingPhaseOverride} onClick={()=>clearPhaseOverride(ws)} style={{marginTop:'4px',padding:'5px 8px',borderRadius:'6px',border:`1px solid ${t.danger}`,background:'transparent',cursor:'pointer',fontFamily:F,fontSize:'10px',color:t.danger,fontWeight:600}}>↺ Repor automático</button>
                                 )}
                               </div>
                             </>
@@ -3045,10 +3045,10 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
                           {weekComps.length>0 && (
                             <div style={{display:'flex',flexDirection:'column',gap:'3px',marginBottom:'6px'}}>
                               {weekComps.map((c,ci)=>(
-                                <div key={ci} style={{display:'flex',alignItems:'center',gap:'4px',padding:'3px 8px',borderRadius:'5px',background:'#fef9c3',border:'1px solid #fde047'}}>
+                                <div key={ci} style={{display:'flex',alignItems:'center',gap:'4px',padding:'3px 8px',borderRadius:'5px',background:t.subtleBg,border:'1px solid #fde047'}}>
                                   <span style={{fontSize:'10px'}}>🏌️</span>
-                                  <span style={{fontSize:'9px',fontWeight:700,color:'#713f12'}}>{c.title||c.event_name}</span>
-                                  <span style={{fontSize:'8px',color:'#92400e',marginLeft:'auto'}}>{c.start_date}</span>
+                                  <span style={{fontSize:'9px',fontWeight:700,color:t.text}}>{c.title||c.event_name}</span>
+                                  <span style={{fontSize:'8px',color:t.textMuted,marginLeft:'auto'}}>{c.start_date}</span>
                                 </div>
                               ))}
                             </div>
@@ -3057,7 +3057,7 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
                           {weekAl.length>0 && (
                             <div style={{display:'flex',flexDirection:'column',gap:'2px'}}>
                               {weekAl.map((a,ai)=>(
-                                <div key={ai} style={{fontSize:'9px',color:a.level==='red'?'#b91c1c':'#92400e',fontWeight:500,display:'flex',alignItems:'center',gap:'3px'}}>
+                                <div key={ai} style={{fontSize:'9px',color:a.level==='red'?t.danger:t.textMuted,fontWeight:500,display:'flex',alignItems:'center',gap:'3px'}}>
                                   <span>{a.icon}</span><span>{a.text}</span>
                                 </div>
                               ))}

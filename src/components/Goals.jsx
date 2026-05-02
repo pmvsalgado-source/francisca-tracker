@@ -27,6 +27,9 @@ function GoalChart({ entries, goal, theme, t }) {
     const cw = W - pad.l - pad.r
     const ch = H - pad.t - pad.b
 
+    const canvasGrid  = theme === 'dark' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'
+    const canvasLabel = theme === 'dark' ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)'
+
     const startDate = new Date(goal.start_date)
     const endDate = new Date(goal.end_date)
     const startVal = parseFloat(goal.start_value)
@@ -89,15 +92,15 @@ function GoalChart({ entries, goal, theme, t }) {
     ctx.beginPath()
     ctx.moveTo(xOfRatio(0), yOf(startVal))
     ctx.lineTo(xOfRatio(1), yOf(targetVal))
-    ctx.strokeStyle = theme === 'dark' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'; ctx.lineWidth = 1.5
+    ctx.strokeStyle = canvasGrid; ctx.lineWidth = 1.5
     ctx.setLineDash([5, 4]); ctx.stroke(); ctx.setLineDash([])
 
     // Milestone pins on expected line
     milestones.forEach(m => {
       const x = xOfRatio(m.ratio), y = yOf(m.value)
       ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2)
-      ctx.fillStyle = theme === 'dark' ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)'; ctx.fill()
-      ctx.fillStyle = theme === 'dark' ? 'rgba(255,255,255,0.5)' : t.textMuted; ctx.font = '9px Inter,system-ui'; ctx.textAlign = 'center'
+      ctx.fillStyle = canvasLabel; ctx.fill()
+      ctx.fillStyle = t.textMuted; ctx.font = '9px Inter,system-ui'; ctx.textAlign = 'center'
       ctx.fillText(m.value.toFixed(1) + (goal.unit || ''), x, y - 8)
     })
 
@@ -162,7 +165,7 @@ function GoalChart({ entries, goal, theme, t }) {
     })
 
     // Target label at end
-    ctx.fillStyle = theme === 'dark' ? 'rgba(255,255,255,0.4)' : t.textMuted; ctx.font = 'bold 10px Inter,system-ui'; ctx.textAlign = 'left'
+    ctx.fillStyle = t.textMuted; ctx.font = 'bold 10px Inter,system-ui'; ctx.textAlign = 'left'
     ctx.fillText('Target: ' + targetVal + (goal.unit || ''), xOfRatio(1) - 80, yOf(targetVal) - 6)
 
   }, [entries, goal, theme, t])
@@ -284,7 +287,7 @@ export default function Goals({ theme, t, user }) {
 
       {/* Delete modal */}
       {deleteConfirm && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
+        <div style={{ position: 'fixed', inset: 0, background: t.overlayBg, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
           <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '14px', padding: '28px 32px', maxWidth: '380px', width: '90%' }}>
             <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '8px' }}>Delete this goal?</div>
             <div style={{ fontSize: '13px', color: t.textMuted, marginBottom: '24px', lineHeight: 1.6 }}>
@@ -300,7 +303,7 @@ export default function Goals({ theme, t, user }) {
 
       {/* Goal Modal */}
       {showModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999, padding: '16px' }}>
+        <div style={{ position: 'fixed', inset: 0, background: t.overlayBg, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999, padding: '16px' }}>
           <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '14px', padding: '28px', width: '100%', maxWidth: '480px', maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <div style={{ fontSize: '16px', fontWeight: 700 }}>{editGoal ? 'Edit Goal' : 'New Goal'}</div>
@@ -361,7 +364,7 @@ export default function Goals({ theme, t, user }) {
               <div style={{ display: 'flex', gap: '10px' }}>
                 <button onClick={() => setShowModal(false)} style={{ background: 'transparent', border: `1px solid ${t.border}`, borderRadius: '6px', color: t.textMuted, padding: '8px 16px', cursor: 'pointer', fontSize: '12px', fontFamily: F }}>Cancel</button>
                 <button onClick={saveGoal} disabled={saving || !form.target_value || !form.end_date || !form.start_value}
-                  style={{ background: (!form.target_value || !form.end_date || !form.start_value) ? t.navActive : t.accent, border: 'none', borderRadius: '6px', color: (!form.target_value || !form.end_date || !form.start_value) ? t.textMuted : (theme === 'dark' ? '#000' : '#fff'), padding: '8px 20px', cursor: 'pointer', fontSize: '13px', fontWeight: 700, fontFamily: F }}>
+                  style={{ background: (!form.target_value || !form.end_date || !form.start_value) ? t.navActive : t.accent, border: 'none', borderRadius: '6px', color: (!form.target_value || !form.end_date || !form.start_value) ? t.textMuted : (t.onAccent), padding: '8px 20px', cursor: 'pointer', fontSize: '13px', fontWeight: 700, fontFamily: F }}>
                   {saving ? 'Saving...' : 'Save Goal'}
                 </button>
               </div>
@@ -395,7 +398,7 @@ export default function Goals({ theme, t, user }) {
         <div style={{ ...card, padding: 0 }}>
           <EmptyState icon="🎯" message="No goals defined yet." subMessage="Define a target to track your progress over time." t={t}>
             <button onClick={openNew}
-              style={{ background: t.accent, border: 'none', borderRadius: '8px', color: theme === 'dark' ? '#000' : '#fff', padding: '10px 24px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', fontFamily: F }}>
+              style={{ background: t.accent, border: 'none', borderRadius: '8px', color: t.onAccent, padding: '10px 24px', fontSize: '13px', fontWeight: 700, cursor: 'pointer', fontFamily: F }}>
               Set First Goal
             </button>
           </EmptyState>

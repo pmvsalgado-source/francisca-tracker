@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
 import Goals from './Goals'
 import Chat from './Chat'
 import Microcycles from './Microcycles'
+import Help from './Help'
 import logo from '../assets/logo.png'
 
 const Home = lazy(() => import('./Home'))
@@ -125,6 +126,10 @@ const dark = {
   success: '#52E8A0', successBg: '#0a1a0a', danger: '#f87171', dangerBg: '#1a0808',
   navActive: '#0d0d0d',
   navBg: '#1a2744', navText: '#8aaed4', navTextActive: '#ffffff', navBorder: '#52E8A0',
+  cardBg: '#141414', inputBg: '#0a0a0a', modalBg: '#111111',
+  tableHeaderBg: '#181818', tableRowAlt: '#0f0f0f',
+  overlayBg: 'rgba(0,0,0,0.75)', subtleBg: '#1c1c1c',
+  onAccent: '#000000',
 }
 const light = {
   bg: '#f0f4ff', surface: '#ffffff', border: '#d0d8f0',
@@ -133,6 +138,10 @@ const light = {
   success: '#52E8A0', successBg: '#e8fdf4', danger: '#dc2626', dangerBg: '#fef2f2',
   navActive: '#e6f1fb',
   navBg: '#1a2744', navText: '#8aaed4', navTextActive: '#ffffff', navBorder: '#52E8A0',
+  cardBg: '#ffffff', inputBg: '#f0f4ff', modalBg: '#ffffff',
+  tableHeaderBg: '#eef1f8', tableRowAlt: '#f5f7ff',
+  overlayBg: 'rgba(0,0,0,0.5)', subtleBg: '#eef1f8',
+  onAccent: '#ffffff',
 }
 
 function TeamModal({ t, F, onClose }) {
@@ -214,7 +223,7 @@ function TeamModal({ t, F, onClose }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         {members.map((m, i) => (
           <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '12px 14px', background: t.bg, border: `1px solid ${t.border}`, borderRadius: '10px' }}>
-            <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: `linear-gradient(135deg, ${t.accent}, #4ade80)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+            <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: `linear-gradient(135deg, ${t.accent}, #4ade80)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 800, color: t.navTextActive, flexShrink: 0 }}>
               {initials(m.name)}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -232,7 +241,7 @@ function TeamModal({ t, F, onClose }) {
   }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999, padding: '20px' }}>
+    <div style={{ position: 'fixed', inset: 0, background: t.overlayBg, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999, padding: '20px' }}>
       <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '16px', padding: '28px', width: '100%', maxWidth: '440px', fontFamily: F }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <div>
@@ -572,7 +581,7 @@ export default function Dashboard({ user }) {
   const btn = (active, danger) => ({
     background: danger ? 'transparent' : active ? t.accent : 'transparent',
     border: `1px solid ${danger ? t.danger : active ? t.accent : t.border}`,
-    borderRadius: '6px', color: danger ? t.danger : active ? '#fff' : t.textMuted,
+    borderRadius: '6px', color: danger ? t.danger : active ? t.navTextActive : t.textMuted,
     padding: '6px 14px', cursor: 'pointer', fontSize: '12px', fontFamily: F, fontWeight: 500, transition: 'all 0.15s'
   })
   const card = { background: t.surface, border: `1px solid ${t.border}`, borderRadius: '10px', padding: '14px 16px' }
@@ -597,6 +606,7 @@ export default function Dashboard({ user }) {
     ['competition', lang === 'pt' ? 'Competições'    : 'Competitions',  '▦'],
     ...(isAdmin ? [['backoffice', lang === 'pt' ? 'Atletas' : 'Athletes', '▦']] : []),
     ['chat',        lang === 'pt' ? 'Mensagens'      : 'Messages',      '▦'],
+    ['help',        'Ajuda',                                            '▦'],
   ]
 
   return (
@@ -618,13 +628,13 @@ export default function Dashboard({ user }) {
 
       {/* Language modal */}
       {showLangModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+        <div style={{ position: 'fixed', inset: 0, background: t.overlayBg, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
           <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '14px', padding: '28px 32px', maxWidth: '320px', width: '90%' }}>
             <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '20px', color: t.text }}>{s.langModal.title}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {[['en', '🇬🇧  English'], ['pt', '🇵🇹  Português']].map(([code, label]) => (
                 <button key={code} onClick={() => changeLang(code)}
-                  style={{ background: lang === code ? t.accent : 'transparent', border: `1px solid ${lang === code ? t.accent : t.border}`, borderRadius: '8px', color: lang === code ? '#fff' : t.text, padding: '12px 16px', cursor: 'pointer', fontFamily: F, fontSize: '14px', fontWeight: lang === code ? 600 : 400, textAlign: 'left', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  style={{ background: lang === code ? t.accent : 'transparent', border: `1px solid ${lang === code ? t.accent : t.border}`, borderRadius: '8px', color: lang === code ? t.navTextActive : t.text, padding: '12px 16px', cursor: 'pointer', fontFamily: F, fontSize: '14px', fontWeight: lang === code ? 600 : 400, textAlign: 'left', display: 'flex', alignItems: 'center', gap: '10px' }}>
                   {label} {lang === code && <span style={{ marginLeft: 'auto', fontSize: '12px' }}>✓</span>}
                 </button>
               ))}
@@ -638,7 +648,7 @@ export default function Dashboard({ user }) {
 
       {/* Delete modal */}
       {deleteConfirm && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
+        <div style={{ position: 'fixed', inset: 0, background: t.overlayBg, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
           <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '14px', padding: '28px 32px', maxWidth: '380px', width: '90%' }}>
             <div style={{ fontSize: '16px', fontWeight: 700, marginBottom: '8px', color: t.text }}>{s.deleteModal.title}</div>
             <div style={{ fontSize: '13px', color: t.textMuted, marginBottom: '24px', lineHeight: 1.6 }}>
@@ -660,7 +670,7 @@ export default function Dashboard({ user }) {
 
       {/* Register modal */}
       {showRegister && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999, padding: '16px' }}>
+        <div style={{ position: 'fixed', inset: 0, background: t.overlayBg, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999, padding: '16px' }}>
           <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '14px', padding: '28px', width: '100%', maxWidth: '560px', maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <div style={{ fontSize: '16px', fontWeight: 700 }}>{s.register.title}</div>
@@ -698,7 +708,7 @@ export default function Dashboard({ user }) {
             </div>
             <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
               <button onClick={saveEntry} disabled={saving}
-                style={{ background: saving ? t.navActive : t.accent, border: 'none', borderRadius: '8px', color: saving ? t.textMuted : '#fff', padding: '10px 24px', fontSize: '13px', fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', fontFamily: F }}>
+                style={{ background: saving ? t.navActive : t.accent, border: 'none', borderRadius: '8px', color: saving ? t.textMuted : t.navTextActive, padding: '10px 24px', fontSize: '13px', fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', fontFamily: F }}>
                 {saving ? s.register.saving : s.register.save}
               </button>
               {savedMsg && <span style={{ fontSize: '13px', color: t.success, fontWeight: 600 }}>{savedMsg}</span>}
@@ -710,7 +720,7 @@ export default function Dashboard({ user }) {
 
       {/* Profile modal */}
       {showProfile && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999, padding: '16px' }}>
+        <div style={{ position: 'fixed', inset: 0, background: t.overlayBg, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999, padding: '16px' }}>
           <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '14px', padding: '28px', width: '100%', maxWidth: '400px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <div style={{ fontSize: '16px', fontWeight: 700 }}>{s.profile.title}</div>
@@ -790,7 +800,7 @@ export default function Dashboard({ user }) {
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 24px', height:'64px', background:t.surface, borderBottom:`1px solid ${t.border}`, flexShrink:0, zIndex:10 }}>
         {/* Logo */}
         <div style={{ display:'flex', alignItems:'center', gap:'10px' }}>
-          <img src={logo} alt="Team F1" style={{ height:'38px', width:'auto', objectFit:'contain', flexShrink:0 }} />
+          <img src={logo} alt="Team F1" style={{ height:'66px', width:'auto', objectFit:'contain', flexShrink:0 }} />
           <div>
             <div style={{ fontSize:'12px', fontWeight:900, color:t.text, lineHeight:1.15, letterSpacing:'0.3px', textTransform:'uppercase' }}>Performance Golf</div>
             <div style={{ fontSize:'11px', fontWeight:600, color:t.textMuted, lineHeight:1.1 }}>Francisca Salgado</div>
@@ -853,7 +863,7 @@ export default function Dashboard({ user }) {
         </div>
 
         {/* MAIN CONTENT */}
-        <div style={{ flex:1, overflowY:'auto', background: theme === 'dark' ? t.bg : '#f0f4f8', display:'flex', flexDirection:'column' }}>
+        <div style={{ flex:1, overflowY:'auto', background: t.bg, display:'flex', flexDirection:'column' }}>
           {/* KPI Panel */}
           {showKpis && (
             <div style={{ padding:'16px 32px 0' }}>
@@ -892,7 +902,7 @@ export default function Dashboard({ user }) {
                 </div>
                 <div style={{ marginTop:'12px', display:'flex', alignItems:'center', gap:'12px' }}>
                   <button onClick={saveKpis} disabled={savingKpis}
-                    style={{ background: savingKpis ? t.navActive : t.accent, border:'none', borderRadius:'6px', color: savingKpis ? t.textMuted : '#fff', padding:'7px 18px', fontFamily:F, fontWeight:600, fontSize:'12px', cursor: savingKpis ? 'not-allowed' : 'pointer' }}>
+                    style={{ background: savingKpis ? t.navActive : t.accent, border:'none', borderRadius:'6px', color: savingKpis ? t.textMuted : t.navTextActive, padding:'7px 18px', fontFamily:F, fontWeight:600, fontSize:'12px', cursor: savingKpis ? 'not-allowed' : 'pointer' }}>
                     {savingKpis ? s.kpi.saving : s.kpi.saveBtn}
                   </button>
                   {kpiMsg && <span style={{ fontSize:'12px', color: kpiMsg.startsWith('Erro') || kpiMsg.startsWith('Error') ? t.danger : t.success, fontWeight:600 }}>{kpiMsg}</span>}
@@ -1005,6 +1015,7 @@ export default function Dashboard({ user }) {
                 <Backoffice theme={theme} t={t} user={user} userRole={profile.role} />
               </Suspense>
             )}
+            {!loading && view === 'help' && <Help theme={theme} t={t} />}
           </div>
         </div>
       </div>

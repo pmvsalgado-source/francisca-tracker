@@ -41,8 +41,8 @@ function fmtRange(start, end) {
   return `${parseInt(sd)} ${PT_MONTHS[parseInt(sm) - 1]} – ${parseInt(ed)} ${PT_MONTHS[parseInt(em) - 1]} ${ey}`
 }
 
-function catBadge() {
-  return { bg: '#F1F5F9', color: '#64748B' }
+function catBadge(t) {
+  return { bg: t.subtleBg, color: t.textMuted }
 }
 
 function getDaysBetween(start, end) {
@@ -300,27 +300,25 @@ export default function CompStats({ theme, t, user, events = [] }) {
   const flatStatFields = statFields.filter(f => !ROUND_FIELD_IDS.includes(f.id))
 
   // ── Render ─────────────────────────────────────────────────────────────────
-  const ACCENT = '#2563EB'
-
   return (
     <div style={{ fontFamily: F, color: t.text }}>
       <style>{`
         .cs-row:hover td { background: ${t.bg} !important }
         .cs-row { cursor: pointer }
-        .cs-edit-btn:hover { border-color: ${ACCENT} !important; color: ${ACCENT} !important }
+        .cs-edit-btn:hover { border-color: ${t.accent} !important; color: ${t.accent} !important }
       `}</style>
 
       {/* ── Delete confirm ── */}
       {deleteConfirm && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000 }}>
-          <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'14px', padding:'28px 32px', maxWidth:'380px', width:'90%' }}>
+        <div style={{ position:'fixed', inset:0, background:t.overlayBg, display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000 }}>
+          <div style={{ background:t.modalBg, border:`1px solid ${t.border}`, borderRadius:'14px', padding:'28px 32px', maxWidth:'380px', width:'90%' }}>
             <div style={{ fontSize:'16px', fontWeight:700, marginBottom:'8px' }}>Apagar estas stats?</div>
             <div style={{ fontSize:'13px', color:t.textMuted, marginBottom:'24px', lineHeight:1.6 }}>
               Stats de <b style={{ color:t.text }}>{deleteConfirm.event_name}</b> serão apagadas permanentemente.
             </div>
             <div style={{ display:'flex', gap:'10px', justifyContent:'flex-end' }}>
               <button onClick={() => setDeleteConfirm(null)} style={{ background:'transparent', border:`1px solid ${t.border}`, borderRadius:'6px', color:t.textMuted, padding:'8px 16px', cursor:'pointer', fontSize:'12px', fontFamily:F }}>Cancelar</button>
-              <button onClick={confirmDelete} style={{ background:'#DC2626', border:'none', borderRadius:'6px', color:'#fff', padding:'8px 20px', cursor:'pointer', fontSize:'12px', fontFamily:F, fontWeight:700 }}>Apagar</button>
+              <button onClick={confirmDelete} style={{ background:t.danger, border:'none', borderRadius:'6px', color:t.navTextActive, padding:'8px 20px', cursor:'pointer', fontSize:'12px', fontFamily:F, fontWeight:700 }}>Apagar</button>
             </div>
           </div>
         </div>
@@ -328,8 +326,8 @@ export default function CompStats({ theme, t, user, events = [] }) {
 
       {/* ── Settings modal ── */}
       {showSettings && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:999, padding:'16px' }}>
-          <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'14px', padding:'28px', width:'100%', maxWidth:'520px', maxHeight:'90vh', overflowY:'auto' }}>
+        <div style={{ position:'fixed', inset:0, background:t.overlayBg, display:'flex', alignItems:'center', justifyContent:'center', zIndex:999, padding:'16px' }}>
+          <div style={{ background:t.modalBg, border:`1px solid ${t.border}`, borderRadius:'14px', padding:'28px', width:'100%', maxWidth:'520px', maxHeight:'90vh', overflowY:'auto' }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px' }}>
               <div style={{ fontSize:'16px', fontWeight:700 }}>Configurar Campos</div>
               <button onClick={() => setShowSettings(false)} style={{ background:'transparent', border:'none', color:t.textMuted, cursor:'pointer', fontSize:'22px', lineHeight:1 }}>×</button>
@@ -357,19 +355,19 @@ export default function CompStats({ theme, t, user, events = [] }) {
                           <label style={{ fontSize:'11px', color:t.textMuted, display:'flex', alignItems:'center', gap:'4px', cursor:'pointer', whiteSpace:'nowrap' }}>
                             <input type="checkbox" checked={!!editingField.lower_better} onChange={e => setEditingField(p => ({ ...p, lower_better: e.target.checked }))} />↓ melhor
                           </label>
-                          <button onClick={saveFieldEdit} style={{ background:ACCENT, border:'none', borderRadius:'4px', color:'#fff', padding:'5px 10px', cursor:'pointer', fontSize:'11px', fontFamily:F }}>Guardar</button>
+                          <button onClick={saveFieldEdit} style={{ background:t.accent, border:'none', borderRadius:'4px', color:t.navTextActive, padding:'5px 10px', cursor:'pointer', fontSize:'11px', fontFamily:F }}>Guardar</button>
                           <button onClick={() => setEditingField(null)} style={{ background:'transparent', border:`1px solid ${t.border}`, borderRadius:'4px', color:t.textMuted, padding:'5px 8px', cursor:'pointer', fontSize:'11px', fontFamily:F }}>✕</button>
                         </div>
                       ) : (
                         <div style={{ display:'flex', alignItems:'center', gap:'8px' }}>
                           <div style={{ flex:1, fontSize:'13px', color:t.text }}>{f.label}</div>
-                          {ROUND_FIELD_IDS.includes(f.id) && <div style={{ fontSize:'9px', color:ACCENT, fontWeight:600 }}>POR ROUND</div>}
+                          {ROUND_FIELD_IDS.includes(f.id) && <div style={{ fontSize:'9px', color:t.accent, fontWeight:600 }}>POR ROUND</div>}
                           {f.unit && <div style={{ fontSize:'11px', color:t.textMuted }}>{f.unit}</div>}
                           <div style={{ fontSize:'10px', color:t.textFaint }}>{f.lower_better ? '↓' : '↑'}</div>
                           <button onClick={() => setEditingField({ idx:i, label:f.label, unit:f.unit||'', lower_better:!!f.lower_better })}
                             style={{ background:'transparent', border:'none', color:t.textMuted, cursor:'pointer', fontSize:'13px', padding:'2px 6px' }}>✎</button>
                           <button onClick={() => removeField(i)}
-                            style={{ background:'transparent', border:'none', color:'#DC2626', cursor:'pointer', fontSize:'18px', lineHeight:1, padding:'2px 4px' }}>×</button>
+                            style={{ background:'transparent', border:'none', color:t.danger, cursor:'pointer', fontSize:'18px', lineHeight:1, padding:'2px 4px' }}>×</button>
                         </div>
                       )}
                     </div>
@@ -383,7 +381,7 @@ export default function CompStats({ theme, t, user, events = [] }) {
                     <label style={{ fontSize:'11px', color:t.textMuted, display:'flex', alignItems:'center', gap:'4px', cursor:'pointer', whiteSpace:'nowrap' }}>
                       <input type="checkbox" checked={newField.lower_better} onChange={e => setNewField(p => ({ ...p, lower_better: e.target.checked }))} />↓ melhor
                     </label>
-                    <button onClick={addField} style={{ background:ACCENT, border:'none', borderRadius:'6px', color:'#fff', padding:'7px 14px', cursor:'pointer', fontSize:'12px', fontWeight:700, fontFamily:F, whiteSpace:'nowrap' }}>+ Adicionar</button>
+                    <button onClick={addField} style={{ background:t.accent, border:'none', borderRadius:'6px', color:t.navTextActive, padding:'7px 14px', cursor:'pointer', fontSize:'12px', fontWeight:700, fontFamily:F, whiteSpace:'nowrap' }}>+ Adicionar</button>
                   </div>
                 </div>
               </div>
@@ -408,8 +406,8 @@ export default function CompStats({ theme, t, user, events = [] }) {
 
       {/* ── Entry modal ── */}
       {showModal && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.55)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:999, padding:'16px' }}>
-          <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'14px', padding:'22px 24px', width:'100%', maxWidth:'620px' }}>
+        <div style={{ position:'fixed', inset:0, background:t.overlayBg, display:'flex', alignItems:'center', justifyContent:'center', zIndex:999, padding:'16px' }}>
+          <div style={{ background:t.modalBg, border:`1px solid ${t.border}`, borderRadius:'14px', padding:'22px 24px', width:'100%', maxWidth:'620px' }}>
 
             {/* Header */}
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:'16px' }}>
@@ -459,7 +457,7 @@ export default function CompStats({ theme, t, user, events = [] }) {
                       <div style={{ display:'grid', gridTemplateColumns:cols, gap:'6px', marginBottom:'6px' }}>
                         <div />
                         {form.rounds.map((_, i) => (
-                          <div key={i} style={{ textAlign:'center', fontSize:'10px', color:ACCENT, fontWeight:700, letterSpacing:'1px' }}>
+                          <div key={i} style={{ textAlign:'center', fontSize:'10px', color:t.accent, fontWeight:700, letterSpacing:'1px' }}>
                             R{i+1}{days[i] ? ` · ${parseInt(days[i].split('-')[2])}` : ''}
                           </div>
                         ))}
@@ -480,7 +478,7 @@ export default function CompStats({ theme, t, user, events = [] }) {
                       {totalScore > 0 && (
                         <div style={{ display:'grid', gridTemplateColumns:cols, gap:'6px', alignItems:'center', marginTop:'4px', marginBottom:'8px' }}>
                           <div style={{ fontSize:'10px', color:t.textMuted, fontWeight:700 }}>TOTAL</div>
-                          <div style={{ gridColumn:`2 / span ${n}`, fontSize:'13px', fontWeight:800, color:ACCENT }}>
+                          <div style={{ gridColumn:`2 / span ${n}`, fontSize:'13px', fontWeight:800, color:t.accent }}>
                             {form.rounds.map(r => r.score || '—').join(' + ')} = {totalScore}
                           </div>
                         </div>
@@ -516,7 +514,7 @@ export default function CompStats({ theme, t, user, events = [] }) {
                   <input type="text" value={stat.value} onChange={e => updateCustomStat(idx, 'value', e.target.value)}
                     placeholder="Valor" style={{ ...inp, padding:'6px 8px' }} />
                   <button onClick={() => removeCustomStat(idx)}
-                    style={{ background:'transparent', border:'none', color:'#DC2626', cursor:'pointer', fontSize:'18px', lineHeight:1, padding:'2px 6px' }}>×</button>
+                    style={{ background:'transparent', border:'none', color:t.danger, cursor:'pointer', fontSize:'18px', lineHeight:1, padding:'2px 6px' }}>×</button>
                 </div>
               ))}
               <button onClick={addCustomStat}
@@ -531,7 +529,7 @@ export default function CompStats({ theme, t, user, events = [] }) {
               style={{ ...inp, resize:'vertical', marginBottom:'14px' }} />
 
             {saveError && (
-              <div style={{ color:'#DC2626', fontSize:'12px', padding:'7px 10px', background:'#FEF2F2', borderRadius:'6px', marginBottom:'12px', borderLeft:'3px solid #DC2626' }}>⚠ {saveError}</div>
+              <div style={{ color:t.danger, fontSize:'12px', padding:'7px 10px', background:t.dangerBg, borderRadius:'6px', marginBottom:'12px', borderLeft:`3px solid ${t.danger}` }}>⚠ {saveError}</div>
             )}
 
             {/* Actions */}
@@ -539,7 +537,7 @@ export default function CompStats({ theme, t, user, events = [] }) {
               <div>
                 {editStat && (
                   <button onClick={() => { setDeleteConfirm(editStat); setShowModal(false) }}
-                    style={{ background:'transparent', border:'1px solid #DC2626', borderRadius:'6px', color:'#DC2626', padding:'7px 14px', cursor:'pointer', fontSize:'12px', fontFamily:F }}>
+                    style={{ background:'transparent', border:`1px solid ${t.danger}`, borderRadius:'6px', color:t.danger, padding:'7px 14px', cursor:'pointer', fontSize:'12px', fontFamily:F }}>
                     Apagar
                   </button>
                 )}
@@ -548,7 +546,7 @@ export default function CompStats({ theme, t, user, events = [] }) {
                 <button onClick={() => setShowModal(false)}
                   style={{ background:'transparent', border:`1px solid ${t.border}`, borderRadius:'6px', color:t.textMuted, padding:'7px 16px', cursor:'pointer', fontSize:'12px', fontFamily:F }}>Cancelar</button>
                 <button onClick={saveStat} disabled={saving || !form.event_name}
-                  style={{ background:form.event_name ? ACCENT : t.border, border:'none', borderRadius:'6px', color:'#fff', padding:'7px 24px', cursor:form.event_name ? 'pointer' : 'not-allowed', fontSize:'13px', fontWeight:700, fontFamily:F, opacity:form.event_name ? 1 : 0.5 }}>
+                  style={{ background:form.event_name ? t.accent : t.border, border:'none', borderRadius:'6px', color:t.navTextActive, padding:'7px 24px', cursor:form.event_name ? 'pointer' : 'not-allowed', fontSize:'13px', fontWeight:700, fontFamily:F, opacity:form.event_name ? 1 : 0.5 }}>
                   {saving ? 'A guardar...' : 'Guardar Stats'}
                 </button>
               </div>
@@ -560,7 +558,7 @@ export default function CompStats({ theme, t, user, events = [] }) {
       {/* ── Header ── */}
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:'24px', flexWrap:'wrap', gap:'12px' }}>
         <div>
-          <div style={{ fontSize:'10px', letterSpacing:'3px', color:ACCENT, marginBottom:'4px', fontWeight:700 }}>COMPETIÇÕES</div>
+          <div style={{ fontSize:'10px', letterSpacing:'3px', color:t.accent, marginBottom:'4px', fontWeight:700 }}>COMPETIÇÕES</div>
           <div style={{ fontSize:'24px', fontWeight:800, color:t.text, lineHeight:1.15 }}>Histórico Competitivo</div>
           <div style={{ fontSize:'12px', color:t.textMuted, marginTop:'4px' }}>Torneios marcados como jogados no calendário</div>
         </div>
@@ -586,15 +584,15 @@ export default function CompStats({ theme, t, user, events = [] }) {
         const cards = [
           { label:'COMPETIÇÕES',    icon:'🏁', value: playedTournaments.length,                           color: t.text   },
           { label:'MÉDIA SCORE',    icon:'📈', value: avgScore,                                            color: t.text   },
-          { label:'MELHOR POSIÇÃO', icon:'🏆', value: bestPos != null ? `#${bestPos}` : '—',              color:'#16A34A' },
-          { label:'TOP 10',         icon:'⭐', value: top10,                                               color:'#F59E0B' },
+          { label:'MELHOR POSIÇÃO', icon:'🏆', value: bestPos != null ? `#${bestPos}` : '—',              color: t.success },
+          { label:'TOP 10',         icon:'⭐', value: top10,                                               color:'#F59E0B'  },
           { label:'MÉDIA GIR',      icon:'🎯', value: avgGir !== '—' ? `${avgGir}%` : '—',               color: t.text   },
         ]
         return (
           <div style={{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:'12px', marginBottom:'24px' }}>
             {cards.map(card => (
               <div key={card.label} style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'14px', padding:'16px 18px', display:'flex', alignItems:'center', gap:'14px' }}>
-                <div style={{ width:'40px', height:'40px', borderRadius:'10px', background:`${ACCENT}10`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'18px', flexShrink:0 }}>
+                <div style={{ width:'40px', height:'40px', borderRadius:'10px', background:t.accentBg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'18px', flexShrink:0 }}>
                   {card.icon}
                 </div>
                 <div style={{ minWidth:0 }}>
@@ -609,9 +607,9 @@ export default function CompStats({ theme, t, user, events = [] }) {
 
       {/* ── Error ── */}
       {fetchError && (
-        <div style={{ color:'#DC2626', fontSize:'13px', padding:'12px 16px', background:'#FEF2F2', borderRadius:'8px', border:'1px solid #FCA5A5', marginBottom:'12px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:'12px' }}>
+        <div style={{ color:t.danger, fontSize:'13px', padding:'12px 16px', background:t.dangerBg, borderRadius:'8px', border:`1px solid ${t.danger}`, marginBottom:'12px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:'12px' }}>
           <span>⚠ {fetchError}</span>
-          <button onClick={fetchData} disabled={loading} style={{ background:'transparent', border:'1px solid #DC2626', borderRadius:'6px', color:'#DC2626', padding:'4px 12px', cursor:'pointer', fontSize:'12px', fontFamily:F, fontWeight:600 }}>{loading ? 'A tentar...' : 'Tentar novamente'}</button>
+          <button onClick={fetchData} disabled={loading} style={{ background:'transparent', border:`1px solid ${t.danger}`, borderRadius:'6px', color:t.danger, padding:'4px 12px', cursor:'pointer', fontSize:'12px', fontFamily:F, fontWeight:600 }}>{loading ? 'A tentar...' : 'Tentar novamente'}</button>
         </div>
       )}
 
@@ -646,7 +644,7 @@ export default function CompStats({ theme, t, user, events = [] }) {
                 const days          = isMultiDay ? getDaysBetween(ev.start_date, ev.end_date) : []
                 const rounds        = statsForEvent?.values?.rounds || []
                 const hasRounds     = recordHasRounds(statsForEvent)
-                const badge         = catBadge(ev.category)
+                const badge         = catBadge(t)
                 const rowBg         = 'transparent'
                 const hasData       = !!statsForEvent && (
                   hasRounds ||
@@ -699,7 +697,7 @@ export default function CompStats({ theme, t, user, events = [] }) {
                               {roundBreakdown && <div style={{ fontSize:'10px', color:t.textMuted, marginTop:'2px' }}>({roundBreakdown})</div>}
                             </div>
                           ) : (
-                            <span style={{ color:'#CBD5E1' }}>—</span>
+                            <span style={{ color:t.textFaint }}>—</span>
                           )}
                         </td>
                       )
@@ -712,7 +710,7 @@ export default function CompStats({ theme, t, user, events = [] }) {
                         </button>
                       ) : (
                         <button onClick={() => openFromTournament(ev)}
-                          style={{ background:'#FFFBEB', border:'1px solid #FDE68A', borderRadius:'6px', color:'#D97706', cursor:'pointer', padding:'5px 12px', fontSize:'11px', fontFamily:F, fontWeight:700, whiteSpace:'nowrap' }}>
+                          style={{ background:t.cardBg, border:'1px solid #D97706', borderRadius:'6px', color:'#D97706', cursor:'pointer', padding:'5px 12px', fontSize:'11px', fontFamily:F, fontWeight:700, whiteSpace:'nowrap' }}>
                           Por preencher
                         </button>
                       )}
@@ -731,7 +729,7 @@ export default function CompStats({ theme, t, user, events = [] }) {
                         {tableFields.map(f => {
                           const val = r?.[f.id]
                           return (
-                            <td key={f.id} style={{ padding:'8px 12px', textAlign:'center', color:val ? t.text : '#CBD5E1', fontSize:'12px', fontWeight: val ? 600 : 400 }}>
+                            <td key={f.id} style={{ padding:'8px 12px', textAlign:'center', color:val ? t.text : t.textFaint, fontSize:'12px', fontWeight: val ? 600 : 400 }}>
                               {val || '—'}
                             </td>
                           )
@@ -762,7 +760,7 @@ export default function CompStats({ theme, t, user, events = [] }) {
         <div style={{ marginTop:'20px', display:'flex', flexDirection:'column', gap:'8px' }}>
           <div style={{ fontSize:'9px', letterSpacing:'3px', color:t.textMuted, fontWeight:600, marginBottom:'4px' }}>NOTAS</div>
           {statsWithData.filter(s => s.notes).map(stat => (
-            <div key={stat.id} style={{ padding:'12px 16px', background:t.surface, border:`1px solid ${t.border}`, borderLeft:`3px solid ${ACCENT}`, borderRadius:'6px' }}>
+            <div key={stat.id} style={{ padding:'12px 16px', background:t.surface, border:`1px solid ${t.border}`, borderLeft:`3px solid ${t.accent}`, borderRadius:'6px' }}>
               <div style={{ fontSize:'11px', fontWeight:700, color:t.textMuted, marginBottom:'4px' }}>{stat.event_name} · {fmtDate(stat.event_date)}</div>
               <div style={{ fontSize:'13px', color:t.text, lineHeight:1.6 }}>{stat.notes}</div>
             </div>
