@@ -84,7 +84,7 @@ function prettifyKey(key = '') {
 }
 
 // ── Component ──────────────────────────────────────────────────────────────────
-export default function CompStats({ theme, t, user, events = [] }) {
+export default function CompStats({ theme, t, user, events = [], onNavigate }) {
   const [stats,       setStats]       = useState([])
   const [loading,     setLoading]     = useState(true)
   const [fetchError,  setFetchError]  = useState(null)
@@ -103,6 +103,7 @@ export default function CompStats({ theme, t, user, events = [] }) {
   const [saving,        setSaving]        = useState(false)
   const [saveError,     setSaveError]     = useState(null)
   const [expandedRows,  setExpandedRows]  = useState(new Set())
+  const [compView,      setCompView]      = useState('summary')
 
   // Form — rounds[] for per-round fields; values{} for flat fields (position, etc.)
   const [form, setForm] = useState({
@@ -113,6 +114,18 @@ export default function CompStats({ theme, t, user, events = [] }) {
   // Settings forms
   const [newField,     setNewField]     = useState({ label: '', unit: '', lower_better: false })
   const [editingField, setEditingField] = useState(null)
+
+  useEffect(() => {
+    const h = e => {
+      if (e.key !== 'Escape') return
+      setShowModal(false)
+      setShowSettings(false)
+      setDeleteConfirm(null)
+      setSaveError(null)
+    }
+    document.addEventListener('keydown', h)
+    return () => document.removeEventListener('keydown', h)
+  }, [])
 
   const F   = "'Inter', system-ui, sans-serif"
   const inp = {
@@ -298,6 +311,40 @@ export default function CompStats({ theme, t, user, events = [] }) {
   // ── Computed ───────────────────────────────────────────────────────────────
   const tableFields    = statFields.filter(f => visibleColumns.includes(f.id))
   const flatStatFields = statFields.filter(f => !ROUND_FIELD_IDS.includes(f.id))
+  const fullTableFields = statFields
+  const statForEvent = (ev) => stats.find(s => s.event_id === ev.id) || null
+  const valueForField = (s, f) => {
+    if (!s) return ''
+    const hasRounds = recordHasRounds(s)
+    if (ROUND_FIELD_IDS.includes(f.id)) return hasRounds ? s.values?.[f.id] : ''
+    return s.values?.[f.id] ?? ''
+  }
+  const fmtCell = (value, f) => {
+    if (value === '' || value === null || value === undefined) return '—'
+    return `${f.id === 'position' ? '#' : ''}${value}${f.unit || ''}`
+  }
+  const summaryForField = (f) => {
+    if (f.id === 'score') {
+      const scores = statsWithData.flatMap(s => (s.values?.rounds || []).map(r => parseFloat(r.score)).filter(v => !isNaN(v) && v > 0))
+      return scores.length ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : '—'
+    }
+    const values = statsWithData.map(s => parseFloat(valueForField(s, f))).filter(v => !isNaN(v))
+    if (!values.length) return '—'
+    if (f.id === 'position' || f.lower_better) return `${f.id === 'position' ? '#' : ''}${Math.min(...values)}${f.unit || ''}`
+    return `${(values.reduce((a, b) => a + b, 0) / values.length).toFixed(1)}${f.unit || ''}`
+  }
+  const topBtn = (active) => ({
+    background: active ? t.accent : t.surface,
+    border: `1px solid ${active ? t.accent : t.border}`,
+    borderRadius: '999px',
+    color: active ? t.navTextActive : t.textMuted,
+    padding: '8px 14px',
+    fontSize: '12px',
+    fontWeight: 800,
+    cursor: 'pointer',
+    fontFamily: F,
+    whiteSpace: 'nowrap',
+  })
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
@@ -562,10 +609,15 @@ export default function CompStats({ theme, t, user, events = [] }) {
           <div style={{ fontSize:'24px', fontWeight:800, color:t.text, lineHeight:1.15 }}>Histórico Competitivo</div>
           <div style={{ fontSize:'12px', color:t.textMuted, marginTop:'4px' }}>Torneios marcados como jogados no calendário</div>
         </div>
+        <div style={{ display:'flex', alignItems:'center', gap:'8px', flexWrap:'wrap', justifyContent:'flex-end' }}>
+        <button onClick={() => setCompView(v => v === 'full' ? 'summary' : 'full')} style={topBtn(compView === 'full')}>Full Stats</button>
+        <button onClick={() => onNavigate?.('hcpwagr', { hcpWagrTab: 'hcp' })} style={topBtn(false)}>HCP</button>
+        <button onClick={() => onNavigate?.('hcpwagr', { hcpWagrTab: 'wagr' })} style={topBtn(false)}>WAGR</button>
         <button onClick={() => { setSettingsTab('fields'); setShowSettings(true) }}
           style={{ display:'flex', alignItems:'center', gap:'6px', background:'transparent', border:`1px solid ${t.border}`, borderRadius:'20px', color:t.textMuted, padding:'6px 16px', fontSize:'12px', fontWeight:500, cursor:'pointer', fontFamily:F }}>
           <span style={{ fontSize:'13px' }}>⚙</span> Configurar
         </button>
+        </div>
       </div>
 
       {/* ── 5 KPI Cards ── */}
@@ -614,7 +666,63 @@ export default function CompStats({ theme, t, user, events = [] }) {
       )}
 
       {/* ── Table ── */}
-      {loading ? (
+      {compView === 'full' && (
+        <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'14px', overflow:'hidden' }}>
+          <div style={{ padding:'14px 18px', borderBottom:`1px solid ${t.border}`, display:'flex', justifyContent:'space-between', alignItems:'center', gap:'12px', flexWrap:'wrap' }}>
+            <div>
+              <div style={{ fontSize:'13px', fontWeight:900, color:t.text }}>Full Stats</div>
+              <div style={{ fontSize:'11px', color:t.textMuted, marginTop:'2px' }}>Todas as estatisticas configuradas, mesmo sem dados preenchidos.</div>
+            </div>
+            <div style={{ fontSize:'11px', color:t.textMuted }}>{fullTableFields.length} colunas</div>
+          </div>
+          <div style={{ overflowX:'auto' }}>
+            <table style={{ width:'100%', minWidth:`${520 + fullTableFields.length * 92}px`, borderCollapse:'collapse', fontSize:'12px' }}>
+              <thead>
+                <tr style={{ borderBottom:`1px solid ${t.border}`, background:t.tableHeaderBg || t.bg }}>
+                  <th style={{ position:'sticky', left:0, zIndex:2, background:t.tableHeaderBg || t.bg, padding:'11px 14px', textAlign:'left', color:t.textMuted, fontWeight:800, fontSize:'10px', letterSpacing:'1.2px', minWidth:'220px' }}>COMPETICAO</th>
+                  <th style={{ padding:'11px 10px', textAlign:'left', color:t.textMuted, fontWeight:800, fontSize:'10px', letterSpacing:'1.2px', minWidth:'110px' }}>DATA</th>
+                  <th style={{ padding:'11px 10px', textAlign:'left', color:t.textMuted, fontWeight:800, fontSize:'10px', letterSpacing:'1.2px', minWidth:'130px' }}>CATEGORIA</th>
+                  {fullTableFields.map(f => (
+                    <th key={f.id} style={{ padding:'11px 10px', textAlign:'center', color:t.textMuted, fontWeight:800, fontSize:'10px', letterSpacing:'0.8px', minWidth:'92px', lineHeight:1.35 }}>
+                      {f.label.toUpperCase()}{f.unit ? ` (${f.unit})` : ''}
+                    </th>
+                  ))}
+                  <th style={{ padding:'11px 10px', textAlign:'left', color:t.textMuted, fontWeight:800, fontSize:'10px', letterSpacing:'1.2px', minWidth:'180px' }}>NOTAS</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style={{ borderBottom:`2px solid ${t.border}`, background:t.accentBg }}>
+                  <td style={{ position:'sticky', left:0, zIndex:1, background:t.accentBg, padding:'11px 14px', fontWeight:900, color:t.accent }}>Media / melhor</td>
+                  <td style={{ padding:'11px 10px', color:t.textMuted }}>Resumo</td>
+                  <td style={{ padding:'11px 10px', color:t.textMuted }}>{statsWithData.length} com dados</td>
+                  {fullTableFields.map(f => (
+                    <td key={f.id} style={{ padding:'11px 10px', textAlign:'center', fontWeight:900, color:t.text }}>{summaryForField(f)}</td>
+                  ))}
+                  <td style={{ padding:'11px 10px', color:t.textMuted }}>—</td>
+                </tr>
+                {playedTournaments.map((ev, rowIdx) => {
+                  const s = statForEvent(ev)
+                  return (
+                    <tr key={ev.id} className="cs-row" onClick={() => openFromTournament(ev)} style={{ borderTop: rowIdx > 0 ? `1px solid ${t.border}` : 'none' }}>
+                      <td style={{ position:'sticky', left:0, zIndex:1, background:t.surface, padding:'10px 14px', fontWeight:800, color:t.text }}>{ev.title}</td>
+                      <td style={{ padding:'10px', color:t.textMuted, whiteSpace:'nowrap' }}>{fmtRange(ev.start_date, ev.end_date)}</td>
+                      <td style={{ padding:'10px', color:t.textMuted }}>{ev.category || '—'}</td>
+                      {fullTableFields.map(f => (
+                        <td key={f.id} style={{ padding:'10px', textAlign:'center', color:valueForField(s, f) ? t.text : t.textFaint, fontWeight:valueForField(s, f) ? 700 : 400 }}>
+                          {fmtCell(valueForField(s, f), f)}
+                        </td>
+                      ))}
+                      <td style={{ padding:'10px', color:s?.notes ? t.textMuted : t.textFaint, maxWidth:'260px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{s?.notes || '—'}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {compView !== 'full' && (loading ? (
         <div style={{ padding:'60px', textAlign:'center', color:t.textMuted, fontSize:'13px' }}>A carregar...</div>
       ) : playedTournaments.length === 0 ? (
         <div style={{ background:t.surface, border:`1px solid ${t.border}`, borderRadius:'14px' }}>
@@ -743,7 +851,7 @@ export default function CompStats({ theme, t, user, events = [] }) {
             </tbody>
           </table>
         </div>
-      )}
+      ))}
 
       {/* ── Footer ── */}
       {!loading && playedTournaments.length > 0 && (

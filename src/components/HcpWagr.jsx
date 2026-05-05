@@ -67,9 +67,9 @@ function simulateWeeks(tournaments, curWeek, curYear, simTournaments = [], n = 1
 }
 
 // ── main component ──────────────────────────────────────────────────────────
-export default function HcpWagr({ theme, t, user }) {
+export default function HcpWagr({ theme, t, user, initialTab = 'wagr' }) {
   const F = "'Inter', system-ui, sans-serif"
-  const [tab, setTab] = useState('wagr') // wagr | hcp
+  const [tab, setTab] = useState(initialTab) // wagr | hcp
 
   // ── WAGR state ──
   const [tournaments, setTournaments] = useState([])
@@ -103,6 +103,18 @@ export default function HcpWagr({ theme, t, user }) {
   const [hcpForm, setHcpForm] = useState({ date: today.toISOString().split('T')[0], hcp: '', notes: '' })
 
   // ── fetch ──
+  useEffect(() => {
+    const h = e => {
+      if (e.key !== 'Escape') return
+      setShowTModal(false)
+      setShowHModal(false)
+      setShowHcpModal(false)
+      setDeleteConfirm(null)
+    }
+    document.addEventListener('keydown', h)
+    return () => document.removeEventListener('keydown', h)
+  }, [])
+
   const fetchAll = useCallback(async () => {
     setLoading(true)
     const { tournaments: wt, wagrHistory: wh, hcpHistory: hh } = await getHcpWagrData()
@@ -113,6 +125,7 @@ export default function HcpWagr({ theme, t, user }) {
   }, [])
 
   useEffect(() => { fetchAll() }, [fetchAll])
+  useEffect(() => { if (initialTab === 'hcp' || initialTab === 'wagr') setTab(initialTab) }, [initialTab])
 
   // ── WAGR calculations ──
   const { rows: tRows, ptsTotal, divisorTotal, divisorAdjusted, pointAverage } = calcWAGR(tournaments, curWeek, curYear)

@@ -15,12 +15,22 @@ export async function getProfile(userId) {
 }
 
 export async function saveProfile(userId, payload) {
-  const { data, error } = await supabase
+  const savePayload = { ...payload, updated_at: new Date().toISOString() }
+  let { data, error } = await supabase
     .from('profiles')
-    .update({ ...payload, updated_at: new Date().toISOString() })
+    .update(savePayload)
     .eq('id', userId)
     .select()
     .maybeSingle()
+  if (error && payload.email && /email/i.test(error.message || '')) {
+    const { email, ...fallbackPayload } = savePayload
+    ;({ data, error } = await supabase
+      .from('profiles')
+      .update(fallbackPayload)
+      .eq('id', userId)
+      .select()
+      .maybeSingle())
+  }
   if (error) {
     Sentry.captureException(error, { extra: { context: 'profileService.saveProfile', userId } })
     throw error
@@ -50,10 +60,16 @@ export async function uploadAvatar(userId, file) {
 }
 
 export async function getTeam() {
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('profiles')
-    .select('id, name, role, phone, athlete_club, avatar_url')
+    .select('id, name, role, phone, athlete_club, avatar_url, email')
     .order('name', { ascending: true })
+  if (error && /email/i.test(error.message || '')) {
+    ;({ data, error } = await supabase
+      .from('profiles')
+      .select('id, name, role, phone, athlete_club, avatar_url')
+      .order('name', { ascending: true }))
+  }
   if (error) {
     Sentry.captureException(error, { extra: { context: 'profileService.getTeam' } })
     throw error
@@ -76,10 +92,16 @@ export async function getTeamActivity() {
 }
 
 export async function getProfilesByIds(userIds) {
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('profiles')
-    .select('id, name, role, phone, athlete_club')
+    .select('id, name, role, phone, athlete_club, email')
     .in('id', userIds)
+  if (error && /email/i.test(error.message || '')) {
+    ;({ data, error } = await supabase
+      .from('profiles')
+      .select('id, name, role, phone, athlete_club')
+      .in('id', userIds))
+  }
   if (error) {
     Sentry.captureException(error, { extra: { context: 'profileService.getProfilesByIds' } })
     throw error

@@ -469,6 +469,19 @@ export default function Performance({ t, user }) {
     notes:  '',
   })
 
+  useEffect(() => {
+    const h = e => {
+      if (e.key !== 'Escape') return
+      setShowRegister(false)
+      setShowEditFocus(false)
+      setShowEditTasks(false)
+      setShowEditDrivers(false)
+      setShowMilestones(false)
+    }
+    document.addEventListener('keydown', h)
+    return () => document.removeEventListener('keydown', h)
+  }, [])
+
   const fetchEntries = useCallback(async () => {
     setLoading(true)
     try { setEntries((await getEntries()) || []) } finally { setLoading(false) }
@@ -592,7 +605,7 @@ export default function Performance({ t, user }) {
       )}
 
       {/* ── Header ── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
         <div>
           <div style={{ fontSize: '10px', letterSpacing: '3px', color: t.accent, marginBottom: '4px', fontWeight: 700 }}>FOCO ATIVO</div>
           <div style={{ fontSize: '24px', fontWeight: 800, color: t.text, lineHeight: 1.15 }}>{focus.name}</div>
@@ -600,6 +613,30 @@ export default function Performance({ t, user }) {
         </div>
         <button onClick={() => setShowEditFocus(true)} style={secondary}>Alterar foco</button>
       </div>
+
+      {/* Sentinel — triggers compact header when header leaves scroll viewport */}
+      
+
+      {/* ── Sticky bar: section tabs + compact header ── */}
+      {false && <div className="tp-sticky-bar" style={{ boxShadow: 'none', transition: 'box-shadow 0.2s' }}>
+        <div className="tp-compact-hdr" style={{ maxHeight: compactVisible ? '38px' : '0' }}>
+          <span style={{ fontSize: '13px', fontWeight: 700, color: '#0F172A', whiteSpace: 'nowrap', fontFamily: F }}>{focus.name}</span>
+          <span style={{ color: '#CBD5E1' }}>·</span>
+          <span style={{ fontSize: '12px', color: '#64748B', whiteSpace: 'nowrap', fontFamily: F }}>{startValue} → {focus.targetValue} {focus.unit}</span>
+        </div>
+        <div className="tp-sec-tabs">
+          {[
+            { label: 'FOCO',     ref: focusSectionRef  },
+            { label: 'TAREFAS',  ref: tasksSectionRef  },
+            { label: 'EVOLUÇÃO', ref: evolveSectionRef },
+          ].map(({ label, ref }) => (
+            <button key={label} className="tp-sec-tab" style={{ fontFamily: F }}
+              onClick={() => scrollToSection(ref)}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>}
 
       {/* ── FOCO ATUAL ── */}
       <div style={{ ...card, padding: '28px 32px', marginBottom: '16px', display: 'grid', gridTemplateColumns: '1fr 230px', gap: '24px', alignItems: 'center' }}>

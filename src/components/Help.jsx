@@ -76,6 +76,111 @@ const FAQ = [
   },
 ]
 
+const PERIODIZATION_PRINCIPLES = [
+  {
+    title: 'O calendário manda',
+    desc: 'Competição perto → reduzir volume. Competição longe → aumentar carga.',
+  },
+  {
+    title: 'Treinar não é competir',
+    desc: 'O treino constrói capacidade. A competição exige frescura.',
+  },
+  {
+    title: 'Golf e Gym não são iguais',
+    desc: 'O golf mantém sensibilidade e qualidade. O gym é uma das maiores fontes de fadiga, por isso reduz mais nas semanas críticas.',
+  },
+  {
+    title: 'A carga não é linear',
+    desc: 'O ciclo segue: Construir → Desenvolver → Afinar → Competir → Recuperar.',
+  },
+  {
+    title: 'O corpo tem prioridade',
+    desc: 'Fadiga, dor ou quebra de performance podem obrigar a DESCARGA ou DESCANSO, mesmo que o calendário diga outra coisa.',
+  },
+]
+
+const PHASE_GUIDE = [
+  {
+    phase: 'PEAK',
+    message: 'Vais competir esta semana',
+    sub: 'Não mudes nada',
+    golf: 'Baixo volume (-40% a -50%) + alta qualidade → putting, wedges, confiança',
+    gym: 'Muito baixo (-60%) + intensidade baixa → ativação, mobilidade',
+    criteria: 'Competição esta semana',
+    color: '#ef4444',
+  },
+  {
+    phase: 'MANUTENÇÃO B2B',
+    message: 'Entre competições',
+    sub: 'Recuperar e manter',
+    golf: 'Baixo volume + intensidade média → ritmo e consistência',
+    gym: 'Muito baixo + baixa intensidade → recuperação ativa',
+    criteria: 'Competição recente + nova ≤7 dias',
+    color: '#f97316',
+  },
+  {
+    phase: 'AFINAÇÃO',
+    message: 'Competição próxima',
+    sub: 'Afinar, não mudar',
+    golf: 'Volume reduzido (-40%) + alta qualidade → jogo real, precisão',
+    gym: 'Baixo volume (-50%) + baixa/média intensidade → estabilidade',
+    criteria: 'Competição em 1–7 dias',
+    color: '#eab308',
+  },
+  {
+    phase: 'DESENVOLVIMENTO LIGHT',
+    message: 'Pouco tempo entre torneios',
+    sub: 'Melhorar sem cansar',
+    golf: 'Volume moderado (-20%) + intensidade média/alta → técnica controlada',
+    gym: 'Volume moderado (-20%) + intensidade média → manutenção',
+    criteria: 'Competição em 8–14 dias',
+    color: '#60a5fa',
+  },
+  {
+    phase: 'DESENVOLVIMENTO',
+    message: '2–3 semanas para competir',
+    sub: 'Treinar para evoluir',
+    golf: 'Volume alto + intensidade alta → intenção, pressão, velocidade',
+    gym: 'Volume alto + intensidade alta → força, potência',
+    criteria: 'Competição em 15–21 dias',
+    color: '#3b82f6',
+  },
+  {
+    phase: 'ACUMULAÇÃO',
+    message: 'Longe de competições',
+    sub: 'Construir base',
+    golf: 'Volume médio/alto + intensidade média → técnica, repetição',
+    gym: 'Volume alto + intensidade média → base de força',
+    criteria: 'Competição a 22+ dias',
+    color: '#22c55e',
+  },
+  {
+    phase: 'DESCARGA',
+    message: 'Carga alta acumulada',
+    sub: 'Reduzir carga',
+    golf: 'Volume -40% a -60% + intensidade média → leve, fluido',
+    gym: 'Volume -50% + baixa/média intensidade → recuperar',
+    criteria: '3–5 semanas sem descarga / carga alta',
+    color: '#9ca3af',
+  },
+  {
+    phase: 'DESCANSO',
+    message: 'Fadiga ou dor',
+    sub: 'Parar para recuperar',
+    golf: 'Volume mínimo + intensidade baixa',
+    gym: '0 ou muito baixo → recuperação total',
+    criteria: 'Fadiga elevada / dor / saturação',
+    color: '#6b7280',
+  },
+]
+
+const PERIODIZATION_DECISION = [
+  { n: '1', title: 'Estado físico', desc: 'Dor, fadiga ou quebra de performance podem levar a DESCANSO ou DESCARGA.' },
+  { n: '2', title: 'Carga acumulada', desc: 'Muitas competições recentes ou semanas sem recuperação podem gerar DESCARGA.' },
+  { n: '3', title: 'Proximidade da competição', desc: 'Esta semana → PEAK; 1–7 dias → AFINAÇÃO; 8–14 dias → DESENVOLVIMENTO LIGHT; 15–21 dias → DESENVOLVIMENTO; 22+ dias → ACUMULAÇÃO.' },
+  { n: '4', title: 'Back-to-back', desc: 'Competições muito próximas → MANUTENÇÃO B2B.' },
+]
+
 function FaqItem({ q, a, t }) {
   const [open, setOpen] = useState(false)
   return (
@@ -254,6 +359,95 @@ export default function Help({ theme, t }) {
             </div>
           </div>
 
+        </div>
+      </div>
+
+      {/* Periodização */}
+      <div>
+        <div style={{ fontSize: '10px', letterSpacing: '3px', color: t.accent, marginBottom: '4px', fontWeight: 700, textTransform: 'uppercase' }}>Periodização</div>
+        <div style={{ fontSize: '24px', fontWeight: 800, color: t.text, lineHeight: 1.15, marginBottom: '10px' }}>Periodização</div>
+        <div style={{ ...card, marginBottom: '14px' }}>
+          <p style={{ margin: 0, fontSize: '14px', color: t.text, lineHeight: 1.65 }}>
+            A periodização ajusta o treino ao calendário competitivo. Nem todas as semanas devem ter a mesma carga: longe da competição constrói-se capacidade; perto da competição reduz-se volume e aumenta-se qualidade; em semana de prova protege-se a frescura.
+          </p>
+        </div>
+
+        <div style={{ ...card, marginBottom: '14px' }}>
+          <div style={{ fontSize: '16px', fontWeight: 800, color: t.text, marginBottom: '14px' }}>Princípios fundamentais</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
+            {PERIODIZATION_PRINCIPLES.map((item, i) => (
+              <div key={item.title} style={{ background: t.subtleBg, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '14px 16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '7px' }}>
+                  <span style={{ width: '22px', height: '22px', borderRadius: '50%', background: t.accentBg, color: t.accent, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 800, flexShrink: 0 }}>{i + 1}</span>
+                  <span style={{ fontSize: '13px', fontWeight: 800, color: t.text }}>{item.title}</span>
+                </div>
+                <div style={{ fontSize: '12px', color: t.textMuted, lineHeight: 1.55 }}>{item.desc}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ ...card, marginBottom: '14px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '12px', marginBottom: '14px', flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontSize: '16px', fontWeight: 800, color: t.text }}>Guia de Fases</div>
+              <div style={{ fontSize: '12px', color: t.textMuted, marginTop: '3px' }}>Como a app traduz o calendário em carga de treino.</div>
+            </div>
+          </div>
+          <div style={{ overflowX: 'auto', border: `1px solid ${t.border}`, borderRadius: '12px' }}>
+            <table style={{ width: '100%', minWidth: '980px', borderCollapse: 'collapse', fontSize: '12px' }}>
+              <thead>
+                <tr style={{ background: t.subtleBg }}>
+                  {['Fase', 'Mensagem', 'Subfrase', 'Golf', 'Gym', 'Critério'].map(h => (
+                    <th key={h} style={{ textAlign: 'left', padding: '12px 14px', color: t.textMuted, fontSize: '10px', letterSpacing: '1.4px', textTransform: 'uppercase', borderBottom: `1px solid ${t.border}` }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {PHASE_GUIDE.map(row => (
+                  <tr key={row.phase} style={{ borderBottom: `1px solid ${t.border}` }}>
+                    <td style={{ padding: '13px 14px', verticalAlign: 'top', width: '150px' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '7px', color: row.color, fontWeight: 850, fontSize: '11px', letterSpacing: '0.4px' }}>
+                        <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: row.color, flexShrink: 0 }} />
+                        {row.phase}
+                      </span>
+                    </td>
+                    <td style={{ padding: '13px 14px', color: t.text, fontWeight: 700, verticalAlign: 'top' }}>{row.message}</td>
+                    <td style={{ padding: '13px 14px', color: t.textMuted, verticalAlign: 'top' }}>{row.sub}</td>
+                    <td style={{ padding: '13px 14px', color: t.textMuted, lineHeight: 1.5, verticalAlign: 'top' }}>{row.golf}</td>
+                    <td style={{ padding: '13px 14px', color: t.textMuted, lineHeight: 1.5, verticalAlign: 'top' }}>{row.gym}</td>
+                    <td style={{ padding: '13px 14px', color: t.text, lineHeight: 1.5, verticalAlign: 'top' }}>{row.criteria}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div style={{ ...card, marginBottom: '14px' }}>
+          <div style={{ fontSize: '16px', fontWeight: 800, color: t.text, marginBottom: '14px' }}>Como a fase é definida</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {PERIODIZATION_DECISION.map(item => (
+              <div key={item.n} style={{ display: 'flex', gap: '12px', alignItems: 'flex-start', background: t.subtleBg, borderRadius: '12px', padding: '13px 14px' }}>
+                <div style={{ width: '26px', height: '26px', borderRadius: '50%', background: t.text, color: t.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 800, flexShrink: 0 }}>{item.n}</div>
+                <div>
+                  <div style={{ fontSize: '13px', fontWeight: 800, color: t.text, marginBottom: '3px' }}>{item.title}</div>
+                  <div style={{ fontSize: '12px', color: t.textMuted, lineHeight: 1.55 }}>{item.desc}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ ...card, background: t.accentBg, border: '1px solid #93c5fd' }}>
+          <div style={{ fontSize: '16px', fontWeight: 800, color: t.text, marginBottom: '12px' }}>Regra simples</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px' }}>
+            {['Longe → trabalhar', 'Perto → afinar', 'Competição → confiar', 'Depois → recuperar'].map(rule => (
+              <div key={rule} style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', padding: '12px 14px', fontSize: '13px', fontWeight: 800, color: t.text, textAlign: 'center' }}>
+                {rule}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 

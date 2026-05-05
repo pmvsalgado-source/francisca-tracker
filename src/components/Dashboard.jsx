@@ -24,6 +24,7 @@ import {
   getProfile,
   saveProfile as saveProfileSvc,
   uploadAvatar as uploadAvatarSvc,
+  getTeam,
   getTeamActivity,
   getProfilesByIds,
   getAvatarPublicUrl,
@@ -138,6 +139,12 @@ const dark = {
   tableHeaderBg: '#181818', tableRowAlt: '#0f0f0f',
   overlayBg: 'rgba(0,0,0,0.75)', subtleBg: '#1c1c1c',
   onAccent: '#000000',
+  weekTypes: {
+    load: { bg: '#B5D4F4', text: '#042C53', subtitle: '#0C447C' },
+    deload: { bg: '#E6F1FB', text: '#042C53', subtitle: '#0C447C' },
+    competition: { bg: '#C0DD97', text: '#173404', subtitle: '#27500A' },
+    transition: { bg: '#D3D1C7', text: '#2C2C2A', subtitle: '#5F5E5A' },
+  },
 }
 const light = {
   bg: '#f0f4ff', surface: '#ffffff', border: '#d0d8f0',
@@ -150,6 +157,12 @@ const light = {
   tableHeaderBg: '#eef1f8', tableRowAlt: '#f5f7ff',
   overlayBg: 'rgba(0,0,0,0.5)', subtleBg: '#eef1f8',
   onAccent: '#ffffff',
+  weekTypes: {
+    load: { bg: '#B5D4F4', text: '#042C53', subtitle: '#0C447C' },
+    deload: { bg: '#E6F1FB', text: '#042C53', subtitle: '#0C447C' },
+    competition: { bg: '#C0DD97', text: '#173404', subtitle: '#27500A' },
+    transition: { bg: '#D3D1C7', text: '#2C2C2A', subtitle: '#5F5E5A' },
+  },
 }
 
 function TeamModal({ t, F, onClose }) {
@@ -160,18 +173,56 @@ function TeamModal({ t, F, onClose }) {
   useEffect(() => {
     const fetchTeam = async () => {
       try {
-        const { msgs, entries, plans } = await getTeamActivity()
+        const [profiles, activity] = await Promise.all([
+          getTeam().catch(() => []),
+          getTeamActivity().catch(() => ({ msgs: [], entries: [], plans: [] })),
+        ])
+        const { msgs, entries, plans } = activity
 
         const map = {}
+        const byUserId = {}
+        const byEmail = {}
+        const upsert = (member) => {
+          const email = (member.email || '').trim().toLowerCase()
+          const key = member.userId || email
+          if (!key) return
+          const existing = map[key] || {}
+          map[key] = {
+            ...existing,
+            ...member,
+            email: email || existing.email || '',
+            name: member.name || existing.name || (email ? email.split('@')[0] : 'Utilizador'),
+          }
+          if (member.userId) byUserId[member.userId] = map[key]
+          if (email) byEmail[email] = map[key]
+        }
+
+        ;(profiles || []).forEach(p => {
+          upsert({
+            userId: p.id,
+            email: p.email || '',
+            name: p.name || '',
+            role: p.role || null,
+            phone: p.phone || null,
+            club: p.athlete_club || null,
+            avatarUrl: p.avatar_url || null,
+          })
+        })
         ;(msgs || []).forEach(r => {
-          if (r.user_email && !map[r.user_email]) map[r.user_email] = { email: r.user_email, name: r.user_name || r.user_email.split('@')[0], userId: r.user_id || null }
+          const email = (r.user_email || '').trim().toLowerCase()
+          if (!email && !r.user_id) return
+          const existing = (r.user_id && byUserId[r.user_id]) || byEmail[email]
+          upsert({ ...(existing || {}), email, name: r.user_name || existing?.name || email.split('@')[0], userId: r.user_id || existing?.userId || null })
         })
         ;(entries || []).forEach(r => {
-          if (r.updated_by && !map[r.updated_by]) map[r.updated_by] = { email: r.updated_by, name: r.updated_by.split('@')[0], userId: null }
+          const email = (r.updated_by || '').trim().toLowerCase()
+          if (email) upsert({ ...(byEmail[email] || {}), email, name: byEmail[email]?.name || email.split('@')[0], userId: byEmail[email]?.userId || null })
         })
         ;(plans || []).forEach(r => {
-          if (r.created_by && !map[r.created_by]) map[r.created_by] = { email: r.created_by, name: r.created_by.split('@')[0], userId: null }
-          if (r.updated_by && !map[r.updated_by]) map[r.updated_by] = { email: r.updated_by, name: r.updated_by.split('@')[0], userId: null }
+          ;[r.created_by, r.updated_by].forEach(raw => {
+            const email = (raw || '').trim().toLowerCase()
+            if (email) upsert({ ...(byEmail[email] || {}), email, name: byEmail[email]?.name || email.split('@')[0], userId: byEmail[email]?.userId || null })
+          })
         })
 
         const userIds = Object.values(map).map(m => m.userId).filter(Boolean)
@@ -181,11 +232,14 @@ function TeamModal({ t, F, onClose }) {
           ;(profs || []).forEach(p => { profilesByUserId[p.id] = p })
         }
 
-        setMembers(Object.values(map).map(m => {
+        const merged = Object.values(map).map(m => {
           const prof = m.userId ? profilesByUserId[m.userId] : null
-          if (prof) return { ...m, name: prof.name || m.name, role: prof.role || null, phone: prof.phone || null, club: prof.athlete_club || null }
+          if (prof) return { ...m, email: prof.email || m.email, name: prof.name || m.name, role: prof.role || null, phone: prof.phone || null, club: prof.athlete_club || null }
           return m
-        }))
+        })
+          .filter(m => m.email || m.phone)
+          .sort((a, b) => (a.name || a.email || '').localeCompare(b.name || b.email || ''))
+        setMembers(merged)
       } catch (err) {
         setError(err.message || 'Erro ao carregar a equipa.')
       } finally {
@@ -195,7 +249,17 @@ function TeamModal({ t, F, onClose }) {
     fetchTeam()
   }, [])
 
-  const initials = (name) => name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0,2)
+  const initials = (name) => String(name || '?').split(' ').map(w => w[0]).join('').toUpperCase().slice(0,2)
+  const roleLabel = (role) => {
+    const r = String(role || '').toLowerCase()
+    if (r.includes('athlete') || r.includes('atleta')) return 'Atleta'
+    if (r.includes('parent') || r.includes('pai') || r.includes('mãe') || r.includes('mae')) return 'Parent'
+    if (r.includes('strength') || r.includes('conditioning') || r.includes('físico') || r.includes('fisico')) return 'Preparador Fisico'
+    if (r.includes('putting')) return 'Putting Coach'
+    if (r.includes('golf') || r.includes('golfe') || r.includes('coach') || r.includes('treinador')) return 'Coach'
+    if (r.includes('feder')) return 'Federacao'
+    return role || 'Utilizador'
+  }
 
   const bodyContent = () => {
     if (loading) return (
@@ -230,17 +294,27 @@ function TeamModal({ t, F, onClose }) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         {members.map((m, i) => (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '12px 14px', background: t.bg, border: `1px solid ${t.border}`, borderRadius: '10px' }}>
+          <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '14px', padding: '14px', background: t.bg, border: `1px solid ${t.border}`, borderRadius: '12px' }}>
             <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: `linear-gradient(135deg, ${t.accent}, #4ade80)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 800, color: t.navTextActive, flexShrink: 0 }}>
               {initials(m.name)}
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: '14px', fontWeight: 700, color: t.text }}>{m.name}</div>
-              <div style={{ fontSize: '12px', color: t.textMuted, marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.email}</div>
-              {m.phone && <div style={{ fontSize: '11px', color: t.textFaint, marginTop: '1px' }}>{m.phone}</div>}
-            </div>
-            <div style={{ fontSize: '10px', letterSpacing: '1px', color: t.accent, fontWeight: 600, background: t.accentBg, padding: '3px 10px', borderRadius: '10px', flexShrink: 0 }}>
-              {m.role || 'Utilizador'}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '6px' }}>
+                <div style={{ fontSize: '14px', fontWeight: 800, color: t.text }}>{m.name}</div>
+                <div style={{ fontSize: '10px', letterSpacing: '0.6px', color: t.accent, fontWeight: 700, background: t.accentBg, padding: '3px 9px', borderRadius: '999px', flexShrink: 0 }}>
+                  {roleLabel(m.role)}
+                </div>
+              </div>
+              {m.email && (
+                <a href={`mailto:${m.email}`} style={{ display: 'block', fontSize: '12px', color: t.textMuted, marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textDecoration: 'none' }}>
+                  {m.email}
+                </a>
+              )}
+              {m.phone && (
+                <a href={`tel:${m.phone}`} style={{ display: 'block', fontSize: '12px', color: t.textMuted, marginTop: '3px', textDecoration: 'none' }}>
+                  {m.phone}
+                </a>
+              )}
             </div>
           </div>
         ))}
@@ -250,7 +324,7 @@ function TeamModal({ t, F, onClose }) {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: t.overlayBg, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999, padding: '20px' }}>
-      <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '16px', padding: '28px', width: '100%', maxWidth: '440px', fontFamily: F }}>
+      <div style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '16px', padding: '28px', width: '100%', maxWidth: '520px', maxHeight: '85vh', overflowY: 'auto', fontFamily: F }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <div>
             <div style={{ fontSize: '9px', letterSpacing: '3px', color: t.accent, marginBottom: '3px', fontWeight: 600 }}>TEAM</div>
@@ -344,6 +418,7 @@ export default function Dashboard({ user }) {
   const [trainingFocusDate, setTrainingFocusDate] = useState(null)
   const [calendarFocusDate, setCalendarFocusDate] = useState(null)
   const [calendarInitSchedule, setCalendarInitSchedule] = useState(null)
+  const [hcpWagrTab, setHcpWagrTab] = useState('wagr')
   const clearCalendarInitSchedule = useCallback(() => setCalendarInitSchedule(null), [])
   const [entries, setEntries] = useState([])
   const [metrics, setMetrics] = useState(DEFAULT_METRICS)
@@ -387,7 +462,7 @@ export default function Dashboard({ user }) {
     getProfile(user.id)
       .then(data => {
         const base = { name: user.email.split('@')[0], role: 'athlete', club: '', phone: '' }
-        const p = data ? { name: data.name || base.name, role: data.role || base.role, club: data.athlete_club || base.club, phone: data.phone || base.phone } : base
+        const p = data ? { name: data.name || base.name, role: data.role || base.role, club: data.athlete_club || base.club, phone: data.phone || base.phone, email: data.email || user.email } : { ...base, email: user.email }
         setProfile(p); setProfileForm(p)
         if (data?.avatar_url) {
           setAvatar(data.avatar_url + '?t=' + Date.now())
@@ -400,6 +475,21 @@ export default function Dashboard({ user }) {
     const h = e => { if (menuRef.current && !menuRef.current.contains(e.target)) setShowMenu(false) }
     document.addEventListener('mousedown', h)
     return () => document.removeEventListener('mousedown', h)
+  }, [])
+
+  useEffect(() => {
+    const h = e => {
+      if (e.key !== 'Escape') return
+      setShowMenu(false)
+      setShowLangModal(false)
+      setShowTeam(false)
+      setShowKpis(false)
+      setShowProfile(false)
+      setShowRegister(false)
+      setDeleteConfirm(null)
+    }
+    document.addEventListener('keydown', h)
+    return () => document.removeEventListener('keydown', h)
   }, [])
 
   useEffect(() => {
@@ -418,6 +508,7 @@ export default function Dashboard({ user }) {
     if (opts?.date) setTrainingFocusDate(opts.date)
     if (opts?.date && normalizedView === 'calendar') setCalendarFocusDate(opts.date)
     if (opts?.scheduleType) setCalendarInitSchedule(opts.scheduleType)
+    if (opts?.hcpWagrTab) setHcpWagrTab(opts.hcpWagrTab)
     setView(normalizedView)
     localStorage.setItem('fs_view', normalizedView)
     window.history.pushState({ appView: normalizedView }, '')
@@ -537,7 +628,7 @@ export default function Dashboard({ user }) {
   const saveProfile = async () => {
     setProfileSaving(true); setProfileError('')
     try {
-      await saveProfileSvc(user.id, { name: profileForm.name, role: profileForm.role, phone: profileForm.phone, athlete_club: profileForm.club })
+      await saveProfileSvc(user.id, { name: profileForm.name, role: profileForm.role, phone: profileForm.phone, athlete_club: profileForm.club, email: user.email })
       setProfile({ ...profileForm, email: user.email })
       setShowProfile(false)
     } catch (err) { setProfileError('Erro: ' + err.message) }
@@ -1002,12 +1093,12 @@ export default function Dashboard({ user }) {
 
             {!loading && view === 'training' && (
               <Suspense fallback={<div style={{ padding:'60px', textAlign:'center', color:t.textMuted, fontSize:'14px' }}>{s.loading}</div>}>
-                <Training theme={theme} t={t} user={user} userRole={profile.role} lang={lang} focusDate={trainingFocusDate} onFocusConsumed={() => setTrainingFocusDate(null)} events={events} onPlansChanged={fetchTrainingPlans} />
+                <Training theme={theme} t={t} user={user} userRole={profile.role} lang={lang} focusDate={trainingFocusDate} onFocusConsumed={() => setTrainingFocusDate(null)} events={events} trainingPlans={trainingPlans} onPlansChanged={fetchTrainingPlans} />
               </Suspense>
             )}
             {!loading && view === 'competition' && (
               <Suspense fallback={<div style={{ padding:'60px', textAlign:'center', color:t.textMuted, fontSize:'14px' }}>{s.loading}</div>}>
-                <CompStats theme={theme} t={t} user={user} events={events} />
+                <CompStats theme={theme} t={t} user={user} events={events} onNavigate={(v, opts) => navigateToView(v, opts)} />
               </Suspense>
             )}
             {!loading && view === 'calendar' && (
@@ -1018,7 +1109,7 @@ export default function Dashboard({ user }) {
             {!loading && view === 'chat'        && <Chat        theme={theme} t={t} user={user} profile={profile} lang={lang} />}
             {!loading && view === 'hcpwagr' && (
               <Suspense fallback={<div style={{ padding:'60px', textAlign:'center', color:t.textMuted, fontSize:'14px' }}>{s.loading}</div>}>
-                <HcpWagr theme={theme} t={t} user={user} />
+                <HcpWagr theme={theme} t={t} user={user} initialTab={hcpWagrTab} />
               </Suspense>
             )}
             {!loading && view === 'microcycles' && <Microcycles theme={theme} t={t} user={user} lang={lang} />}

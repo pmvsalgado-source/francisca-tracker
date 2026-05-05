@@ -1,5 +1,17 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { isCompetition } from '../lib/periodization'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import {
+  isCompetition,
+  isPeriodizationCompetition,
+  calcWeekPhase,
+  PHASE_COLORS,
+  PHASE_LABELS,
+  PHASE_GUIDELINES,
+  WEEK_TYPES,
+  WEEK_TYPE_LABELS,
+  applyWeekTypeContext,
+  getDayPeriodizationContext,
+  getDayLoadVisual,
+} from '../lib/periodization'
 import {
   getTrainingPlans,
   saveTrainingPlan,
@@ -9,11 +21,15 @@ import {
   getPeriodizationOverrides,
   savePeriodizationOverride,
   deletePeriodizationOverride,
+  getWeekTypeOverrides,
+  setWeekType,
+  clearWeekType,
 } from '../services/trainingService'
 import { ACTIVITY_COLORS } from '../constants/eventCategories'
 
 import { COACH_ROLES } from '../constants/roles'
 import EmptyState from './EmptyState'
+import PeriodizationDashboard from './PeriodizationDashboard'
 
 const GOLF_CATS = ['Driving Range', 'Jogo Curto', 'Putt', 'Bunker', 'Campo']
 const GYM_CATS  = ['Pernas', 'Potência', 'Core', 'Braços', 'Mobilidade', 'Cardio', 'Prevenção']
@@ -22,6 +38,9 @@ const golfColor = ACTIVITY_COLORS.golf
 const gymColor  = ACTIVITY_COLORS.gym
 const golfDark  = '#0C447C'
 const gymDark   = '#27500A'
+
+const WEEK_TYPE_ORDER = [WEEK_TYPES.LOAD, WEEK_TYPES.DELOAD, WEEK_TYPES.COMPETITION, WEEK_TYPES.TRANSITION]
+const getWeekTypeTheme = (t, type) => t.weekTypes?.[type] || t.weekTypes?.load || { bg: '#B5D4F4', text: '#042C53', subtitle: '#0C447C' }
 
 const GOLF_LIBRARY = [
   { id:'g0',  name:'Aquecimento — pitch shots',      cat:'Driving Range', desc:'9-ferro meio swing a crescer, foco em contacto e ritmo', default_qty:20 },
@@ -665,7 +684,7 @@ const parseDailyTemplateXlsxV2 = async (file) => {
     .filter(row => Object.values(row).some(v => String(v).trim() !== ''))
 }
 
-export default function Training({ theme, t, user, userRole = '', lang = 'en', events = [], focusDate = null, onFocusConsumed, onPlansChanged }) {
+export default function Training({ theme, t, user, userRole = '', lang = 'en', events = [], trainingPlans = [], focusDate = null, onFocusConsumed, onPlansChanged }) {
   const [subTab, setSubTab] = useState('plan')
   const [plans, setPlans] = useState([])
   const [loading, setLoading] = useState(true)
@@ -711,11 +730,110 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
   const excelFileRef = useRef(null)
   const [showLegend, setShowLegend] = useState(false)
   const [phaseOverrides, setPhaseOverrides] = useState({})
+  const [weekTypeOverrides, setWeekTypeOverrides] = useState({})
   const [editingPhaseWs, setEditingPhaseWs] = useState(null)
   const [savingPhaseOverride, setSavingPhaseOverride] = useState(false)
+  const [savingWeekType, setSavingWeekType] = useState(false)
   const [showCriterios, setShowCriterios] = useState(false)
   const [expandedPhaseKey, setExpandedPhaseKey] = useState(null)
+  const [periodoMode, setPeriodoMode] = useState('rolling12')
+  const [expandedWeekWs, setExpandedWeekWs] = useState(null)
+  const [expandedDayDate, setExpandedDayDate] = useState(null)
+  const [legendOpen, setLegendOpen] = useState(() => typeof window !== 'undefined' && window.innerWidth >= 640)
+  const [hoveredWeekWs, setHoveredWeekWs] = useState(null)
+  const [historyOpen, setHistoryOpen] = useState(false)
   const [deleteTemplateConfirm, setDeleteTemplateConfirm] = useState(null)
+
+  useEffect(() => {
+    const h = e => {
+      if (e.key !== 'Escape') return
+      setWizard(false)
+      setWizardOpenCat(null)
+      setShowFreeSession(false)
+      setShowSaveTemplate(false)
+      setShowLegend(false)
+      setShowCriterios(false)
+      setEditingPhaseWs(null)
+      setDeleteTemplateConfirm(null)
+      setTooltipId(null)
+    }
+    document.addEventListener('keydown', h)
+    return () => document.removeEventListener('keydown', h)
+  }, [])
+
+  // ── Periodization calendar (memoised at component level) ──────────────────
+  const periodoCurrentWs = useMemo(() => {
+    const d = new Date(); const dow = d.getDay()
+    d.setDate(d.getDate() - (dow===0?6:dow-1)); d.setHours(12,0,0,0)
+    return d.toISOString().split('T')[0]
+  }, [])
+
+  const periodoWeeks = useMemo(() => {
+    const addWs = (ws,n) => { const d=new Date(ws+'T12:00:00'); d.setDate(d.getDate()+n*7); return d.toISOString().split('T')[0] }
+    if (periodoMode==='civil') {
+      const yr=new Date().getFullYear()
+      const j1=new Date(yr,0,1); const j1d=j1.getDay()
+      const start=new Date(yr,0,1-(j1d===0?6:j1d-1)); start.setHours(12,0,0,0)
+      const weeks=[]; let c=new Date(start)
+      const dec31=new Date(yr,11,31,12,0,0,0)
+      while(c<=dec31&&weeks.length<60){weeks.push(c.toISOString().split('T')[0]);c.setDate(c.getDate()+7)}
+      return weeks
+    }
+    return Array.from({length:52},(_,i)=>addWs(periodoCurrentWs,i-26))
+  }, [periodoMode, periodoCurrentWs])
+
+  const validCompetitions = useMemo(
+    () => events.filter(isPeriodizationCompetition),
+    [events]
+  )
+
+  const yearPhases = useMemo(
+    () => periodoWeeks.map(w => calcWeekPhase(w, validCompetitions)),
+    [periodoWeeks, validCompetitions]
+  )
+
+  const monthGroups = useMemo(() => {
+    const g={}
+    periodoWeeks.forEach((ws,idx)=>{
+      const d=new Date(ws+'T12:00:00')
+      const k=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`
+      if(!g[k]) g[k]={year:d.getFullYear(),month:d.getMonth(),key:k,weeks:[]}
+      g[k].weeks.push({ws,idx})
+    })
+    return Object.values(g).sort((a,b)=>a.key.localeCompare(b.key))
+  }, [periodoWeeks])
+
+  const weekMesoLabel = useMemo(() => {
+    const MESO={ACUMULACAO:'Construção',DESENVOLVIMENTO:'Construção',DESENVOLVIMENTO_LIGHT:'Preparação',
+      AFINACAO:'Preparação',PEAK:'Competição',MANUTENCAO_B2B:'Competição',DESCARGA:'Recuperação',DESCANSO:'Recuperação'}
+    const blocks=[]; let cur=null
+    yearPhases.forEach((ph,idx)=>{
+      const grp=MESO[ph.phase]||'Construção'
+      if(cur&&cur.grp===grp){cur.end=idx}else{if(cur)blocks.push(cur);cur={grp,start:idx,end:idx}}
+    })
+    if(cur)blocks.push(cur)
+    const map={}
+    blocks.forEach(b=>{map[b.start]=(b.end-b.start+1)>=2?b.grp:'Transição'})
+    return map
+  }, [yearPhases])
+
+  const mesoBlocks = useMemo(()=>{
+    const MESO={ACUMULACAO:'Construção',DESENVOLVIMENTO:'Construção',DESENVOLVIMENTO_LIGHT:'Preparação',
+      AFINACAO:'Preparação',PEAK:'Competição',MANUTENCAO_B2B:'Competição',DESCARGA:'Recuperação',DESCANSO:'Recuperação'}
+    const blocks=[]; let cur=null
+    yearPhases.forEach((ph,idx)=>{
+      const grp=MESO[ph.phase]||'Construção'
+      if(cur&&cur.grp===grp){cur.end=idx}else{if(cur)blocks.push(cur);cur={grp,start:idx,end:idx}}
+    })
+    if(cur)blocks.push(cur)
+    return blocks.map(b=>({...b,label:(b.end-b.start+1)>=2?b.grp:'Transição'}))
+  }, [yearPhases])
+
+  const weekMesoGrp = useMemo(()=>{
+    const map={}
+    mesoBlocks.forEach(b=>{for(let i=b.start;i<=b.end;i++)map[i]=b.label})
+    return map
+  }, [mesoBlocks])
 
   const email = (user?.email||'').toLowerCase()
   const DAYS_LONG  = lang==='pt' ? DAYS_PT : DAYS_EN
@@ -768,6 +886,16 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
       .catch(() => {})
   }, [])
 
+  useEffect(() => {
+    getWeekTypeOverrides()
+      .then(data => {
+        const ov = {}
+        ;(data || []).forEach(r => { if (r.week_type) ov[r.week_start] = r.week_type })
+        setWeekTypeOverrides(ov)
+      })
+      .catch(() => {})
+  }, [])
+
   const focusDateRef = useRef(null)
   useEffect(() => {
     if (!focusDate || focusDate === focusDateRef.current) return
@@ -786,6 +914,29 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
 
   const golfPlan = plans.find(p => p.week_start===weekStart && p.plan_type==='golf')
   const gymPlan  = plans.find(p => p.week_start===weekStart && p.plan_type==='gym')
+  const currentWeekTypeContext = useMemo(
+    () => applyWeekTypeContext(calcWeekPhase(weekStart, validCompetitions), weekTypeOverrides[weekStart] || null),
+    [weekStart, validCompetitions, weekTypeOverrides]
+  )
+  const last4WeekTypeRatio = useMemo(() => {
+    const weeks = Array.from({ length: 4 }, (_, i) => {
+      const d = new Date(weekStart + 'T12:00:00')
+      d.setDate(d.getDate() - (3 - i) * 7)
+      const ws = d.toISOString().split('T')[0]
+      return applyWeekTypeContext(calcWeekPhase(ws, validCompetitions), weekTypeOverrides[ws] || null)
+    })
+    const loadCount = weeks.filter(w => w.effectiveWeekType === WEEK_TYPES.LOAD).length
+    const deloadCount = weeks.filter(w => w.effectiveWeekType === WEEK_TYPES.DELOAD).length
+    const outOfCycle = weeks.length - loadCount - deloadCount
+    return {
+      weeks,
+      loadCount,
+      deloadCount,
+      outOfCycle,
+      ratioText: `${loadCount}:${deloadCount}`,
+      warn: deloadCount === 0 && loadCount >= 3,
+    }
+  }, [weekStart, validCompetitions, weekTypeOverrides])
 
   const dayHasComp = (dayIdx) => {
     const ws = new Date(weekStart+'T12:00:00')
@@ -1226,49 +1377,49 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
 
   // ── PERIODIZAÇÃO ────────────────────────────────────────────────────────────
   const PHASES = {
-    peak:             { id:'peak',               label:'PEAK',                   color:'#ef4444', bg:t.dangerBg,
+    peak:             { id:'peak',               label:PHASE_LABELS.PEAK,                   color:PHASE_COLORS.PEAK,                bg:t.dangerBg,
       situacao:'Vais competir esta semana.', regra:'Não mudes nada. Faz o que já sabes.', hoje:'Putting + wedges + confiança.',
       golfSugestao:['30–45 min putting: ritmo e distância','wedges 50–80m: controlo','poucos drivers: sensação','rotina pré-volta'],
       gymSugestao:['ativação leve: mobilidade + core','20–30 min máximo'],
       evitar:['treino pesado','mudanças técnicas','muitas bolas'],
     },
-    manutencao:       { id:'manutencao',         label:'MANUTENÇÃO B2B',         color:'#f97316', bg:t.subtleBg,
+    manutencao:       { id:'manutencao',         label:PHASE_LABELS.MANUTENCAO_B2B,         color:PHASE_COLORS.MANUTENCAO_B2B,      bg:t.subtleBg,
       situacao:'Entre competições próximas.', regra:'Recuperar e manter.', hoje:'Leve + sensações.',
       golfSugestao:['putting','wedges','poucos ferros','sessão curta'],
       gymSugestao:['recuperação ativa','mobilidade','ativação leve'],
       evitar:['carga física','técnica nova'],
     },
-    afinacao:         { id:'afinacao',           label:'AFINAÇÃO',               color:'#eab308', bg:t.subtleBg,
+    afinacao:         { id:'afinacao',           label:PHASE_LABELS.AFINACAO,               color:PHASE_COLORS.AFINACAO,            bg:t.subtleBg,
       situacao:'Competição nos próximos dias.', regra:'Afinar, não mudar.', hoje:'Jogo curto + ritmo.',
       golfSugestao:['putting competitivo: 1 bola, pressão','wedges: distâncias','ferro médio: controlo','rotina consistente'],
       gymSugestao:['leve a moderado','mobilidade','velocidade leve'],
       evitar:['técnica nova','sessões longas'],
     },
-    desenvolvimentoLight:{ id:'desenvolvimentoLight', label:'DESENVOLVIMENTO LIGHT', color:'#60a5fa', bg:t.subtleBg,
+    desenvolvimentoLight:{ id:'desenvolvimentoLight', label:PHASE_LABELS.DESENVOLVIMENTO_LIGHT, color:PHASE_COLORS.DESENVOLVIMENTO_LIGHT, bg:t.subtleBg,
       situacao:'Tens pouco tempo entre torneios.', regra:'Melhorar sem cansar.', hoje:'Técnica leve + controlo.',
       golfSugestao:['wedges + putting','drills simples: contacto / alinhamento','controlo de distâncias','sessões curtas'],
       gymSugestao:['moderado','força leve','mobilidade'],
       evitar:['carga alta','volume excessivo'],
     },
-    desenvolvimento:  { id:'desenvolvimento',    label:'DESENVOLVIMENTO',         color:'#3b82f6', bg:t.subtleBg,
+    desenvolvimento:  { id:'desenvolvimento',    label:PHASE_LABELS.DESENVOLVIMENTO,         color:PHASE_COLORS.DESENVOLVIMENTO,     bg:t.subtleBg,
       situacao:'Tens 2–3 semanas até competir.', regra:'Treinar para jogar melhor.', hoje:'Range com intenção + velocidade.',
       golfSugestao:['treino de velocidade: driver','ferro com alvo e objetivo','drills com feedback','sessões com foco claro'],
       gymSugestao:['força + potência','velocidade','sessões completas'],
       evitar:['bater bolas sem objetivo'],
     },
-    acumulacao:       { id:'acumulacao',         label:'ACUMULAÇÃO',             color:'#22c55e', bg:t.successBg,
+    acumulacao:       { id:'acumulacao',         label:PHASE_LABELS.ACUMULACAO,             color:PHASE_COLORS.ACUMULACAO,          bg:t.successBg,
       situacao:'Longe de competições.', regra:'Construir base.', hoje:'Volume + técnica.',
       golfSugestao:['muitas bolas no range','técnica detalhada','repetição controlada','putting básico consistente'],
       gymSugestao:['força base','volume mais alto','progressão de carga'],
       evitar:['foco em score','pouca repetição'],
     },
-    descarga:         { id:'descarga',           label:'DESCARGA',               color:'#9ca3af', bg:t.subtleBg,
+    descarga:         { id:'descarga',           label:PHASE_LABELS.DESCARGA,               color:PHASE_COLORS.DESCARGA,            bg:t.subtleBg,
       situacao:'Vens de carga alta ou estás cansada.', regra:'Reduzir carga.', hoje:'Leve + recuperar.',
       golfSugestao:['putting leve','wedges simples','poucos swings','ritmo sem pressão'],
       gymSugestao:['mobilidade','recuperação','muito leve'],
       evitar:['intensidade alta','volume'],
     },
-    descanso:         { id:'descanso',           label:'DESCANSO',               color:'#6b7280', bg:t.subtleBg,
+    descanso:         { id:'descanso',           label:PHASE_LABELS.DESCANSO,               color:PHASE_COLORS.DESCANSO,            bg:t.subtleBg,
       situacao:'Estás cansada física ou mentalmente.', regra:'Parar para recuperar.', hoje:'Descansar.',
       golfSugestao:['opcional: putting leve','ou zero treino'],
       gymSugestao:['descanso total'],
@@ -1276,62 +1427,6 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
     },
   }
 
-  const computeAllPhases = (weekStarts, evts) => {
-    const comps = evts.filter(isCompetition)
-    const msDay = 86400000
-    const wsMs = (ws) => new Date(ws+'T12:00:00').getTime()
-    const weekHasComp = (ws) => { const s=wsMs(ws),e=s+6*msDay; return comps.some(c=>{ const cs=new Date(c.start_date+'T12:00:00').getTime(),ce=c.end_date?new Date(c.end_date+'T12:00:00').getTime():cs; return cs<=e&&ce>=s }) }
-    const daysToNext = (ws) => { const wsM=wsMs(ws); let mn=null; comps.forEach(c=>{ const cs=new Date(c.start_date+'T12:00:00').getTime(); if(cs>wsM&&(mn===null||cs<mn))mn=cs }); return mn===null?999:Math.round((mn-wsM)/msDay) }
-    const daysSinceLast = (ws) => { const wsM=wsMs(ws); let lat=null; comps.forEach(c=>{ const ce=c.end_date?new Date(c.end_date+'T12:00:00').getTime():new Date(c.start_date+'T12:00:00').getTime(); if(ce<wsM&&(lat===null||ce>lat))lat=ce }); return lat===null?999:Math.round((wsM-lat)/msDay) }
-    const sorted=[...weekStarts].sort()
-    const phases={}, alerts={}
-    sorted.forEach((ws,idx)=>{
-      const wa=[]
-      // Yellow alerts
-      if(idx>=3){
-        const p4=sorted.slice(idx-3,idx+1)
-        if(p4.filter(w=>weekHasComp(w)).length>=3) wa.push({level:'yellow',icon:'⚠️',text:'3 competições nas últimas 4 semanas — considera uma semana de descarga'})
-        if(p4.every(w=>phases[w]&&!['descarga','descanso'].includes(phases[w]))) wa.push({level:'yellow',icon:'⚠️',text:'Sem semana de descarga há 4+ semanas — considera reduzir carga'})
-      }
-      // Red alerts
-      if(idx>=5){ const p6=sorted.slice(idx-5,idx+1); if(p6.every(w=>phases[w]&&!['descarga','descanso'].includes(phases[w]))) wa.push({level:'red',icon:'🔴',text:'6 semanas sem descarga — risco de fadiga acumulada'}) }
-      if(idx>=4){ if(sorted.slice(idx-4,idx+1).filter(w=>weekHasComp(w)).length>=4) wa.push({level:'red',icon:'🔴',text:'4 competições em 5 semanas — reduzir carga urgente'}) }
-      // B2B alert
-      const nextWs=sorted[idx+1]
-      if(weekHasComp(ws)&&nextWs&&weekHasComp(nextWs)) wa.push({level:'orange',icon:'🔴',text:'B2B — competições em semanas consecutivas'})
-      alerts[ws]=wa
-      const hasRed=wa.some(a=>a.level==='red'), hasYellow=wa.some(a=>a.level==='yellow')
-      const thisC=weekHasComp(ws), dtN=daysToNext(ws), dsL=daysSinceLast(ws)
-      let phId
-      if(hasRed) phId='descanso'
-      else if(hasYellow) phId='descarga'
-      else if(thisC) phId='peak'
-      else if(dsL<=7&&dtN>=1&&dtN<=7) phId='manutencao'
-      else if(dtN>=1&&dtN<=7) phId='afinacao'
-      else if(dtN<=14) phId='desenvolvimentoLight'
-      else if(dtN<=21) phId='desenvolvimento'
-      else phId='acumulacao'
-      phases[ws]=phId
-    })
-    return {phases,alerts}
-  }
-
-  const getPhaseSummary = (ws, evts, phId) => {
-    const ph = PHASES[phId] || PHASES.acumulacao
-    const comps = evts.filter(isCompetition)
-    const msDay = 86400000
-    const wsM = new Date(ws+'T12:00:00').getTime()
-    let nextComp=null, minCs=null
-    comps.forEach(c=>{ const cs=new Date(c.start_date+'T12:00:00').getTime(); if(cs>wsM&&(minCs===null||cs<minCs)){minCs=cs;nextComp=c} })
-    let prevComp=null, maxCe=null
-    comps.forEach(c=>{ const ce=c.end_date?new Date(c.end_date+'T12:00:00').getTime():new Date(c.start_date+'T12:00:00').getTime(); if(ce<wsM&&(maxCe===null||ce>maxCe)){maxCe=ce;prevComp=c} })
-    return {
-      phase:phId, reason:ph.situacao,
-      nextCompetition:nextComp?.title||null, daysToNextCompetition:minCs?Math.round((minCs-wsM)/msDay):null,
-      previousCompetition:prevComp?.title||null, daysSincePreviousCompetition:maxCe?Math.round((wsM-maxCe)/msDay):null,
-      recommendedToday:ph.hoje, golfSuggestion:ph.golfSugestao, gymSuggestion:ph.gymSugestao, avoid:ph.evitar,
-    }
-  }
 
   const applyWeeklyTemplate = (tpl) => {
     const newDayPlans={}, newSessionTypes={}
@@ -1572,6 +1667,21 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
     await deletePeriodizationOverride(ws)
     setPhaseOverrides(prev => { const next = { ...prev }; delete next[ws]; return next })
     setEditingPhaseWs(null)
+  }
+
+  const saveWeekTypeOverride = async (ws, type) => {
+    setSavingWeekType(true)
+    try {
+      if (type) {
+        await setWeekType(ws, type, email)
+        setWeekTypeOverrides(prev => ({ ...prev, [ws]: type }))
+      } else {
+        await clearWeekType(ws, email)
+        setWeekTypeOverrides(prev => { const next = { ...prev }; delete next[ws]; return next })
+      }
+    } finally {
+      setSavingWeekType(false)
+    }
   }
   const resetWizard = () => {
     setWizard(false)
@@ -2224,6 +2334,29 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
             )}
           </div>
 
+          <div style={{...card,marginBottom:'16px',padding:'14px 16px'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'12px',flexWrap:'wrap'}}>
+              <div>
+                <div style={{fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginBottom:'4px'}}>TIPO DE SEMANA</div>
+                <div style={{fontSize:'12px',color:t.textMuted}}>
+                  Fase: <b style={{color:t.text}}>{currentWeekTypeContext.phase}</b> · Tipo: <b style={{color:getWeekTypeTheme(t,currentWeekTypeContext.effectiveWeekType).subtitle}}>{currentWeekTypeContext.weekTypeLabel}</b>
+                  {currentWeekTypeContext.weekTypeOverride ? ' (definido pelo coach)' : ' (sugerido)'}
+                </div>
+              </div>
+              <select
+                value={currentWeekTypeContext.weekTypeOverride || ''}
+                disabled={savingWeekType}
+                onChange={e=>saveWeekTypeOverride(weekStart, e.target.value || null)}
+                style={{...inp,maxWidth:'220px'}}
+              >
+                <option value="">Auto ({WEEK_TYPE_LABELS[currentWeekTypeContext.suggestedWeekType]})</option>
+                {WEEK_TYPE_ORDER.map(type => (
+                  <option key={type} value={type}>{WEEK_TYPE_LABELS[type]}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
           {/* Templates guardados */}
           {templates.length > 0 && (
             <div style={{...card,marginBottom:'16px',padding:'14px 16px'}}>
@@ -2268,6 +2401,38 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
           </div>
 
           {/* ── COACH PANELS split by type ── */}
+          <div style={{...card,marginBottom:'16px',borderLeft:`4px solid ${last4WeekTypeRatio.warn ? '#f59e0b' : getWeekTypeTheme(t,WEEK_TYPES.LOAD).subtitle}`}}>
+            <div style={{display:'flex',justifyContent:'space-between',gap:'12px',alignItems:'flex-start',flexWrap:'wrap'}}>
+              <div>
+                <div style={{fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:600,marginBottom:'6px'}}>RATIO DAS ÚLTIMAS 4 SEMANAS</div>
+                <div style={{fontSize:'13px',fontWeight:800,color:t.text}}>
+                  Ratio últimas 4 semanas: {last4WeekTypeRatio.ratioText}
+                </div>
+                {last4WeekTypeRatio.outOfCycle > 0 && (
+                  <div style={{fontSize:'11px',color:t.textMuted,marginTop:'3px'}}>
+                    ratio carga/descarga: {last4WeekTypeRatio.ratioText} ({last4WeekTypeRatio.outOfCycle} semana{last4WeekTypeRatio.outOfCycle!==1?'s':''} fora do ciclo)
+                  </div>
+                )}
+              </div>
+              <div style={{display:'flex',gap:'6px',alignItems:'center'}}>
+                {last4WeekTypeRatio.weeks.map((w, i) => {
+                  const wt = getWeekTypeTheme(t, w.effectiveWeekType)
+                  const char = w.effectiveWeekType === WEEK_TYPES.DELOAD ? '○' : '●'
+                  return (
+                    <span key={i} title={w.weekTypeLabel} style={{fontSize:'18px',lineHeight:1,color:wt.subtitle}}>
+                      {char}
+                    </span>
+                  )
+                })}
+              </div>
+            </div>
+            {last4WeekTypeRatio.warn && (
+              <div style={{marginTop:'10px',background:'#f59e0b18',border:'1px solid #f59e0b',borderRadius:'8px',padding:'8px 12px',fontSize:'11px',color:'#b45309',fontWeight:700}}>
+                4 semanas sem descarga — considerar agendar deload.
+              </div>
+            )}
+          </div>
+
           {/* Golf coach panel */}
           <div style={{...card,marginBottom:'12px',borderLeft:`4px solid ${noGolfNext3?'#ef4444':golfColor}`}}>
             <div style={{fontSize:'9px',letterSpacing:'2px',color:golfColor,fontWeight:600,marginBottom:'10px'}}>COACH GOLF</div>
@@ -2785,32 +2950,47 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
       {/* ── PERIODIZAÇÃO ── */}
       {subTab==='periodizacao' && (() => {
         const isCoach = COACH_ROLES.includes(userRole)
-        const today = new Date()
-        const todayStr = today.toISOString().split('T')[0]
-        const currentWsDate = new Date(todayStr+'T12:00:00')
-        const dow = currentWsDate.getDay()
-        currentWsDate.setDate(currentWsDate.getDate() - (dow===0?6:dow-1))
-        const currentWs = currentWsDate.toISOString().split('T')[0]
-        const addWeeks = (ws, n) => { const d=new Date(ws+'T12:00:00'); d.setDate(d.getDate()+n*7); return d.toISOString().split('T')[0] }
-        const allWeeks = Array.from({length:24}, (_,i) => addWeeks(currentWs, i-4))
-        const {phases: autoPhases, alerts: autoAlerts} = computeAllPhases(allWeeks, events)
-        const resolvedPhases = {}
-        allWeeks.forEach(ws => { resolvedPhases[ws] = phaseOverrides[ws] || autoPhases[ws] || 'acumulacao' })
-        const mesociclos = []
-        for (let i=0; i<allWeeks.length; i+=4) mesociclos.push(allWeeks.slice(i, i+4))
-        const comps = events.filter(isCompetition)
-        const getWeekComps = (ws) => {
-          const wsMs = new Date(ws+'T12:00:00').getTime(), weMs = wsMs+6*86400000
-          return comps.filter(c=>{ const cs=new Date(c.start_date+'T12:00:00').getTime(),ce=c.end_date?new Date(c.end_date+'T12:00:00').getTime():cs; return cs<=weMs&&ce>=wsMs })
+        const todayStr = new Date().toISOString().split('T')[0]
+        const currentWs = periodoCurrentWs
+        const toPhId = {
+          PEAK:'peak',MANUTENCAO_B2B:'manutencao',AFINACAO:'afinacao',
+          DESENVOLVIMENTO_LIGHT:'desenvolvimentoLight',DESENVOLVIMENTO:'desenvolvimento',
+          ACUMULACAO:'acumulacao',DESCARGA:'descarga',DESCANSO:'descanso',
         }
-        // Deduplicated global alerts
-        const seen = new Set()
-        const globalAlerts = []
-        allWeeks.forEach(ws=>(autoAlerts[ws]||[]).forEach(a=>{ if(!seen.has(a.text)){seen.add(a.text);globalAlerts.push(a)} }))
-
-        const currentPhId = resolvedPhases[currentWs]
-        const currentPh = PHASES[currentPhId] || PHASES.acumulacao
-        const currentSummary = getPhaseSummary(currentWs, events, currentPhId)
+        const getWeekComps = (ws) => {
+          const wsMs=new Date(ws+'T12:00:00').getTime(), weMs=wsMs+6*86400000
+          return validCompetitions.filter(c=>{ const cs=new Date(c.start_date+'T12:00:00').getTime(),ce=c.end_date?new Date(c.end_date+'T12:00:00').getTime():cs; return cs<=weMs&&ce>=wsMs })
+        }
+        const hasFutureComps = validCompetitions.some(c=>new Date(c.start_date+'T12:00:00')>=new Date(todayStr+'T12:00:00'))
+        const ignoredCount = events.filter(e=>isCompetition(e)&&!isPeriodizationCompetition(e)).length
+        return <PeriodizationDashboard events={events} trainingPlans={trainingPlans} />
+        const PT_MONTHS=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
+        const PT_MONTHS_SHORT=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
+        const MESO_COLORS={'Construção':'#22c55e','Preparação':'#f59e0b','Competição':'#ef4444','Recuperação':'#6b7280','Transição':'#94a3b8'}
+        const MESO_SHORT={'Construção':'CONST','Preparação':'PREP','Competição':'COMP','Recuperação':'RECUP','Transição':'TRANS'}
+        const vw = typeof window!=='undefined'?window.innerWidth:640
+        const sq = vw<480 ? 32 : vw<768 ? 40 : 48
+        const barH = vw<480 ? 18 : 22
+        const gridCols = vw<640 ? '1fr' : vw<1100 ? 'repeat(2,1fr)' : 'repeat(3,1fr)'
+        const fmtWsLabel=(ws,addDays=0)=>{const d=new Date(ws+'T12:00:00');d.setDate(d.getDate()+addDays);return d.toLocaleDateString('pt-PT',{day:'2-digit',month:'short'})}
+        // Load/intensity visual scale (local presentation only — does not alter calcWeekPhase)
+        const LOAD_LEVELS=[
+          {color:'#e2e8f0',label:'Muito baixa'},  // 0 DESCANSO
+          {color:'#c7d2fe',label:'Baixa'},         // 1 DESCARGA
+          {color:'#a5b4fc',label:'Moderada'},      // 2 ACUMULACAO
+          {color:'#818cf8',label:'Moderada+'},     // 3 DESENVOLVIMENTO_LIGHT
+          {color:'#6366f1',label:'Alta'},          // 4 DESENVOLVIMENTO
+          {color:'#4f46e5',label:'Alta+'},         // 5 AFINACAO
+          {color:'#4338ca',label:'Muito alta'},    // 6 MANUTENCAO_B2B
+          {color:'#3730a3',label:'Peak'},          // 7 PEAK
+        ]
+        const PHASE_LOAD={'DESCANSO':0,'DESCARGA':1,'ACUMULACAO':2,'DESENVOLVIMENTO_LIGHT':3,'DESENVOLVIMENTO':4,'AFINACAO':5,'MANUTENCAO_B2B':6,'PEAK':7}
+        const PHASEID_LOAD={'descanso':0,'descarga':1,'acumulacao':2,'desenvolvimentoLight':3,'desenvolvimento':4,'afinacao':5,'manutencao':6,'peak':7}
+        const getLoadVis=(phase)=>LOAD_LEVELS[PHASE_LOAD[phase]??2]
+        const getLoadVisByPhId=(phId)=>LOAD_LEVELS[PHASEID_LOAD[phId]??2]
+        const loadColor=(phData,overrideId)=>hasFutureComps?(overrideId?getLoadVisByPhId(overrideId).color:getLoadVis(phData.phase).color):'#d1d5db'
+        const getWeekTypeCtx = (ws, phData) => applyWeekTypeContext(phData, weekTypeOverrides[ws] || null)
+        const weekTypeColor = (ws, phData) => hasFutureComps ? getWeekTypeTheme(t, getWeekTypeCtx(ws, phData).effectiveWeekType).bg : '#d1d5db'
 
         return (
           <div>
@@ -2847,210 +3027,261 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
                       <div style={{fontSize:'9px',letterSpacing:'2px',color:t.textMuted,fontWeight:700,marginBottom:'8px'}}>ALERTAS AUTOMÁTICOS</div>
                       <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
                         <div style={{padding:'8px',borderRadius:'8px',background:t.subtleBg,border:'1px solid #fcd34d',fontSize:'10px',color:t.textMuted}}>
-                          <div style={{fontWeight:700,marginBottom:'3px'}}>⚠️ Alerta amarelo (recomenda DESCARGA)</div>
+                          <div style={{fontWeight:700,marginBottom:'3px'}}>⚠️ Alerta amarelo</div>
                           <ul style={{margin:0,paddingLeft:'16px',lineHeight:1.8}}>
                             <li>3 competições nas últimas 4 semanas</li>
-                            <li>4 semanas consecutivas sem descarga</li>
+                            <li>3+ semanas consecutivas sem descarga</li>
+                            <li>Fadiga elevada reportada</li>
+                            <li>Saturação reportada</li>
                           </ul>
                         </div>
                         <div style={{padding:'8px',borderRadius:'8px',background:t.dangerBg,border:`1px solid ${t.danger}`,fontSize:'10px',color:t.danger}}>
-                          <div style={{fontWeight:700,marginBottom:'3px'}}>🔴 Alerta vermelho (recomenda DESCANSO)</div>
+                          <div style={{fontWeight:700,marginBottom:'3px'}}>🔴 Alerta vermelho</div>
                           <ul style={{margin:0,paddingLeft:'16px',lineHeight:1.8}}>
-                            <li>6 semanas consecutivas sem descarga/descanso</li>
+                            <li>5+ semanas consecutivas sem descarga/descanso</li>
                             <li>4 competições em 5 semanas</li>
-                            <li>Fadiga ≥8/10 (ajuste manual pelo coach)</li>
-                            <li>Dor persistente (ajuste manual pelo coach)</li>
+                            <li>Fadiga muito alta reportada</li>
+                            <li>Dor persistente reportada</li>
+                            <li>Quebra de performance detectada</li>
                           </ul>
                         </div>
                       </div>
                     </div>
                     <div style={{borderTop:`1px solid ${t.border}`,paddingTop:'10px',fontSize:'10px',color:t.textMuted,fontStyle:'italic'}}>
-                      Nota: DESCANSO e DESCARGA por fadiga ou dor requerem ajuste manual pelo coach. Os alertas automáticos baseiam-se apenas no calendário de competições.
+                      Nota: Os alertas são independentes da fase — uma semana de competição pode ter alerta vermelho. Só o coach pode forçar DESCARGA ou DESCANSO via override manual.
                     </div>
                   </div>
                 </div>
               </div>
             )}
 
-            {/* Current week card */}
-            <div style={{...card,marginBottom:'16px',padding:'16px',background:currentPh.bg,border:`2px solid ${currentPh.color}55`}}>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:'8px'}}>
-                <div style={{display:'flex',flexDirection:'column',gap:'5px'}}>
-                  <div style={{fontSize:'8px',letterSpacing:'2px',color:currentPh.color,fontWeight:700}}>SEMANA ACTUAL</div>
-                  <div style={{padding:'3px 10px',borderRadius:'20px',fontSize:'10px',fontWeight:700,color:t.navTextActive,background:currentPh.color,alignSelf:'flex-start'}}>{currentPh.label}</div>
-                  <div style={{fontSize:'12px',color:t.text,fontWeight:600}}>{currentPh.situacao}</div>
-                  <div style={{fontSize:'11px',color:t.textMuted}}>{currentPh.regra}</div>
-                  <div style={{fontSize:'11px',color:currentPh.color,fontWeight:600}}>Hoje: {currentPh.hoje}</div>
-                </div>
-                <button onClick={()=>setShowCriterios(true)}
-                  style={{padding:'5px 12px',borderRadius:'20px',border:`1px solid ${t.border}`,background:'transparent',color:t.textMuted,cursor:'pointer',fontSize:'10px',fontFamily:F,fontWeight:500,whiteSpace:'nowrap'}}>
-                  Ver critérios
-                </button>
-              </div>
-              {currentSummary.daysToNextCompetition !== null && (
-                <div style={{marginTop:'10px',fontSize:'10px',color:t.textMuted,display:'flex',gap:'12px',flexWrap:'wrap',borderTop:`1px solid ${currentPh.color}33`,paddingTop:'8px'}}>
-                  <span>Próxima: <b style={{color:t.text}}>{currentSummary.nextCompetition}</b></span>
-                  <span>em <b style={{color:currentPh.color}}>{currentSummary.daysToNextCompetition} dias</b></span>
-                </div>
-              )}
-            </div>
-
-            {/* Global alerts */}
-            {globalAlerts.length>0 && (
-              <div style={{marginBottom:'16px',display:'flex',flexDirection:'column',gap:'6px'}}>
-                {globalAlerts.map((a,i)=>(
-                  <div key={i} style={{display:'flex',alignItems:'flex-start',gap:'8px',padding:'9px 14px',borderRadius:'10px',
-                    background:a.level==='red'?t.dangerBg:t.subtleBg,
-                    border:`1px solid ${a.level==='red'?t.danger:a.level==='orange'?'#fdba74':'#fcd34d'}`,
-                    fontSize:'11px',fontWeight:500,color:a.level==='red'?t.danger:t.textMuted}}>
-                    <span style={{flexShrink:0}}>{a.icon}</span><span>{a.text}</span>
-                  </div>
+            {/* ── Toggle: Rolling 12m / Ano civil ── */}
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:'8px',marginBottom:'20px'}}>
+              <div style={{display:'flex',gap:'3px',padding:'3px',background:t.subtleBg,borderRadius:'8px'}}>
+                {[
+                  {key:'rolling12',label:'Rolling 12 meses'},
+                  {key:'civil',label:`Ano ${new Date().getFullYear()}`},
+                ].map(opt=>(
+                  <button key={opt.key} onClick={()=>{setPeriodoMode(opt.key);setExpandedWeekWs(null);setExpandedDayDate(null)}}
+                    style={{padding:'4px 12px',borderRadius:'6px',border:'none',cursor:'pointer',fontFamily:F,fontSize:'10px',
+                      background:periodoMode===opt.key?t.surface:'transparent',
+                      color:periodoMode===opt.key?'#7e22ce':t.textMuted,
+                      fontWeight:periodoMode===opt.key?700:500,
+                      boxShadow:periodoMode===opt.key?`0 1px 3px rgba(0,0,0,0.12)`:'none',
+                      transition:'all 0.15s'}}>
+                    {opt.label}
+                  </button>
                 ))}
               </div>
-            )}
-
-            {/* Phase guide — compact accordion */}
-            <div style={{...card,marginBottom:'20px',padding:'14px 16px'}}>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px'}}>
-                <div style={{fontSize:'9px',letterSpacing:'2px',color:'#7e22ce',fontWeight:700}}>GUIA DE FASES</div>
-                <div style={{fontSize:'10px',color:t.textMuted}}>Clica para ver sugestões</div>
-              </div>
-              <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
-                {Object.values(PHASES).map(ph=>{
-                  const isExp = expandedPhaseKey===ph.id
-                  return (
-                    <div key={ph.id} style={{borderRadius:'10px',background:ph.bg,border:`1px solid ${isExp?ph.color:ph.color+'44'}`,overflow:'hidden'}}>
-                      <button onClick={()=>setExpandedPhaseKey(isExp?null:ph.id)}
-                        style={{width:'100%',display:'flex',alignItems:'center',gap:'10px',padding:'10px 12px',background:'transparent',border:'none',cursor:'pointer',fontFamily:F,textAlign:'left'}}>
-                        <div style={{padding:'2px 8px',borderRadius:'4px',fontSize:'8px',fontWeight:700,letterSpacing:'1px',color:t.navTextActive,background:ph.color,whiteSpace:'nowrap',flexShrink:0}}>{ph.label}</div>
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontSize:'11px',fontWeight:600,color:t.text,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ph.situacao}</div>
-                          <div style={{fontSize:'10px',color:t.textMuted,marginTop:'1px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ph.regra}</div>
-                        </div>
-                        <div style={{fontSize:'10px',color:ph.color,fontWeight:600,flexShrink:0,marginRight:'4px',whiteSpace:'nowrap'}}>Hoje: {ph.hoje}</div>
-                        <div style={{fontSize:'11px',color:ph.color,flexShrink:0}}>{isExp?'▲':'▼'}</div>
-                      </button>
-                      {isExp && (
-                        <div style={{padding:'0 12px 12px',display:'flex',flexDirection:'column',gap:'8px'}}>
-                          <div style={{height:'1px',background:ph.color+'33',marginBottom:'4px'}} />
-                          <div>
-                            <div style={{fontSize:'8px',letterSpacing:'1.5px',color:ph.color,fontWeight:700,marginBottom:'4px'}}>SUGESTÃO GOLF (RANGE / JOGO CURTO / PUTTING)</div>
-                            {ph.golfSugestao.map((sg,i)=><div key={i} style={{fontSize:'11px',color:t.text,paddingLeft:'8px',lineHeight:1.8}}>· {sg}</div>)}
-                          </div>
-                          <div>
-                            <div style={{fontSize:'8px',letterSpacing:'1.5px',color:ph.color,fontWeight:700,marginBottom:'4px'}}>SUGESTÃO GINÁSIO</div>
-                            {ph.gymSugestao.map((sg,i)=><div key={i} style={{fontSize:'11px',color:t.text,paddingLeft:'8px',lineHeight:1.8}}>· {sg}</div>)}
-                          </div>
-                          <div>
-                            <div style={{fontSize:'8px',letterSpacing:'1.5px',color:'#ef4444',fontWeight:700,marginBottom:'4px'}}>EVITAR</div>
-                            {ph.evitar.map((sg,i)=><div key={i} style={{fontSize:'11px',color:t.danger,paddingLeft:'8px',lineHeight:1.8}}>· {sg}</div>)}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
             </div>
 
-            {/* Mesociclos */}
-            {mesociclos.map((block, mIdx) => {
-              const blockLabel = `Mesociclo ${mIdx+1}`
-              const blockStart = block[0], blockEnd = block[block.length-1]
-              const blockHasCurrent = block.includes(currentWs)
-              const blockStartDate = new Date(blockStart+'T12:00:00').toLocaleDateString('pt-PT',{day:'2-digit',month:'short'})
-              const blockEndDate = new Date(blockEnd+'T12:00:00'); blockEndDate.setDate(blockEndDate.getDate()+6)
-              const blockEndStr = blockEndDate.toLocaleDateString('pt-PT',{day:'2-digit',month:'short'})
+            {/* ── Ignored competitions notice ── */}
+            {ignoredCount>0&&(
+              <div style={{display:'flex',alignItems:'center',gap:'8px',padding:'8px 14px',borderRadius:'8px',
+                background:t.subtleBg,border:`1px solid ${t.border}`,marginBottom:'12px',fontSize:'10px',color:t.textMuted}}>
+                <span style={{flexShrink:0}}>ℹ️</span>
+                <span>{ignoredCount} competição{ignoredCount!==1?'ões':''} ignorada{ignoredCount!==1?'s':''} na periodização (estado não válido: opcional, cancelada ou sem estado definido)</span>
+              </div>
+            )}
+
+            {/* ── Empty state: zero valid competitions ── */}
+            {validCompetitions.length===0&&(
+              <div style={{...card,padding:'32px 24px',textAlign:'center',marginBottom:'16px'}}>
+                <div style={{fontSize:'28px',marginBottom:'10px'}}>📅</div>
+                <div style={{fontSize:'14px',fontWeight:700,color:t.text,marginBottom:'6px'}}>Sem planeamento confirmado</div>
+                <div style={{fontSize:'12px',color:t.textMuted,lineHeight:1.6,marginBottom:'14px'}}>
+                  Adiciona competições com estado "Confirmado" no Calendário para activar a periodização.
+                </div>
+              </div>
+            )}
+
+            {/* ── A) Próximos 30 dias ── */}
+            {hasFutureComps&&(()=>{
+              const start = new Date(todayStr+'T12:00:00')
+              const next30Days = Array.from({length:30},(_,i)=>{
+                const d=new Date(start); d.setDate(start.getDate()+i)
+                const ds=d.toISOString().split('T')[0]
+                return getDayPeriodizationContext({date:ds,events})
+              })
               return (
-                <div key={mIdx} style={{marginBottom:'20px'}}>
-                  <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'10px'}}>
-                    <div style={{fontSize:'9px',letterSpacing:'2px',fontWeight:700,color:blockHasCurrent?'#7e22ce':t.textMuted}}>{blockLabel.toUpperCase()}</div>
-                    <div style={{fontSize:'10px',color:t.textMuted}}>{blockStartDate} – {blockEndStr}</div>
-                    {blockHasCurrent && <div style={{padding:'2px 8px',borderRadius:'10px',background:t.subtleBg,color:'#7e22ce',fontSize:'9px',fontWeight:700}}>ACTUAL</div>}
+                <div style={{...card,padding:'18px 16px',marginBottom:'20px'}}>
+                  <div style={{fontSize:'9px',letterSpacing:'2px',color:'#7e22ce',fontWeight:700,marginBottom:'12px'}}>
+                    PRÓXIMOS 30 DIAS
                   </div>
-                  <div className="train-perio-grid">
-                    {block.map(ws => {
-                      const phId = resolvedPhases[ws]
-                      const ph = PHASES[phId] || PHASES.acumulacao
-                      const isManual = !!phaseOverrides[ws]
-                      const isCurrent = ws===currentWs, isPast = ws<currentWs
-                      const weekComps = getWeekComps(ws)
-                      const weekAl = autoAlerts[ws]||[]
-                      const isEditing = editingPhaseWs===ws
-                      const wsDate = new Date(ws+'T12:00:00'), weDate = new Date(ws+'T12:00:00')
-                      weDate.setDate(weDate.getDate()+6)
-                      const wsLabel = wsDate.toLocaleDateString('pt-PT',{day:'2-digit',month:'short'})
-                      const weLabel = weDate.toLocaleDateString('pt-PT',{day:'2-digit',month:'short'})
-                      const daysToWs = Math.round((new Date(ws+'T12:00:00').getTime()-new Date(todayStr+'T12:00:00').getTime())/86400000)
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(30,1fr)',gap:'2px',height:vw<480?'34px':'44px',marginBottom:'7px'}}>
+                    {next30Days.map((ctx,di)=>{
+                      const vis=getDayLoadVisual(ctx)
+                      const isToday=ctx.date===todayStr
+                      const isSelected=expandedDayDate===ctx.date
+                      const hasDayMarker=['competition','practice_round','recovery','rest','travel','medical'].includes(ctx.dayType)
+                      const mark=ctx.dayType==='competition'?'C':ctx.dayType==='practice_round'?'P':ctx.dayType==='recovery'?'R':ctx.dayType==='rest'?'•':ctx.dayType==='medical'?'!':ctx.dayType==='travel'?'T':''
+                      const d=new Date(ctx.date+'T12:00:00')
+                      const ws=(()=>{const x=new Date(ctx.date+'T12:00:00');const dow=x.getDay();x.setDate(x.getDate()-(dow===0?6:dow-1));return x.toISOString().split('T')[0]})()
+                      const phData=yearPhases[periodoWeeks.indexOf(ws)]
+                      const hasAlert=phData?.alerts?.length>0
+                      const tipLines=[
+                        d.toLocaleDateString('pt-PT',{weekday:'short',day:'2-digit',month:'short'}),
+                        `O que faço hoje? ${ctx.actionSummary}`,
+                        `Carga: ${ctx.loadSummary}`,
+                        `Porque: ${ctx.why}`,
+                        `Fase: ${ctx.phaseSummary}`,
+                        ctx.nextCompetition?.title || '',
+                      ].filter(Boolean)
                       return (
-                        <div key={ws} style={{background:isPast?t.surface:ph.bg,border:`1px solid ${isCurrent?ph.color:isPast?t.border:ph.color+'55'}`,borderRadius:'10px',padding:'12px',opacity:isPast?0.7:1,position:'relative'}}>
-                          {/* Week header */}
-                          <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'8px'}}>
-                            <div>
-                              <div style={{fontSize:'9px',color:t.textMuted,fontWeight:600,letterSpacing:'1px'}}>{wsLabel} – {weLabel}</div>
-                              {isCurrent && <div style={{fontSize:'8px',color:ph.color,fontWeight:700,marginTop:'1px'}}>SEMANA ACTUAL</div>}
-                              {!isCurrent&&!isPast&&daysToWs>0 && <div style={{fontSize:'8px',color:t.textMuted}}>em {daysToWs}d</div>}
-                              {isPast && <div style={{fontSize:'8px',color:t.textMuted}}>passado</div>}
-                            </div>
-                            <button onClick={()=>navigateToWeek(ws)} style={{background:'transparent',border:`1px solid ${ph.color}66`,borderRadius:'6px',color:ph.color,padding:'3px 8px',cursor:'pointer',fontSize:'10px',fontFamily:F,fontWeight:600}}>Ir →</button>
+                        <button key={ctx.date} title={tipLines.join('\n')}
+                          onClick={()=>{setExpandedDayDate(isSelected?null:ctx.date);setExpandedWeekWs(null)}}
+                          style={{position:'relative',background:vis.bg,color:vis.text,border:`1px solid ${isSelected?'#7e22ce':vis.border}`,
+                            borderStyle:vis.pattern==='dashed'?'dashed':'solid',borderRadius:'5px',cursor:'pointer',fontFamily:F,
+                            fontSize:'9px',fontWeight:900,padding:0,minWidth:0,boxShadow:isToday?'0 0 0 2px rgba(126,34,206,0.35)':'none'}}>
+                          {hasDayMarker&&<span style={{display:'inline-block',width:'6px',height:'6px',borderRadius:'50%',background:vis.text,opacity:0.9}} />}
+                          {hasAlert&&<span style={{position:'absolute',top:'3px',right:'3px',width:'5px',height:'5px',borderRadius:'50%',background:'#ef4444'}} />}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(30,1fr)',gap:'2px'}}>
+                    {next30Days.map((ctx,di)=>{
+                      const d=new Date(ctx.date+'T12:00:00')
+                      const showLabel=di===0||d.getDate()===1||ctx.dayType==='competition'
+                      return (
+                        <div key={ctx.date} style={{fontSize:'7px',color:ctx.date===todayStr?'#7e22ce':t.textMuted,fontWeight:ctx.date===todayStr?800:500,textAlign:'center',minWidth:0,whiteSpace:'nowrap',overflow:'hidden'}}>
+                          {ctx.date===todayStr?'HOJE':showLabel?String(d.getDate()).padStart(2,'0'):''}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })()}
+
+            {false&&hasFutureComps&&(()=>{
+              const todayMs=new Date(todayStr+'T12:00:00').getTime()
+              const in30Ms=todayMs+30*86400000
+              const next30=periodoWeeks.map((ws,idx)=>({ws,idx})).filter(({ws})=>{
+                const wsMs=new Date(ws+'T12:00:00').getTime()
+                return (wsMs+6*86400000)>=todayMs && wsMs<=in30Ms
+              })
+              if(!next30.length)return null
+              const n30=next30.length
+              const pSegs30=[];let c30=null
+              next30.forEach(({ws,idx})=>{
+                const phData=yearPhases[idx]
+                const color=weekTypeColor(ws, phData)
+                if(c30&&c30.color===color){c30.count++}
+                else{if(c30)pSegs30.push(c30);c30={color,count:1}}
+              })
+              if(c30)pSegs30.push(c30)
+              const mSegs30=[];let m30=null
+              next30.forEach(({ws,idx})=>{
+                const meso=weekMesoGrp[idx]||'Construção'
+                if(m30&&m30.meso===meso){m30.count++}
+                else{if(m30)mSegs30.push(m30);m30={meso,count:1}}
+              })
+              if(m30)mSegs30.push(m30)
+              const bH30=vw<480?28:40
+              return (
+                <div style={{...card,padding:'18px 16px',marginBottom:'20px'}}>
+                  <div style={{fontSize:'9px',letterSpacing:'2px',color:'#7e22ce',fontWeight:700,marginBottom:'12px'}}>
+                    PRÓXIMOS 30 DIAS
+                  </div>
+                  {/* Meso bar — thin indicator, no labels */}
+                  <div style={{display:'flex',height:'4px',borderRadius:'2px',overflow:'hidden',marginBottom:'4px'}}>
+                    {mSegs30.map((seg,si)=>{
+                      const mc=MESO_COLORS[seg.meso]||'#94a3b8'
+                      return <div key={si} style={{flex:seg.count,background:mc+'99'}} />
+                    })}
+                  </div>
+                  {/* Load bar */}
+                  <div style={{position:'relative',height:bH30+'px',marginBottom:'10px'}}>
+                    <div style={{position:'absolute',inset:0,display:'flex',
+                      gap:'2px',background:t.border,borderRadius:'8px',overflow:'hidden'}}>
+                      {pSegs30.map((seg,si)=>(
+                        <div key={si} style={{flex:seg.count,background:seg.color,minWidth:0}} />
+                      ))}
+                    </div>
+                    <div style={{position:'absolute',inset:0,display:'flex',pointerEvents:'none'}}>
+                      {next30.map(({ws},wi)=>(
+                        <div key={ws} style={{flex:1,borderRight:wi<n30-1?'1px solid rgba(255,255,255,0.28)':'none'}} />
+                      ))}
+                    </div>
+                    {/* Current week — purple ring, always visible on any load colour */}
+                    {(()=>{const ci=next30.findIndex(({ws})=>ws===currentWs);return ci>=0?(
+                      <div style={{position:'absolute',top:0,bottom:0,
+                        left:`${ci/n30*100}%`,width:`${1/n30*100}%`,
+                        boxSizing:'border-box',border:'2.5px solid #7e22ce',
+                        borderRadius:'5px',pointerEvents:'none',
+                        boxShadow:'0 0 0 2px rgba(255,255,255,0.7), 0 0 0 4px rgba(126,34,206,0.2)'}} />
+                    ):null})()}
+                    {/* Selected overlay */}
+                    {(()=>{const si2=next30.findIndex(({ws})=>ws===expandedWeekWs);return si2>=0?(
+                      <div style={{position:'absolute',top:0,bottom:0,
+                        left:`${si2/n30*100}%`,width:`${1/n30*100}%`,
+                        background:'rgba(255,255,255,0.3)',borderRadius:'5px',pointerEvents:'none'}} />
+                    ):null})()}
+                    {/* Competition markers — white + indigo ring for contrast on all load colours */}
+                    {next30.map(({ws},wi)=>getWeekComps(ws).length>0&&(
+                      <div key={ws+'c'} style={{position:'absolute',bottom:'5px',
+                        left:`${(wi+0.5)/n30*100}%`,transform:'translateX(-50%)',
+                        width:'9px',height:'9px',borderRadius:'50%',
+                        background:'#fff',boxShadow:'0 0 0 1.5px #4338ca, 0 1px 3px rgba(0,0,0,0.25)',
+                        pointerEvents:'none'}} />
+                    ))}
+                    {/* Alert dots — red/amber */}
+                    {next30.map(({ws,idx},wi)=>{
+                      const phData=yearPhases[idx]
+                      const hasRed=phData.alerts.some(a=>a.level==='red')
+                      const hasYellow=!hasRed&&phData.alerts.some(a=>a.level==='yellow')
+                      if(!hasRed&&!hasYellow)return null
+                      return (
+                        <div key={ws+'a'} style={{position:'absolute',top:'5px',
+                          left:`${(wi+0.5)/n30*100}%`,transform:'translateX(-50%)',
+                          width:'7px',height:'7px',borderRadius:'50%',
+                          background:hasRed?'#ef4444':'#f59e0b',
+                          boxShadow:'0 0 0 1px rgba(255,255,255,0.7)',
+                          pointerEvents:'none'}} />
+                      )
+                    })}
+                    {/* Click zones */}
+                    <div style={{position:'absolute',inset:0,display:'flex'}}>
+                      {next30.map(({ws,idx})=>{
+                        const phData=yearPhases[idx]
+                        const overrideId=phaseOverrides[ws]
+                        const overridePh=overrideId?PHASES[overrideId]:null
+                        const displayLabel=overridePh?overridePh.label:phData.phaseLabel
+                        const hasCompThisWk=getWeekComps(ws).length>0
+                        const hasRed=phData.alerts.some(a=>a.level==='red')
+                        const hasYellow=!hasRed&&phData.alerts.some(a=>a.level==='yellow')
+                        const isSelected=expandedWeekWs===ws
+                        const weekCtx=getWeekTypeCtx(ws, phData)
+                        const tipLines=[`${fmtWsLabel(ws)} – ${fmtWsLabel(ws,6)}`,
+                          hasFutureComps?`Fase: ${displayLabel} · Tipo de semana: ${weekCtx.weekTypeLabel} (${weekCtx.weekTypeOverride?'definido pelo coach':'sugerido'})`:'Sem planeamento',
+                          hasCompThisWk?'🏌️ Competição':'',
+                          hasRed?'🔴 Alerta':hasYellow?'⚠️ Alerta':''].filter(Boolean)
+                        return (
+                          <div key={ws} title={tipLines.join('\n')} style={{flex:1,cursor:'pointer'}}
+                            onClick={()=>setExpandedWeekWs(isSelected?null:ws)}
+                            onMouseEnter={()=>setHoveredWeekWs(ws)}
+                            onMouseLeave={()=>setHoveredWeekWs(null)} />
+                        )
+                      })}
+                    </div>
+                  </div>
+                  {/* Week labels */}
+                  <div style={{display:'flex'}}>
+                    {next30.map(({ws,idx},wi)=>{
+                      const isCurr=ws===currentWs
+                      const comps=getWeekComps(ws)
+                      return (
+                        <div key={ws} style={{flex:1,textAlign:'center',minWidth:0}}>
+                          <div style={{fontSize:isCurr?'10px':'8px',fontWeight:isCurr?800:400,
+                            color:isCurr?'#7e22ce':t.textMuted,lineHeight:1.2,
+                            whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',padding:'0 1px'}}>
+                            {isCurr?'HOJE':fmtWsLabel(ws)}
                           </div>
-                          {/* Phase badge + coach edit */}
-                          <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'8px'}}>
-                            <div style={{flex:1}}>
-                              <div style={{display:'inline-flex',alignItems:'center',gap:'4px'}}>
-                                <div style={{padding:'3px 8px',borderRadius:'4px',fontSize:'9px',fontWeight:700,letterSpacing:'1px',color:t.navTextActive,background:ph.color}}>{ph.label}</div>
-                                {isManual && <div style={{padding:'2px 5px',borderRadius:'4px',fontSize:'8px',fontWeight:700,color:t.textMuted,background:t.subtleBg,border:'1px solid #fcd34d'}}>MANUAL</div>}
-                              </div>
-                            </div>
-                            {isCoach && (
-                              <button onClick={()=>setEditingPhaseWs(isEditing?null:ws)} style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'6px',color:t.textMuted,padding:'3px 6px',cursor:'pointer',fontSize:'9px',fontFamily:F}}>✏️</button>
-                            )}
-                          </div>
-                          {/* Phase override dropdown */}
-                          {isEditing && isCoach && (
-                            <>
-                              <div onClick={()=>setEditingPhaseWs(null)} style={{position:'fixed',inset:0,zIndex:10}} />
-                              <div style={{position:'relative',zIndex:11,marginBottom:'8px',background:t.bg,border:`1px solid ${t.border}`,borderRadius:'8px',padding:'8px',display:'flex',flexDirection:'column',gap:'4px'}}>
-                                <div style={{fontSize:'9px',letterSpacing:'1px',color:t.textMuted,fontWeight:600,marginBottom:'4px'}}>SELECCIONAR FASE</div>
-                                {Object.values(PHASES).map(opt=>(
-                                  <button key={opt.id} disabled={savingPhaseOverride} onClick={()=>savePhaseOverride(ws,opt.id)}
-                                    style={{display:'flex',alignItems:'center',gap:'6px',padding:'5px 8px',borderRadius:'6px',border:`1px solid ${phId===opt.id?opt.color:t.border}`,background:phId===opt.id?opt.color+'22':'transparent',cursor:'pointer',fontFamily:F,textAlign:'left',width:'100%'}}>
-                                    <span style={{fontSize:'10px',fontWeight:600,color:opt.color}}>{opt.label}</span>
-                                    {phId===opt.id && <span style={{marginLeft:'auto',fontSize:'9px',color:opt.color}}>✓</span>}
-                                  </button>
-                                ))}
-                                {isManual && (
-                                  <button disabled={savingPhaseOverride} onClick={()=>clearPhaseOverride(ws)} style={{marginTop:'4px',padding:'5px 8px',borderRadius:'6px',border:`1px solid ${t.danger}`,background:'transparent',cursor:'pointer',fontFamily:F,fontSize:'10px',color:t.danger,fontWeight:600}}>↺ Repor automático</button>
-                                )}
-                              </div>
-                            </>
-                          )}
-                          {/* Situacao + Regra + Hoje */}
-                          <div style={{display:'flex',flexDirection:'column',gap:'3px',marginBottom:'8px'}}>
-                            <div style={{fontSize:'9px',color:t.text,lineHeight:1.5}}><span style={{fontWeight:700,color:ph.color}}>Situação: </span>{ph.situacao}</div>
-                            <div style={{fontSize:'9px',color:t.text,lineHeight:1.5}}><span style={{fontWeight:700,color:ph.color}}>Regra: </span>{ph.regra}</div>
-                            <div style={{fontSize:'9px',color:ph.color,fontWeight:600,lineHeight:1.5}}>Hoje: {ph.hoje}</div>
-                          </div>
-                          {/* Competitions */}
-                          {weekComps.length>0 && (
-                            <div style={{display:'flex',flexDirection:'column',gap:'3px',marginBottom:'6px'}}>
-                              {weekComps.map((c,ci)=>(
-                                <div key={ci} style={{display:'flex',alignItems:'center',gap:'4px',padding:'3px 8px',borderRadius:'5px',background:t.subtleBg,border:'1px solid #fde047'}}>
-                                  <span style={{fontSize:'10px'}}>🏌️</span>
-                                  <span style={{fontSize:'9px',fontWeight:700,color:t.text}}>{c.title||c.event_name}</span>
-                                  <span style={{fontSize:'8px',color:t.textMuted,marginLeft:'auto'}}>{c.start_date}</span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          {/* Week alerts */}
-                          {weekAl.length>0 && (
-                            <div style={{display:'flex',flexDirection:'column',gap:'2px'}}>
-                              {weekAl.map((a,ai)=>(
-                                <div key={ai} style={{fontSize:'9px',color:a.level==='red'?t.danger:t.textMuted,fontWeight:500,display:'flex',alignItems:'center',gap:'3px'}}>
-                                  <span>{a.icon}</span><span>{a.text}</span>
-                                </div>
-                              ))}
+                          {comps.length>0&&(
+                            <div style={{fontSize:'7px',color:t.textMuted,lineHeight:1.2,marginTop:'2px',
+                              whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',padding:'0 1px'}}>
+                              🏌️ {comps[0].title}
                             </div>
                           )}
                         </div>
@@ -3059,7 +3290,492 @@ export default function Training({ theme, t, user, userRole = '', lang = 'en', e
                   </div>
                 </div>
               )
-            })}
+            })()}
+
+            {/* ── C) Calendário 12 meses ── */}
+            <div style={{...card,padding:'20px 16px',marginBottom:'16px'}}>
+
+              {/* History + future grid */}
+              {(()=>{
+                const pastMonths=monthGroups.filter(({weeks:mw})=>mw.every(({ws})=>ws<currentWs))
+                const liveMonths=monthGroups.filter(({weeks:mw})=>!mw.every(({ws})=>ws<currentWs))
+
+                const renderMonthCard=({year:mYear,month,key:mKey,weeks:mWeeks})=>{
+                  const nw=mWeeks.length
+                  const isPastM=mWeeks.every(({ws})=>ws<currentWs)
+                  const mSegs=[];let cM=null
+                  mWeeks.forEach(({ws,idx})=>{
+                    const meso=weekMesoGrp[idx]||'Construção'
+                    if(cM&&cM.meso===meso){cM.count++}
+                    else{if(cM)mSegs.push(cM);cM={meso,count:1}}
+                  })
+                  if(cM)mSegs.push(cM)
+                  const pSegs=[];let cP=null
+                  mWeeks.forEach(({ws,idx})=>{
+                    const phData=yearPhases[idx]
+                    const overrideId=phaseOverrides[ws]
+                    const overridePh=overrideId?PHASES[overrideId]:null
+                    const color=weekTypeColor(ws, phData)
+                    if(cP&&cP.color===color){cP.count++}
+                    else{if(cP)pSegs.push(cP);cP={color,count:1}}
+                  })
+                  if(cP)pSegs.push(cP)
+                  return (
+                    <div key={mKey} style={{opacity:isPastM?0.55:1}}>
+                      <div style={{display:'flex',alignItems:'baseline',gap:'6px',marginBottom:'5px'}}>
+                        <span style={{fontSize:'13px',fontWeight:700,color:t.text}}>{PT_MONTHS_SHORT[month]}</span>
+                        <span style={{fontSize:'10px',color:t.textMuted}}>{mYear}</span>
+                      </div>
+                      {/* Meso bar */}
+                      <div style={{display:'flex',height:'4px',borderRadius:'2px',overflow:'hidden',marginBottom:'3px'}}>
+                        {mSegs.map((seg,si)=>{
+                          const mc=hasFutureComps?(MESO_COLORS[seg.meso]||'#94a3b8'):'#d1d5db'
+                          return (
+                            <div key={si} style={{flex:seg.count,background:mc+'99'}} />
+                          )
+                        })}
+                      </div>
+                      {/* Phase bar */}
+                      <div style={{position:'relative',height:barH+'px'}}>
+                        <div style={{position:'absolute',inset:0,display:'flex',
+                          gap:'1px',background:t.surface,borderRadius:'6px',overflow:'hidden'}}>
+                          {pSegs.map((seg,si)=>(
+                            <div key={si} style={{flex:seg.count,background:seg.color,minWidth:0}} />
+                          ))}
+                        </div>
+                        <div style={{position:'absolute',inset:0,display:'flex',pointerEvents:'none'}}>
+                          {mWeeks.map(({ws},wi)=>(
+                            <div key={ws} style={{flex:1,borderRight:wi<nw-1?'1px solid rgba(255,255,255,0.18)':'none'}} />
+                          ))}
+                        </div>
+                        {(()=>{const ci=mWeeks.findIndex(({ws})=>ws===currentWs);return ci>=0?(
+                          <div style={{position:'absolute',top:0,bottom:0,
+                            left:`${ci/nw*100}%`,width:`${1/nw*100}%`,
+                            boxSizing:'border-box',border:'2.5px solid #7e22ce',
+                            borderRadius:'4px',pointerEvents:'none',
+                            boxShadow:'0 0 0 2px rgba(255,255,255,0.7), 0 0 0 4px rgba(126,34,206,0.2)'}} />
+                        ):null})()}
+                        {(()=>{const si2=mWeeks.findIndex(({ws})=>ws===expandedWeekWs);return si2>=0?(
+                          <div style={{position:'absolute',top:0,bottom:0,
+                            left:`${si2/nw*100}%`,width:`${1/nw*100}%`,
+                            background:'rgba(255,255,255,0.28)',borderRadius:'4px',pointerEvents:'none'}} />
+                        ):null})()}
+                        {/* Competition dots */}
+                        {mWeeks.map(({ws},wi)=>getWeekComps(ws).length>0&&(
+                          <div key={ws+'c'} style={{position:'absolute',bottom:'4px',
+                            left:`${(wi+0.5)/nw*100}%`,transform:'translateX(-50%)',
+                            width:'7px',height:'7px',borderRadius:'50%',
+                            background:'#fff',
+                            boxShadow:'0 0 0 1.5px #4338ca, 0 1px 2px rgba(0,0,0,0.2)',
+                            pointerEvents:'none'}} />
+                        ))}
+                        {mWeeks.map(({ws,idx},wi)=>{
+                          const phData=yearPhases[idx]
+                          const hasRed=phData.alerts.some(a=>a.level==='red')
+                          const hasYellow=!hasRed&&phData.alerts.some(a=>a.level==='yellow')
+                          if(!hasRed&&!hasYellow)return null
+                          return (
+                            <div key={ws+'a'} style={{position:'absolute',top:'4px',
+                              left:`${(wi+0.5)/nw*100}%`,transform:'translateX(-50%)',
+                              width:'6px',height:'6px',borderRadius:'50%',
+                              background:hasRed?'#ef4444':'#f59e0b',
+                              boxShadow:'0 0 0 1px rgba(255,255,255,0.6)',
+                              pointerEvents:'none'}} />
+                          )
+                        })}
+                        <div style={{position:'absolute',inset:0,display:'flex'}}>
+                          {mWeeks.map(({ws,idx})=>{
+                            const phData=yearPhases[idx]
+                            const overrideId=phaseOverrides[ws]
+                            const overridePh=overrideId?PHASES[overrideId]:null
+                            const displayLabel=overridePh?overridePh.label:phData.phaseLabel
+                            const hasCompThisWk=getWeekComps(ws).length>0
+                            const hasRed=phData.alerts.some(a=>a.level==='red')
+                            const hasYellow=!hasRed&&phData.alerts.some(a=>a.level==='yellow')
+                            const isSelected=expandedWeekWs===ws
+                            const tipLines=[`${fmtWsLabel(ws)} – ${fmtWsLabel(ws,6)}`,
+                              hasFutureComps?displayLabel:'Sem planeamento',
+                              hasCompThisWk?'🏌️ Competição':'',
+                              hasRed?'🔴 Alerta':hasYellow?'⚠️ Alerta':''].filter(Boolean)
+                            return (
+                              <div key={ws} title={tipLines.join('\n')} style={{flex:1,cursor:'pointer'}}
+                                onClick={()=>setExpandedWeekWs(isSelected?null:ws)}
+                                onMouseEnter={()=>setHoveredWeekWs(ws)}
+                                onMouseLeave={()=>setHoveredWeekWs(null)} />
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                }
+
+                return (
+                  <>
+                    {/* B) Histórico colapsável */}
+                    {pastMonths.length>0&&(
+                      <>
+                        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',
+                          padding:'8px 12px',borderRadius:'8px',background:t.subtleBg,
+                          border:`1px solid ${t.border}`,marginBottom:'12px',cursor:'pointer'}}
+                          onClick={()=>setHistoryOpen(v=>!v)}>
+                          <div style={{fontSize:'10px',color:t.textMuted,fontWeight:600}}>
+                            HISTÓRICO — {pastMonths.length} {pastMonths.length===1?'mês':'meses'} anteriores
+                          </div>
+                          <button style={{background:'transparent',border:'none',cursor:'pointer',
+                            fontSize:'10px',color:'#7e22ce',fontWeight:700,fontFamily:F,padding:0}}>
+                            {historyOpen?'Ocultar ▲':'Mostrar ▼'}
+                          </button>
+                        </div>
+                        {historyOpen&&(
+                          <div style={{display:'grid',gridTemplateColumns:gridCols,gap:'16px 24px',marginBottom:'12px'}}>
+                            {pastMonths.map(m=>renderMonthCard(m))}
+                          </div>
+                        )}
+                        {/* "Hoje" divider */}
+                        <div style={{display:'flex',alignItems:'center',gap:'10px',marginBottom:'14px'}}>
+                          <div style={{flex:1,height:'1px',background:t.border}} />
+                          <span style={{fontSize:'9px',letterSpacing:'1.5px',color:'#7e22ce',fontWeight:700,
+                            padding:'2px 10px',borderRadius:'20px',
+                            background:'#7e22ce14',border:'1px solid #7e22ce33',whiteSpace:'nowrap'}}>
+                            HOJE
+                          </span>
+                          <div style={{flex:1,height:'1px',background:t.border}} />
+                        </div>
+                      </>
+                    )}
+
+                    {/* Future/current months */}
+                    <div style={{display:'grid',gridTemplateColumns:gridCols,gap:'16px 24px'}}>
+                      {liveMonths.map(m=>renderMonthCard(m))}
+                    </div>
+                  </>
+                )
+              })()}
+
+              {/* Indicators key */}
+              <div style={{display:'none',gap:'16px',flexWrap:'wrap',paddingTop:'12px',
+                borderTop:`1px solid ${t.border}`,fontSize:'10px',color:t.textMuted,
+                alignItems:'center',marginTop:'18px'}}>
+                <div style={{display:'flex',alignItems:'center',gap:'5px'}}>
+                  <div style={{width:'22px',height:'10px',borderRadius:'3px',background:'#6366f1',position:'relative'}}>
+                    <div style={{position:'absolute',bottom:'1.5px',left:'50%',transform:'translateX(-50%)',
+                      width:'6px',height:'6px',borderRadius:'50%',background:'#fff',
+                      boxShadow:'0 0 0 1.5px #4338ca'}} />
+                  </div>
+                  <span>ponto baixo = competição</span>
+                </div>
+                <div style={{display:'flex',alignItems:'center',gap:'5px'}}>
+                  <div style={{width:'22px',height:'10px',borderRadius:'3px',background:'#6366f1',position:'relative'}}>
+                    <div style={{position:'absolute',top:'1.5px',left:'50%',transform:'translateX(-50%)',
+                      width:'5px',height:'5px',borderRadius:'50%',background:'#ef4444'}} />
+                  </div>
+                  <span>ponto topo = alerta</span>
+                </div>
+                <div style={{display:'flex',alignItems:'center',gap:'5px'}}>
+                  <div style={{width:'22px',height:'10px',borderRadius:'3px',background:'#6366f1',
+                    border:'2px solid #7e22ce',boxSizing:'border-box'}} />
+                  <span>contorno roxo = semana atual</span>
+                </div>
+              </div>
+            </div>
+
+            {/* ── D) Week detail card ── */}
+            {expandedDayDate&&(()=>{
+              const ctx=getDayPeriodizationContext({date:expandedDayDate,events})
+              const vis=getDayLoadVisual(ctx)
+              const dateLabel=new Date(ctx.date+'T12:00:00').toLocaleDateString('pt-PT',{weekday:'long',day:'2-digit',month:'long',year:'numeric'})
+              const dayWs=(()=>{const d=new Date(ctx.date+'T12:00:00');const dow=d.getDay();d.setDate(d.getDate()-(dow===0?6:dow-1));return d.toISOString().split('T')[0]})()
+              const weeklyPhase=calcWeekPhase(dayWs, validCompetitions)
+              return (
+                <div style={{...card,padding:'18px 20px',border:`2px solid ${vis.border}55`,background:vis.bg+'22',marginBottom:'16px'}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'12px',flexWrap:'wrap',marginBottom:'14px'}}>
+                    <div>
+                      <div style={{fontSize:'11px',color:t.textMuted,fontWeight:600,marginBottom:'6px',textTransform:'capitalize'}}>{dateLabel}</div>
+                      <div style={{display:'flex',gap:'8px',alignItems:'center',flexWrap:'wrap'}}>
+                        <span style={{padding:'5px 12px',borderRadius:'20px',fontSize:'12px',fontWeight:800,color:vis.text,background:vis.bg,border:`1px solid ${vis.border}`}}>
+                          {ctx.actionSummary}
+                        </span>
+                        <span style={{fontSize:'11px',fontWeight:700,color:t.textMuted}}>Fase semanal: {weeklyPhase.phase}</span>
+                      </div>
+                    </div>
+                    <button onClick={()=>setExpandedDayDate(null)}
+                      style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'8px',color:t.textMuted,padding:'5px 10px',cursor:'pointer',fontSize:'13px',fontFamily:F,lineHeight:1}}>
+                      ×
+                    </button>
+                  </div>
+                  <div style={{display:'grid',gridTemplateColumns:vw<700?'1fr':'1.1fr 1fr 1fr',gap:'12px'}}>
+                    <div>
+                      <div style={{fontSize:'10px',letterSpacing:'1.5px',color:t.textMuted,fontWeight:700,marginBottom:'6px'}}>HOJE</div>
+                      <div style={{fontSize:'12px',color:t.text,lineHeight:1.7}}>
+                        <div>O que faço hoje: <b>{ctx.actionSummary}</b></div>
+                        <div>Carga: <b>{ctx.loadSummary}</b></div>
+                        <div>Porque: <b>{ctx.why}</b></div>
+                        <div>Fase do dia: <b>{ctx.phaseSummary}</b></div>
+                        <div>Fase semanal: <b>{weeklyPhase.phase}</b></div>
+                        <div>Dias até competição: <b>{ctx.daysToCompetition===null?'—':ctx.daysToCompetition}</b></div>
+                        <div>Competição: <b>{ctx.nextCompetition?.title || '—'}</b></div>
+                      </div>
+                      {ctx.reasons.length>0&&(
+                        <div style={{marginTop:'8px',fontSize:'11px',color:t.textMuted,lineHeight:1.6}}>
+                          {ctx.reasons.map((r,i)=><div key={i}>· {r}</div>)}
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <div style={{fontSize:'10px',letterSpacing:'1.5px',color:t.textMuted,fontWeight:700,marginBottom:'6px'}}>GOLF</div>
+                      <div style={{fontSize:'12px',color:t.text,lineHeight:1.6}}>{ctx.golfGuidance}</div>
+                    </div>
+                    <div>
+                      <div style={{fontSize:'10px',letterSpacing:'1.5px',color:t.textMuted,fontWeight:700,marginBottom:'6px'}}>GINÁSIO</div>
+                      <div style={{fontSize:'12px',color:t.text,lineHeight:1.6}}>{ctx.gymGuidance}</div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
+
+            {expandedWeekWs&&(()=>{
+              const ws=expandedWeekWs
+              const idx=periodoWeeks.indexOf(ws)
+              if(idx<0)return null
+              const phData=yearPhases[idx]
+              const overrideId=phaseOverrides[ws]
+              const overridePh=overrideId?PHASES[overrideId]:null
+              const weekTypeContext=getWeekTypeCtx(ws, phData)
+              const displayColor=overridePh?overridePh.color:phData.phaseColor
+              const displayLabel=overridePh?overridePh.label:phData.phaseLabel
+              const mesoLabel=weekMesoGrp[idx]||'Construção'
+              const mesoColor=hasFutureComps?(MESO_COLORS[mesoLabel]||'#94a3b8'):'#94a3b8'
+              const wAlerts=phData.alerts
+              const isEditing=editingPhaseWs===ws
+              const wsMs=new Date(ws+'T12:00:00').getTime(),weMs=wsMs+6*86400000
+              const ignoredInWeek=events.filter(e=>isCompetition(e)&&!isPeriodizationCompetition(e)).filter(c=>{
+                const cs=new Date(c.start_date+'T12:00:00').getTime(),ce=c.end_date?new Date(c.end_date+'T12:00:00').getTime():cs
+                return cs<=weMs&&ce>=wsMs
+              })
+              return (
+                <div style={{...card,padding:'20px',border:`2px solid ${hasFutureComps?displayColor+'55':t.border}`,
+                  marginBottom:'16px',background:hasFutureComps?displayColor+'08':t.surface}}>
+
+                  {/* Detail header */}
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',
+                    flexWrap:'wrap',gap:'12px',marginBottom:'16px'}}>
+                    <div>
+                      <div style={{fontSize:'11px',color:t.textMuted,fontWeight:600,marginBottom:'8px'}}>
+                        {fmtWsLabel(ws)} – {fmtWsLabel(ws,6)}
+                      </div>
+                      {hasFutureComps?(
+                        <>
+                          {/* FASE badge */}
+                          <div style={{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap',marginBottom:'6px'}}>
+                            <div style={{padding:'5px 14px',borderRadius:'20px',fontSize:'13px',fontWeight:700,
+                              color:'#fff',background:displayColor,letterSpacing:'0.3px'}}>
+                              {displayLabel}
+                            </div>
+                            {overrideId&&<span style={{fontSize:'10px',color:t.textMuted,background:t.subtleBg,
+                              border:'1px solid #fcd34d',padding:'2px 7px',borderRadius:'4px',fontWeight:600}}>MANUAL</span>}
+                          </div>
+                          <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'4px'}}>
+                            <div style={{width:'8px',height:'8px',borderRadius:'2px',background:getWeekTypeTheme(t,weekTypeContext.effectiveWeekType).bg,flexShrink:0}} />
+                            <span style={{fontSize:'10px',color:t.textMuted}}>Tipo de semana: </span>
+                            <span style={{fontSize:'10px',fontWeight:700,color:getWeekTypeTheme(t,weekTypeContext.effectiveWeekType).subtitle}}>
+                              {weekTypeContext.weekTypeLabel} ({weekTypeContext.weekTypeOverride?'definido pelo coach':'sugerido'})
+                            </span>
+                          </div>
+                          {/* MESOCICLO row */}
+                          <div style={{display:'flex',alignItems:'center',gap:'6px'}}>
+                            <div style={{width:'8px',height:'8px',borderRadius:'2px',background:mesoColor,flexShrink:0}} />
+                            <span style={{fontSize:'10px',color:t.textMuted}}>Mesociclo: </span>
+                            <span style={{fontSize:'10px',fontWeight:700,color:mesoColor}}>{mesoLabel}</span>
+                          </div>
+                          {/* Phase load row */}
+                          <div style={{display:'flex',alignItems:'center',gap:'6px',marginTop:'4px'}}>
+                            <div style={{width:'8px',height:'8px',borderRadius:'2px',
+                              background:loadColor(phData,overrideId),flexShrink:0}} />
+                            <span style={{fontSize:'10px',color:t.textMuted}}>Carga estimada pela fase: </span>
+                            <span style={{fontSize:'10px',fontWeight:700,color:t.text}}>
+                              {overrideId?getLoadVisByPhId(overrideId).label:getLoadVis(phData.phase).label}
+                            </span>
+                          </div>
+                        </>
+                      ):(
+                        <div style={{fontSize:'13px',color:t.textMuted,fontStyle:'italic'}}>Sem competições planeadas — fase não definida</div>
+                      )}
+                    </div>
+                    <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
+                      {isCoach&&hasFutureComps&&(
+                        <button onClick={e=>{e.stopPropagation();setEditingPhaseWs(isEditing?null:ws)}}
+                          style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'8px',
+                            color:t.textMuted,padding:'5px 10px',cursor:'pointer',fontSize:'11px',fontFamily:F}}>
+                          ✏️ Override
+                        </button>
+                      )}
+                      <button onClick={()=>{setExpandedWeekWs(null);setEditingPhaseWs(null)}}
+                        style={{background:'transparent',border:`1px solid ${t.border}`,borderRadius:'8px',
+                          color:t.textMuted,padding:'5px 10px',cursor:'pointer',fontSize:'13px',fontFamily:F,lineHeight:1}}>
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Phase override dropdown */}
+                  {isEditing&&isCoach&&(
+                    <>
+                      <div onClick={()=>setEditingPhaseWs(null)} style={{position:'fixed',inset:0,zIndex:10}} />
+                      <div style={{position:'relative',zIndex:11,marginBottom:'16px',
+                        background:t.bg,border:`1px solid ${t.border}`,borderRadius:'10px',padding:'10px',
+                        display:'flex',flexDirection:'column',gap:'4px'}}>
+                        <div style={{fontSize:'10px',letterSpacing:'1px',color:t.textMuted,fontWeight:600,marginBottom:'6px'}}>SELECCIONAR FASE</div>
+                        {Object.values(PHASES).map(opt=>{
+                          const curId=overrideId||toPhId[phData.phase]
+                          const isSel=curId===opt.id
+                          return (
+                            <button key={opt.id} disabled={savingPhaseOverride}
+                              onClick={()=>savePhaseOverride(ws,opt.id)}
+                              style={{display:'flex',alignItems:'center',gap:'8px',padding:'7px 10px',borderRadius:'8px',
+                                border:`1px solid ${isSel?opt.color:t.border}`,
+                                background:isSel?opt.color+'22':'transparent',
+                                cursor:'pointer',fontFamily:F,textAlign:'left',width:'100%'}}>
+                              <div style={{width:'10px',height:'10px',borderRadius:'2px',background:opt.color,flexShrink:0}} />
+                              <span style={{fontSize:'11px',fontWeight:600,color:opt.color}}>{opt.label}</span>
+                              {isSel&&<span style={{marginLeft:'auto',fontSize:'11px',color:opt.color}}>✓</span>}
+                            </button>
+                          )
+                        })}
+                        {overrideId&&(
+                          <button disabled={savingPhaseOverride} onClick={()=>clearPhaseOverride(ws)}
+                            style={{marginTop:'6px',padding:'7px 10px',borderRadius:'8px',
+                              border:`1px solid ${t.danger}`,background:'transparent',
+                              cursor:'pointer',fontFamily:F,fontSize:'11px',color:t.danger,fontWeight:600}}>
+                            ↺ Repor automático
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  )}
+
+                  {hasFutureComps&&(
+                    <>
+                      {/* Next competition */}
+                      {phData.nextCompetition&&(
+                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',
+                          flexWrap:'wrap',gap:'10px',padding:'12px 14px',borderRadius:'10px',
+                          background:displayColor+'14',border:`1px solid ${displayColor}33`,marginBottom:'14px'}}>
+                          <div>
+                            <div style={{fontSize:'10px',letterSpacing:'1px',color:t.textMuted,fontWeight:700,marginBottom:'3px'}}>PRÓXIMA COMPETIÇÃO</div>
+                            <div style={{fontSize:'13px',fontWeight:700,color:t.text}}>{phData.nextCompetition.title}</div>
+                          </div>
+                          {phData.daysToNextCompetition!==null&&(
+                            <div style={{fontSize:'16px',color:displayColor,fontWeight:800,letterSpacing:'-0.5px'}}>
+                              {phData.daysToNextCompetition===0?'Esta semana':`${phData.daysToNextCompetition} dias`}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Reasons */}
+                      {phData.reasons.length>0&&(
+                        <div style={{marginBottom:'14px'}}>
+                          <div style={{fontSize:'10px',letterSpacing:'1.5px',color:t.textMuted,fontWeight:700,marginBottom:'6px'}}>PORQUE ESTA FASE</div>
+                          {phData.reasons.map((r,ri)=>(
+                            <div key={ri} style={{fontSize:'12px',color:t.text,lineHeight:1.7,paddingLeft:'8px'}}>· {r}</div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Alerts */}
+                      {wAlerts.length>0&&(
+                        <div style={{display:'flex',flexDirection:'column',gap:'6px',marginBottom:'14px'}}>
+                          {wAlerts.map((a,ai)=>(
+                            <div key={ai} style={{display:'flex',gap:'10px',alignItems:'flex-start',
+                              padding:'10px 14px',borderRadius:'8px',fontSize:'11px',fontWeight:500,
+                              background:a.level==='red'?t.dangerBg:t.subtleBg,
+                              border:`1px solid ${a.level==='red'?t.danger:'#fcd34d'}`,
+                              color:a.level==='red'?t.danger:t.textMuted}}>
+                              <span style={{flexShrink:0,fontSize:'14px'}}>{a.level==='red'?'🔴':'⚠️'}</span>
+                              <span>{a.message}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Ignored in this week */}
+                      {ignoredInWeek.length>0&&(
+                        <div style={{fontSize:'10px',color:t.textMuted,marginBottom:'14px',fontStyle:'italic',paddingLeft:'4px'}}>
+                          Não considerado{ignoredInWeek.length!==1?'s':''}: {ignoredInWeek.map(c=>c.title||'sem título').join(', ')} (estado não válido)
+                        </div>
+                      )}
+
+                      {/* Golf + Gym */}
+                      {(phData.golf||phData.gym)&&(
+                        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'16px'}}>
+                          {[{title:'GOLF',emoji:'🏌️',data:phData.golf},{title:'GINÁSIO',emoji:'💪',data:phData.gym}].map(({title,emoji,data})=>data&&(
+                            <div key={title} style={{padding:'14px',borderRadius:'10px',
+                              background:displayColor+'12',border:`1px solid ${displayColor}2a`}}>
+                              <div style={{fontSize:'10px',letterSpacing:'1.5px',color:displayColor,fontWeight:700,marginBottom:'10px'}}>{emoji} {title}</div>
+                              <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
+                                <div style={{fontSize:'11px',color:t.textMuted}}><b style={{color:t.text}}>Volume:</b> {data.volume}</div>
+                                <div style={{fontSize:'11px',color:t.textMuted}}><b style={{color:t.text}}>Intensidade:</b> {data.intensity}</div>
+                                <div style={{fontSize:'11px',color:t.text,lineHeight:1.6}}><b>Foco:</b> {data.focus}</div>
+                                <div style={{fontSize:'10px',color:t.textMuted,lineHeight:1.6,fontStyle:'italic'}}>{data.rules}</div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <button onClick={()=>navigateToWeek(ws)}
+                        style={{padding:'8px 20px',borderRadius:'20px',
+                          border:`1px solid ${displayColor}66`,background:displayColor+'18',
+                          color:displayColor,cursor:'pointer',fontSize:'12px',fontFamily:F,fontWeight:700}}>
+                        Ver plano desta semana →
+                      </button>
+                    </>
+                  )}
+                </div>
+              )
+            })()}
+
+            {/* ── Legend: Guia rápido das fases ── */}
+            {hasFutureComps&&(
+              <div style={{...card,marginTop:'8px',padding:'16px 20px'}}>
+                <button
+                  onClick={()=>setLegendOpen(v=>!v)}
+                  style={{width:'100%',display:'flex',justifyContent:'space-between',alignItems:'center',
+                    background:'transparent',border:'none',cursor:'pointer',fontFamily:F,textAlign:'left',padding:0}}>
+                  <div style={{fontSize:'9px',letterSpacing:'2px',color:'#7e22ce',fontWeight:700}}>
+                    GUIA RÁPIDO DAS FASES
+                  </div>
+                  <span style={{fontSize:'10px',color:t.textMuted}}>{legendOpen?'▲':'▼'}</span>
+                </button>
+                {legendOpen&&(
+                  <div style={{display:'flex',flexDirection:'column',gap:'8px',marginTop:'14px'}}>
+                    {Object.entries(PHASE_GUIDELINES).map(([phaseKey,guide])=>(
+                      <div key={phaseKey} style={{display:'flex',gap:'10px',alignItems:'flex-start',
+                        padding:'10px 12px',borderRadius:'8px',
+                        background:PHASE_COLORS[phaseKey]+'12',border:`1px solid ${PHASE_COLORS[phaseKey]}33`}}>
+                        <div style={{width:'3px',alignSelf:'stretch',borderRadius:'2px',
+                          background:PHASE_COLORS[phaseKey],flexShrink:0,minHeight:'20px'}} />
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{display:'flex',alignItems:'center',gap:'6px',marginBottom:'5px',flexWrap:'wrap'}}>
+                            <div style={{padding:'1px 7px',borderRadius:'4px',fontSize:'9px',fontWeight:700,
+                              color:'#fff',background:PHASE_COLORS[phaseKey],whiteSpace:'nowrap'}}>
+                              {guide.label}
+                            </div>
+                            <div style={{fontSize:'10px',color:t.text}}>{guide.description}</div>
+                          </div>
+                          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'4px 12px',fontSize:'9px',color:t.textMuted}}>
+                            <div><b style={{color:t.text}}>Golf:</b> {guide.golf.focus}</div>
+                            <div><b style={{color:t.text}}>Gin:</b> {guide.gym.focus}</div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )
       })()}

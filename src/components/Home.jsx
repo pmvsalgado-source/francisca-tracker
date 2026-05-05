@@ -529,6 +529,18 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
   const [athleteSaving, setAthleteSaving] = useState(false)
 
   useEffect(() => {
+    const h = e => {
+      if (e.key !== 'Escape') return
+      setKpiModal(null)
+      setStatPanelOpen(false)
+      setShowFocusRegister(false)
+      setEditingAthlete(false)
+    }
+    document.addEventListener('keydown', h)
+    return () => document.removeEventListener('keydown', h)
+  }, [])
+
+  useEffect(() => {
     getHomeEntries().then(data => setEntries(data)).catch(console.error)
     getHomeCompStats().then(data => setCompStats(data)).catch(console.error)
     getHomeCompConfig().then(data => { if (data.length) setCompConfig(data) }).catch(console.error)
@@ -1223,18 +1235,27 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
     { key: 'mental',  label: 'Coach Mental', keywords: ['mental', 'psicolog'] },
   ]
   const recoveryStatus = RECOVERY_TYPES.map(type => {
-    const past = events
+    const matching = events
       .filter(e => {
         const title = (e.title || '').toLowerCase()
         const cat   = (e.category || '').toLowerCase()
         return type.keywords.some(kw => title.includes(kw) || cat.includes(kw))
       })
+    const past = matching
+      .filter(e => normDate(e.start_date || e.date) <= todayStr)
       .sort((a, b) => normDate(b.start_date || b.date).localeCompare(normDate(a.start_date || a.date)))
+    const upcoming = matching
+      .filter(e => normDate(e.start_date || e.date) >= todayStr)
+      .sort((a, b) => normDate(a.start_date || a.date).localeCompare(normDate(b.start_date || b.date)))
     const lastDateStr = past[0] ? normDate(past[0].start_date || past[0].date) : null
+    const nextDateStr = upcoming[0] ? normDate(upcoming[0].start_date || upcoming[0].date) : null
     const daysSince = lastDateStr
       ? Math.floor((new Date() - new Date(lastDateStr + 'T12:00:00')) / 86400000)
       : null
-    return { ...type, lastDateStr, daysSince, alert: daysSince === null || daysSince > 25 }
+    const daysUntil = nextDateStr
+      ? Math.max(0, Math.ceil((new Date(nextDateStr + 'T12:00:00') - new Date()) / 86400000))
+      : null
+    return { ...type, lastDateStr, nextDateStr, daysSince, daysUntil, alert: !nextDateStr && (daysSince === null || daysSince > 25) }
   })
 
   // Agenda items - real scheduled sessions only (max 3)
@@ -1792,16 +1813,26 @@ export default function Home({ theme, t, onNavigate, onRegister, user, profile, 
           {/* Recovery & Mental */}
           <div style={{ paddingTop:'12px' }}>
             <div style={{ fontSize:'13px', fontWeight:800, color:'#f59e0b', marginBottom:'10px' }}>Recovery & Mental</div>
-            {recoveryStatus.map((r, i) => (
-              <button key={`rec-${i}`} className="hm-btn-reset" onClick={() => onNavigate && onNavigate('calendar', { scheduleType: r.key === 'massage' ? 'massagem' : r.key === 'physio' ? 'fisio' : 'mental_coach' })}
+            {recoveryStatus.map((r, i) => {
+              const badgeText = r.nextDateStr
+                ? r.daysUntil === 0 ? 'Hoje' : r.daysUntil === 1 ? 'Amanha' : `${r.daysUntil}d`
+                : r.daysSince === null ? 'Sem registo' : `${r.daysSince}d`
+              const badgeColor = r.nextDateStr ? '#16a34a' : r.alert ? '#f59e0b' : t.textMuted
+              return (
+              <button key={`rec-${i}`} className="hm-btn-reset" onClick={() => {
+                const scheduleType = r.key === 'massage' ? 'massagem' : r.key === 'physio' ? 'fisio' : 'mental_coach'
+                const opts = r.nextDateStr ? { date: r.nextDateStr } : { scheduleType }
+                onNavigate && onNavigate('calendar', opts)
+              }}
                 style={{ display:'flex', alignItems:'center', gap:'10px', padding:'8px 0', borderBottom: i < recoveryStatus.length - 1 ? `1px solid ${t.border}` : 'none' }}>
                 <div style={{ flex:1, fontSize:'14px', fontWeight:700, color:t.text }}>{r.label}</div>
-                <div style={{ fontSize:'12px', color: r.alert ? '#f59e0b' : t.textMuted, fontWeight:650, whiteSpace:'nowrap' }}>
-                  {r.daysSince === null ? 'Sem registo' : `${r.daysSince}d`}
+                <div style={{ fontSize:'12px', color: badgeColor, fontWeight:650, whiteSpace:'nowrap' }}>
+                  {badgeText}
                 </div>
                 <div style={{ color:t.textMuted, fontSize:'18px', flexShrink:0, lineHeight:1 }}>›</div>
               </button>
-            ))}
+              )
+            })}
           </div>
         </div>
       </div>

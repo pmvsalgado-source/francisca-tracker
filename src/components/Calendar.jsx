@@ -11,9 +11,9 @@ import {
   saveSessionRatingEntry,
   deleteEntry,
 } from '../services/calendarService'
-import { saveTrainingPlan } from '../services/trainingService'
+import { saveTrainingPlan, getWeekTypeOverrides } from '../services/trainingService'
 import { SCHEDULE_TYPES, TOURNAMENT_CATEGORIES, DEFAULT_CATEGORIES, activityColor, activityColorFromCategory, getEventVisual, isCompetitionEvent } from '../constants/eventCategories'
-import { calcWeekPhase, calcCurrentPhase, PHASE_COLORS } from '../lib/periodization'
+import { calcWeekPhase, calcCurrentPhase, WEEK_TYPES, WEEK_TYPE_LABELS, applyWeekTypeContext } from '../lib/periodization'
 import EmptyState from './EmptyState'
 
 const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro']
@@ -35,6 +35,8 @@ const WELLNESS_METRICS = [
   { id: '__w_stress__',   label: 'Stress',         icon: '🌀', color: '#14B8A6' },
 ]
 const DAY_NOTE_METRIC_ID = '__day_note__'
+const WEEK_TYPE_ORDER = [WEEK_TYPES.LOAD, WEEK_TYPES.DELOAD, WEEK_TYPES.COMPETITION, WEEK_TYPES.TRANSITION]
+const getWeekTypeTheme = (t, type) => t.weekTypes?.[type] || t.weekTypes?.load || { bg: '#B5D4F4', text: '#042C53', subtitle: '#0C447C' }
 
 const EMPTY_FORM = {
   title: '', start_date: '', end_date: '', category: 'Competição', status: 'confirmed',
@@ -70,10 +72,29 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
   const [todayPulse, setTodayPulse] = useState(false)
   const [showLoadInfo, setShowLoadInfo] = useState(false)
   const [showPlayedModal, setShowPlayedModal] = useState(false)
+  const [weekTypeOverrides, setWeekTypeOverrides] = useState({})
   const focusDateRef = useRef(null)
   const calNoteSaveTimerRef = useRef(null)
   const calNoteLoadedDateRef = useRef(null)
   const calNoteSkipSaveRef = useRef(false)
+
+  useEffect(() => {
+    const h = e => {
+      if (e.key !== 'Escape') return
+      setShowModal(false)
+      setShowCatModal(false)
+      setShowTypeModal(false)
+      setShowLoadInfo(false)
+      setShowPlayedModal(false)
+      setDeleteConfirmEvent(null)
+      setDeleteSessionConfirm(null)
+      setActivityPopover(null)
+      setScheduleType(null)
+      setSaveError(null)
+    }
+    document.addEventListener('keydown', h)
+    return () => document.removeEventListener('keydown', h)
+  }, [])
 
   const todayDate = new Date()
   todayDate.setHours(0, 0, 0, 0)
@@ -90,6 +111,16 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
   }, [])
 
   useEffect(() => { fetchCategories() }, [fetchCategories])
+
+  useEffect(() => {
+    getWeekTypeOverrides()
+      .then(data => {
+        const ov = {}
+        ;(data || []).forEach(r => { if (r.week_type) ov[r.week_start] = r.week_type })
+        setWeekTypeOverrides(ov)
+      })
+      .catch(() => {})
+  }, [])
 
   const openSchedulePicker = (date) => {
     setPendingDate(date || todayIso)
@@ -213,7 +244,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
     const payload = {
       title: isCampoType ? (form.course || form.title || 'Treino de campo') : form.title,
       start_date: form.start_date,
-      end_date: form.end_date,
+      end_date: form.end_date || form.start_date,
       category: form.category,
       status: form.status,
       color: form.color,
@@ -381,6 +412,11 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
     return `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`
   }
 
+  const getWeekTypeContextForDate = (dateStr) => {
+    const ws = getWeekStartForDate(dateStr)
+    return applyWeekTypeContext(calcWeekPhase(ws, events), weekTypeOverrides[ws] || null)
+  }
+
   const getDayIndex = (dateStr) => {
     const dow = new Date(dateStr + 'T12:00:00').getDay()
     return dow === 0 ? 6 : dow - 1
@@ -523,7 +559,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
   const selectedDayStr = dayDetailDate || todayIso
   const selectedDayDate = new Date(selectedDayStr + 'T12:00:00')
   const selectedDayEvents = getEventsForDay(selectedDayStr)
-  const weekPhaseData = calcWeekPhase(getWeekStartForDate(selectedDayStr), events)
+  const weekPhaseData = getWeekTypeContextForDate(selectedDayStr)
   const currentPhaseData = calcCurrentPhase(events)
   const weekDays = getWeekDays()
   const weekStart = weekDays[0]
@@ -788,11 +824,13 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
     const hasComp = sorted.some(isCompetitionEvent)
     const hasTrain = sorted.some(ev => ev._isTrain)
     const phase = hasComp ? 'Peak' : hasTrain ? 'Build' : 'Rest'
-    const phaseColor = phase === 'Peak' ? '#ef4444' : phase === 'Build' ? '#f59e0b' : '#94a3b8'
     const trainSessions = (trainingLog?.sessions || []).filter(s => !s.isRest)
     const hasRest = (trainingLog?.sessions || []).some(s => s.isRest)
+    const weekCtx = getWeekTypeContextForDate(dateStr)
+    const wt = getWeekTypeTheme(t, weekCtx.effectiveWeekType)
+    const restTone = hasRest || sorted.length === 0
     return (
-      <div onClick={() => openDayDetail(dateStr)} style={{ ...cardShell, padding: 0, minHeight: '210px', background: isToday ? t.accent + '08' : t.cardBg, cursor: 'pointer', overflow: 'hidden', display: 'flex', flexDirection: 'column', borderTop: `3px solid ${phaseColor}` }}>
+      <div onClick={() => openDayDetail(dateStr)} style={{ ...cardShell, padding: 0, minHeight: '210px', background: restTone ? wt.bg + '8c' : wt.bg, cursor: 'pointer', overflow: 'hidden', display: 'flex', flexDirection: 'column', borderTop: `3px solid ${wt.subtitle}` }}>
         <div style={{ padding: '10px 10px 6px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '4px' }}>
           <div>
             <div style={{ fontSize: '9px', letterSpacing: '1.5px', textTransform: 'uppercase', color: isToday ? t.accent : t.textMuted, fontWeight: 700 }}>{weekdayShort}</div>
@@ -801,7 +839,7 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
               : <div style={{ fontSize: '22px', fontWeight: 900, color: t.text, lineHeight: 1, marginTop: '4px' }}>{day.getDate()}</div>
             }
           </div>
-          <div style={{ marginTop: '2px', background: phaseColor + '18', border: `1px solid ${phaseColor}55`, borderRadius: '999px', padding: '2px 7px', fontSize: '8px', fontWeight: 800, color: phaseColor, letterSpacing: '0.8px', textTransform: 'uppercase', flexShrink: 0 }}>{phase}</div>
+          <div title={`Fase: ${weekCtx.phase}\nTipo de semana: ${weekCtx.weekTypeLabel} (${weekCtx.weekTypeOverride ? 'definido pelo coach' : 'sugerido'})`} style={{ marginTop: '2px', background: 'rgba(255,255,255,0.35)', border: `1px solid ${wt.subtitle}55`, borderRadius: '999px', padding: '2px 7px', fontSize: '8px', fontWeight: 800, color: wt.subtitle, letterSpacing: '0.8px', textTransform: 'uppercase', flexShrink: 0 }}>{weekCtx.weekTypeLabel}</div>
         </div>
         <div style={{ padding: '0 8px 8px', flex: 1, display: 'flex', flexDirection: 'column', gap: '3px' }}>
           {sorted.slice(0, 3).map((ev, idx) => {
@@ -1242,6 +1280,23 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
         </div>
       </div>
 
+      <div style={{ ...cardShell, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px 14px' }}>
+          {WEEK_TYPE_ORDER.map(type => {
+            const wt = getWeekTypeTheme(t, type)
+            return (
+              <div key={type} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '10px', color: wt.subtitle, fontWeight: 800 }}>
+                <span style={{ width: '14px', height: '10px', borderRadius: '3px', background: wt.bg, border: `1px solid ${wt.subtitle}55` }} />
+                {WEEK_TYPE_LABELS[type]}
+              </div>
+            )
+          })}
+        </div>
+        <div style={{ fontSize: '10px', color: t.textMuted, lineHeight: 1.45 }}>
+          O tipo de semana é a leitura operacional da carga. A fase continua a ser calculada automaticamente pelo motor de periodização.
+        </div>
+      </div>
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         {view === 'day' && (
         <section style={{ background: t.surface, border: `1px solid ${t.border}`, borderRadius: '12px', overflow: 'hidden' }}>
@@ -1268,9 +1323,9 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
             onToday={() => { setDayDetailDate(todayIso); setCurrentDate(new Date(todayDate.getFullYear(), todayDate.getMonth(), todayDate.getDate())); setView('day') }}
             onAdd={() => openSchedulePicker(selectedDayStr)}
           />
-          <div style={{ background: `linear-gradient(125deg, ${weekPhaseData.phaseColor} 0%, ${weekPhaseData.phaseColor}d0 55%, ${weekPhaseData.phaseColor}90 100%)`, padding: '6px 16px' }}>
-            <span style={{ fontSize: '10px', letterSpacing: '3px', color: '#fff', fontWeight: 800, textTransform: 'uppercase', fontFamily: F, opacity: 0.95 }}>
-              {weekPhaseData.phase.replace(/_/g, ' ')}
+          <div style={{ background: getWeekTypeTheme(t, weekPhaseData.effectiveWeekType).bg, padding: '7px 16px' }}>
+            <span style={{ fontSize: '10px', letterSpacing: '2px', color: getWeekTypeTheme(t, weekPhaseData.effectiveWeekType).text, fontWeight: 800, textTransform: 'uppercase', fontFamily: F, opacity: 0.95 }}>
+              Fase: {weekPhaseData.phase} · Tipo de semana: {weekPhaseData.weekTypeLabel} ({weekPhaseData.weekTypeOverride ? 'definido pelo coach' : 'sugerido'})
             </span>
           </div>
           <div style={{ padding: '14px 16px 16px' }}>
@@ -1639,13 +1694,13 @@ export default function Calendar({ theme, t, user, lang = 'en', onNavigate, even
                   const dayEvts = getEventsForDay(day.date)
                   const isToday = dateStr === todayIso
                   const sorted = sortCalendarEvents(dayEvts)
-                  const hasComp = sorted.some(isCompetitionEvent)
-                  const hasTrain = sorted.some(ev => ev._isTrain)
-                  const mPhase = hasComp ? 'peak' : hasTrain ? 'build' : null
-                  const mPhaseColor = mPhase === 'peak' ? '#ef4444' : mPhase === 'build' ? '#f59e0b' : null
+                  const weekCtx = getWeekTypeContextForDate(dateStr)
+                  const wt = getWeekTypeTheme(t, weekCtx.effectiveWeekType)
+                  const restTone = sorted.length === 0
                   return (
                     <div key={i} className={`cal-cell${isToday ? ' today-cell' : ''}`} onClick={() => openDayDetail(dateStr)}
-                      style={{ background: isToday ? t.accent + '12' : day.current ? t.surface : t.bg, borderTop: mPhaseColor ? `3px solid ${mPhaseColor}` : undefined, opacity: day.current ? 1 : 0.45 }}>
+                      title={`Fase: ${weekCtx.phase}\nTipo de semana: ${weekCtx.weekTypeLabel} (${weekCtx.weekTypeOverride ? 'definido pelo coach' : 'sugerido'})`}
+                      style={{ background: day.current ? (restTone ? wt.bg + '8c' : wt.bg) : t.bg, borderTop: `3px solid ${wt.subtitle}`, opacity: day.current ? 1 : 0.45 }}>
                       <div style={{ marginBottom: '3px' }}>
                         {isToday
                           ? <span className="today-badge">{day.date.getDate()}</span>

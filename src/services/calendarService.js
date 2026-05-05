@@ -1,6 +1,19 @@
 import { supabase } from '../lib/supabase'
 import Sentry from '../lib/sentry.js'
 
+let eventCategoriesUnavailable = false
+let warnedEventCategoriesUnavailable = false
+
+function warnEventCategoriesOnce(message) {
+  if (!import.meta?.env?.DEV || warnedEventCategoriesUnavailable) return
+  warnedEventCategoriesUnavailable = true
+  console.warn(message)
+}
+
+function isMissingOptionalRelation(error) {
+  return error?.code === '42P01' || error?.status === 404 || /does not exist|not found/i.test(error?.message || '')
+}
+
 export async function getEvents() {
   const { data, error } = await supabase
     .from('events')
@@ -48,15 +61,24 @@ export async function deleteEvent(id) {
 }
 
 export async function getEventCategories() {
+  if (eventCategoriesUnavailable) return []
   const { data, error } = await supabase
     .from('event_categories')
     .select('*')
-    .order('created_at', { ascending: true })
   if (error) {
+    if (isMissingOptionalRelation(error)) {
+      eventCategoriesUnavailable = true
+      warnEventCategoriesOnce('[Calendar] Optional table event_categories is unavailable; using built-in categories.')
+      return []
+    }
     Sentry.captureException(error, { extra: { context: 'calendarService.getEventCategories' } })
     throw error
   }
-  return data
+  return [...(data || [])].sort((a, b) => {
+    const aKey = a.created_at || a.name || a.category || ''
+    const bKey = b.created_at || b.name || b.category || ''
+    return String(aKey).localeCompare(String(bKey))
+  })
 }
 
 export async function saveEventCategory(payload) {
